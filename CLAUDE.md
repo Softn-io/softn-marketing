@@ -82,6 +82,8 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 | `security` | Security and GDPR review — read-only |
 | `git-pr` | Commits, branches, PRs — never merges |
 
+Read @AGENTS.md for latest updates and recommendations to write up-to-date Next.js code and practices.
+
 `/backlog` decomposes the design handoff into standalone GitHub issues on a Kanban Project board (Todo / In Progress / Pending / In Review / Done) — run once to seed the task list, Mel validates the breakdown before anything is created.
 
 `/ship` orchestrates one task: scoping → dev → copy validation → QA → security → PR. Run it with a GitHub issue reference (`/ship #12`) once a backlog exists, or with a free-text task otherwise. It runs in the main conversation because that is where Mel validates. When run against an issue, the resulting PR closes it (`Closes #12`), and the Project board's built-in automation moves the card to Done on merge.
