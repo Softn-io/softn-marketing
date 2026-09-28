@@ -3,6 +3,7 @@
   "permissions": {
     "allow": [
       "Bash(pnpm lint *)",
+      "Bash(pnpm lint:tailwind *)",
       "Bash(pnpm typecheck *)",
       "Bash(pnpm test *)",
       "Bash(pnpm test:e2e *)",
@@ -12,7 +13,6 @@
       "Bash(pnpm install)",
       "Bash(pnpm install --frozen-lockfile)",
       "Bash(pnpm audit *)",
-      "Bash(pnpm dlx shadcn@latest add *)",
       "Bash(npx ctx7@latest *)",
       "Bash(git status *)",
       "Bash(git diff *)",
@@ -31,7 +31,17 @@
       "Bash(gh pr diff *)",
       "Bash(gh pr checks *)",
       "Bash(gh run list *)",
-      "Bash(gh run view *)"
+      "Bash(gh run view *)",
+      "Bash(gh issue create *)",
+      "Bash(gh issue view *)",
+      "Bash(gh issue list *)",
+      "Bash(gh issue edit *)",
+      "Bash(gh label create *)",
+      "Bash(gh label list *)",
+      "Bash(gh project create *)",
+      "Bash(gh project view *)",
+      "Bash(gh project item-add *)",
+      "Bash(gh project list *)"
     ],
     "deny": [
       "Read(./.env)",

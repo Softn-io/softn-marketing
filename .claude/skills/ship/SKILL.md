@@ -1,7 +1,7 @@
 ---
 name: ship
-description: Orchestrates the full workflow of a softn.io site task: scoping, development, copy validation, QA, security, commits and PR. Run with /ship followed by the task.
-argument-hint: "<task to carry out, e.g. \"implement the Offer section from the handoff\">"
+description: Orchestrates the full workflow of a softn.io site task: scoping, development, copy validation, QA, security, commits and PR. Run with /ship followed by the task, or by a GitHub issue reference (e.g. "/ship #12").
+argument-hint: "<task to carry out, or a GitHub issue reference, e.g. \"#12\" or \"implement the Offer section from the handoff\">"
 disable-model-invocation: true
 ---
 
@@ -13,8 +13,9 @@ You run in the **main conversation**: this is where Mel validates, since a neste
 
 ## Step 1 — Scoping
 
+- If `$ARGUMENTS` is a GitHub issue reference (`#12`, `12`, or an issue URL), run `gh issue view <number> --json title,body,labels` and use it as the task's scope instead of asking Mel to restate it. Keep the issue number for later steps.
 - Read `CLAUDE.md` and the task context (handoff bundle, `docs/brand-voice.md`, `docs/seo-brief.md` if useful).
-- Create the branch from `develop`: `feat/…`, `fix/…` or `chore/…`.
+- Create the branch from `develop`: `feat/…`, `fix/…` or `chore/…` — when an issue number is known, prefix it (`feat/12-offer-section`).
 - Present Mel with a short plan (files involved, agents used, risks). **Validate before continuing** if the task is more than a small fix.
 
 ## Step 2 — Content (if any copy is involved)
@@ -34,7 +35,7 @@ You run in the **main conversation**: this is where Mel validates, since a neste
 
 ## Step 5 — Commits and PR
 
-- Delegate to `git-pr`: Conventional Commits, branch push, PR to `develop` with the `qa` and `security` verdicts.
+- Delegate to `git-pr`: Conventional Commits, branch push, PR to `develop` with the `qa` and `security` verdicts. Pass along the issue number from Step 1, if any, so the PR closes it.
 - **Final validation gate**: give Mel the PR link and the list of points to validate. **Never merge.**
 
 ## Rules

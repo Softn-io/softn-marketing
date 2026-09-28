@@ -82,9 +82,11 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 | `security` | Security and GDPR review — read-only |
 | `git-pr` | Commits, branches, PRs — never merges |
 
-`/ship` orchestrates: scoping → dev → copy validation → QA → security → PR. It runs in the main conversation because that is where Mel validates.
+`/backlog` decomposes the design handoff into standalone GitHub issues on a Kanban Project board (Todo / In Progress / Pending / In Review / Done) — run once to seed the task list, Mel validates the breakdown before anything is created.
 
-The hooks and permissions in `settings.json` apply to the main session. Check that they also apply to subagents (see `LISEZ-MOI.md`).
+`/ship` orchestrates one task: scoping → dev → copy validation → QA → security → PR. Run it with a GitHub issue reference (`/ship #12`) once a backlog exists, or with a free-text task otherwise. It runs in the main conversation because that is where Mel validates. When run against an issue, the resulting PR closes it (`Closes #12`), and the Project board's built-in automation moves the card to Done on merge.
+
+The hooks and permissions in `settings.json` apply to the main session. Check that they also apply to subagents.
 
 ## Forbidden
 
