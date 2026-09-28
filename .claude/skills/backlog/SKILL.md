@@ -12,6 +12,7 @@ You run in the **main conversation**: creating 15–25 GitHub issues in bulk is 
 ## Step 1 — Read the scope
 
 - `CLAUDE.md`, `docs/design/README.md`, `docs/brand-voice.md`, `docs/rgpd/processors.md`.
+- The exported Claude Design bundle at `docs/design/project/` (HTML, styles, screenshots, design chat export) — read what's there to know what sections/features actually exist to decompose. If the folder is missing or empty, say so and stop: don't guess a task list from `docs/design/README.md`'s generic rules alone.
 - If `$ARGUMENTS` narrows the scope (e.g. "just the chatbot section"), only decompose that part; otherwise cover the whole one-page site.
 
 ## Step 2 — Draft the task list (create nothing yet)

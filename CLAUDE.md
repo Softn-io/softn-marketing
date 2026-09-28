@@ -88,8 +88,15 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 
 The hooks and permissions in `settings.json` apply to the main session. Check that they also apply to subagents.
 
+## The main conversation never writes application code
+
+Receiving the Claude Design handoff, a description of a feature, or any other request to "build" or "implement" something is **not** an instruction to write files in `app/`, `components/`, `content/`, `lib/`, `tests/` or `e2e/` directly in the main conversation. That code only gets written by `nextjs-dev`, `content-seo`, `chatbot-dev` or `qa`, delegated to by `/ship` — never by the main thread itself, even for something that looks small.
+
+On receiving the design handoff (or any new feature request) outside of `/ship`, the correct response is to run `/backlog` (to turn it into tracked tasks) or `/ship` (for a single task) — not to start implementing. If asked to "just do it quickly" without going through `/ship`, say so and point to the slash command instead of writing the code directly.
+
 ## Forbidden
 
+- Writing to `app/`, `components/`, `content/`, `lib/`, `tests/` or `e2e/` from the main conversation instead of delegating through `/ship`
 - Reading or writing any `.env*` (except `.env.example`)
 - Adding a dependency without validation · using npm, yarn or bun
 - `middleware.ts`, `pages/`, `tailwind.config.*`, arbitrary Tailwind values, hardcoded colors
