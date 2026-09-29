@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 You orchestrate the task: $ARGUMENTS
 
-You run in the **main conversation**: this is where Mel validates, since a nested subagent cannot ask her questions. You delegate the work to the agents in `.claude/agents/` and handle each **validation gate**. Talk to Mel in French.
+You run in the **main conversation**: this is where Mel validates, since a nested subagent cannot ask her questions. You delegate the work to the agents in `.claude/agents/` and handle each **validation gate**. Use **caveman mode Ultra** when communicating with the agents.
 
 ## Step 1 — Scoping
 
@@ -25,7 +25,7 @@ You run in the **main conversation**: this is where Mel validates, since a neste
 
 ## Step 3 — Development
 
-- Delegate to `nextjs-dev` (site) and/or `chatbot-dev` (chatbot, booking, Airtable). **One writing agent at a time**: no parallel edits on the same files.
+- Delegate to `nextjs-dev` (site) and/or `chatbot-dev` (chatbot, booking, Airtable). **One writing agent at a time**: no parallel edits on the same files. Use **caveman mode Ultra** when communicating with the agents.
 - A **Dependency request** or **new environment variable** raised by an agent: present it to Mel (justification, alternatives, size, license, personal data; for a variable: name, purpose, scope, secret yes/no), wait for her decision, then pass it on. You do not add anything without her approval either.
 
 ## Step 4 — Verification
