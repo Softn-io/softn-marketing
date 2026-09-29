@@ -7,16 +7,19 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "lint:tailwind": "node scripts/check-tailwind-defaults.mjs"
+    "lint:tailwind": "node scripts/check-tailwind-defaults.mjs",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@softnio-labs/tokens": "0.1.0",
     "next": "16.3.6",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zod": "4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "26.2.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "babel-plugin-react-compiler": "1.0.0",
