@@ -41,5 +41,8 @@ next-env.d.ts
 /.vscode
 /docs/
 
+# claude
+/.claude/agent-memory
+
 # Serena project files
 /.serena/

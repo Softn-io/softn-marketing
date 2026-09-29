@@ -1,26 +1,23 @@
 @import "tailwindcss";
+@import "@softnio-labs/tokens/tokens.css";
+@import "@softnio-labs/tokens/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/*
+ * @softnio-labs/tokens maps `font-body`/`font-display` to the literal
+ * font-family strings `--softn-font-body`/`--softn-font-display` (e.g.
+ * "PlusJakartaSans, sans-serif"), which only resolve if a matching
+ * @font-face exists. The package ships the token, not the font files, so
+ * this site provides the actual self-hosted @font-face (via next/font/local
+ * in app/fonts.ts) and rebinds these two Tailwind theme keys to it — the
+ * same "CSS variable" pattern Next.js documents for next/font + Tailwind.
+ * This does not redefine any `--softn-*` custom property: `--softn-font-body`
+ * and `--softn-font-display` keep the value published by the package.
+ */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-body: var(--font-plus-jakarta-sans);
+  --font-display: var(--font-zalando-sans);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  @apply bg-base text-foreground font-body;
 }

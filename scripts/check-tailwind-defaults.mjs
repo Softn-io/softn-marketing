@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// Flags Tailwind utilities that belong to a namespace reset by @softn/tokens and that Softn does not redefine.
+// Flags Tailwind utilities that belong to a namespace reset by @softnio-labs/tokens and that Softn does not redefine.
 // Such a class generates NOTHING (no build error), so it silently ships unstyled.
 // No dependencies, Node >= 20.
 //
 //   node scripts/check-tailwind-defaults.mjs [dir …]     (default: app components content lib)
 //
 // Reset namespaces: color, text (font sizes), shadow, radius (see resetDefaults in the tokens config).
-// The allowed names are read from the installed @softn/tokens/tailwind.css, so `shadow-md` and `rounded-lg`
+// The allowed names are read from the installed @softnio-labs/tokens/tailwind.css, so `shadow-md` and `rounded-lg`
 // pass (Softn defines them) while `shadow-xl`, `rounded-2xl`, `text-lg`, `bg-white` and `bg-gray-100` fail.
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
@@ -16,9 +16,9 @@ import { join, extname, relative } from "node:path";
 const require = createRequire(join(process.cwd(), "noop.js"));
 let mappingPath;
 try {
-  mappingPath = require.resolve("@softn/tokens/tailwind.css");
+  mappingPath = require.resolve("@softnio-labs/tokens/tailwind.css");
 } catch {
-  console.error("Cannot resolve @softn/tokens/tailwind.css: install @softn/tokens first.");
+  console.error("Cannot resolve @softnio-labs/tokens/tailwind.css: install @softnio-labs/tokens first.");
   process.exit(1);
 }
 const mapping = readFileSync(mappingPath, "utf8");
