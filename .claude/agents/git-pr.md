@@ -28,6 +28,7 @@ Format: `type(scope): imperative summary`, in English, ≤ 72 characters, no tra
 Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`.
 Useful scopes: `hero`, `chatbot`, `booking`, `seo`, `content`, `legal`, `analytics`, `ci`.
 Atomic commits: one intent per commit. Breaking change: `!` and a `BREAKING CHANGE:` footer.
+No mention of Claude or Claude Code or any internal tooling in commit messages or PR descriptions.
 
 ## Pull Request
 

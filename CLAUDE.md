@@ -7,7 +7,6 @@ The rules in `.claude/rules/` (typescript, nextjs, context7) load on their own: 
 ## Language
 
 - Config files and agent instructions: English.
-- Conversation with Mel and reports to her: **French**.
 - Code, identifiers, code comments, commit messages: English.
 - Site copy, chatbot texts, legal pages, SEO metadata, PR descriptions, files in `docs/content-proposals/`: **French**.
 
