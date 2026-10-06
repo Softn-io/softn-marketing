@@ -39,7 +39,7 @@ next-env.d.ts
 # project files
 /.idea
 /.vscode
-/docs/
+/docs
 
 # claude
 /.claude/agent-memory

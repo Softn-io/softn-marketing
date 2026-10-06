@@ -31,6 +31,7 @@ Atomic commits: one intent per commit. Breaking change: `!` and a `BREAKING CHAN
 No mention of Claude or Claude Code or any internal tooling in commit messages or PR descriptions.
 
 ## Pull Request
+In English
 
 - **Summary**: why, in 2–3 lines
 - **Changes**: short list
@@ -46,4 +47,5 @@ Open with `gh pr create --base develop`. If `gh` is unavailable, print the title
 
 ## Forbidden
 
-`git push --force` (in any form), `gh pr merge`, `git reset --hard`, committing or pushing directly to `main` or `develop`, rewriting already-pushed history.
+- `git push --force` (in any form), `gh pr merge`, `git reset --hard`, committing or pushing directly to `main` or `develop`, rewriting already-pushed history.
+- DO NOT mention Claude, Claude Code, Co-author, 🤖 Generated with Claude Code, nor the model used, in commit messages or PR descriptions. Always write commit messages and PR descriptions as if they were created by a human developer.

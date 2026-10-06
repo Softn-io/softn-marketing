@@ -1,6 +1,6 @@
 # Softn.io — one-page site (FR)
 
-Mel's site for her studio Softn: building websites and web apps, and setting up AI workflows and automations. Targets: SMBs, small dev teams, solo entrepreneurs, non-technical startups. Goal: generate leads (free 30-minute discovery call, action plan in return). Design: Claude Design, project "Softn.io Site v3", delivered by handoff (local bundle).
+Mel's site for her studio Softn: building websites and web apps, and setting up AI workflows and automations. Targets: SMBs, small dev teams, solo entrepreneurs, non-technical startups. Goal: generate leads (free 30-minute discovery call, action plan in return). Design: Claude Design, project "Softn.io Site v3" and "Softn.io Contact", delivered by handoff (local bundle).
 
 The rules in `.claude/rules/` (typescript, nextjs, context7) load on their own: do not duplicate them here.
 
@@ -29,7 +29,7 @@ Target scripts, to be created at project init (do not invent other names):
 
 - `app/` routes, layout, `api/` (Route Handlers)
 - `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`
-- `content/fr/` typed copy (single source of content)
+- `locales/fr/` typed copy (single source of content)
 - `lib/` env, airtable, fillout, consent, analytics
 - `tests/` unit · `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR
 
@@ -51,14 +51,14 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 ## Content
 
 - Voice, tone, lexicon: `docs/brand-voice.md` (read it before writing any copy). Summary: **formal "vous" everywhere**, first-person "je" (Mel speaks), warm and expert, pragmatic AI, emojis only in the chatbot and very rare.
-- Copy is **proposed** in `docs/content-proposals/` and **validated by Mel** before integration into `content/fr/`.
+- Copy is **proposed** in `docs/content-proposals/` and **validated by Mel** before integration into `locales/fr/`.
 - No invented figure, testimonial, client or result. No prices displayed. The word « vitrine » is banned.
 - SEO brief: `docs/seo-brief.md` (keywords: automatisation, agents IA; all of France).
 
 ## Chatbot
 
 - Scripted (Q&A), booking via Fillout, data sent to Airtable server-side.
-- Assistant with a **first name** (single constant in `content/fr/chatbot.ts`).
+- Assistant with a **first name** (single constant in `locales/fr/chatbot.ts`).
 - The **first message** discloses that it is a virtual assistant (transparency: AI Act art. 50, and good practice).
 - Explicit consent **before** any personal data is collected.
 
