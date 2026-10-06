@@ -1,0 +1,12 @@
+allowBuilds:
+  esbuild: false
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@vercel/next@20.0.1'
+  - '@vercel/vc-native-darwin-arm64@62.5.0'
+  - '@vercel/vc-native-darwin-x64@62.5.0'
+  - '@vercel/vc-native-linux-arm64@62.5.0'
+  - '@vercel/vc-native-linux-x64@62.5.0'
+  - '@vercel/vc-native-win32-arm64@62.5.0'
+  - '@vercel/vc-native-win32-x64@62.5.0'
+  - vercel@62.5.0
