@@ -19,7 +19,7 @@ A new run on the same PR or ref cancels the previous one (`concurrency`). Deploy
 | `typecheck` | `pnpm typecheck` | `tsc --noEmit`, strict |
 | `test` | `pnpm test` | `vitest run --passWithNoTests` |
 | `build` | `pnpm build` | Next.js production build |
-| `lighthouse` | `pnpm lighthouse` | Builds, then `lhci autorun` (config: `lighthouserc.json`); report uploaded as the `lighthouse-report` artifact (14 days). **Temporarily non-blocking** (`continue-on-error: true`), see below |
+| `lighthouse` | `pnpm lighthouse` | Builds, then `lhci autorun` (config: `lighthouserc.json`); report uploaded as the `lighthouse-report` artifact (14 days). **Temporarily non-blocking** (`continue-on-error: true` on the `pnpm lighthouse` step), see below |
 | `deploy` | Vercel CLI | Needs the six jobs above; see below |
 
 The six checks run in parallel. Each job: checkout, pnpm (version from `packageManager`), Node (version from `.nvmrc`), `pnpm install --frozen-lockfile`.
@@ -32,7 +32,7 @@ The six checks run in parallel. Each job: checkout, pnpm (version from `packageM
 
 Assertions in `lighthouserc.json`, level `error`: Performance, Accessibility, Best Practices, SEO each >= 0.9, median of 3 runs on `/`. Results are written to `.lighthouseci/` (git-ignored) with the `filesystem` upload target: nothing is published to a public storage.
 
-**Temporary gate:** the `lighthouse` job has `continue-on-error: true` because the page renders no content yet, so the budgets cannot be met. A failure is reported but does not block `deploy`. Remove the line once the first content section lands, to make the budgets blocking again.
+**Temporary gate:** the `pnpm lighthouse` step of the `lighthouse` job has `continue-on-error: true` because the page renders no content yet, so the budgets cannot be met. The flag is on the step, not the job: a job-level flag keeps the workflow green but still reports a failed `lighthouse` check (red) on the PR. With the step-level flag the check is green, so a real Lighthouse failure is hidden until the flag is removed; the report artifact is still uploaded. Remove the two lines once the first content section lands, to make the budgets blocking again.
 
 ## Deploy
 
