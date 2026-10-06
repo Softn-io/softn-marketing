@@ -37,7 +37,7 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 
 ## Exports
 
-- **Named exports only** in `lib/`, `components/` and `content/`. No `export default`.
+- **Named exports only** in `lib/`, `components/` and `locales/`. No `export default`.
 - **Required exception**: Next.js special files need a default export (`page.tsx`, `layout.tsx`, `error.tsx`, `loading.tsx`, `not-found.tsx`, `template.tsx`, `default.tsx`, `opengraph-image.tsx`, `sitemap.ts`, `robots.ts`, `next.config.ts`). Route Handlers export `GET`, `POST`… by name.
 - Re-export through an `index.ts` barrel only when a folder exposes several items to other modules.
 - Type re-export uses `export type { Foo }` — never implicit.

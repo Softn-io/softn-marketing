@@ -72,7 +72,7 @@ Colors, radii, spacing, typography and z-index go through `--softn-*` CSS variab
 
 ## Content and i18n
 
-- **No hardcoded text in components**: everything comes from `content/fr/*.ts` (typed objects).
+- **No hardcoded text in components**: everything comes from `locales/fr/*.ts` (typed objects).
 - Structure ready for EN (`next-intl` considered later): no sentence concatenation, no hand-coded plurals or dates.
 - `<html lang="fr">`.
 - The site copy itself is written in French.
