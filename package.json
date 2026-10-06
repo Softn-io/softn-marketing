@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "lint:tailwind": "node scripts/check-tailwind-defaults.mjs",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "lighthouse": "lhci autorun"
   },
