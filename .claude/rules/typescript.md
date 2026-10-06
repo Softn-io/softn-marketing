@@ -1,6 +1,8 @@
 # TypeScript — Softn.io (standalone site)
 
-> Auto-loaded for every `.ts` / `.tsx` file.
+> Loaded without `paths:` (same reason as `rules/nextjs.md`): in an empty repo, a path-scoped rule only
+> loads when Claude reads a matching file, so it wouldn't apply when the first `.ts`/`.tsx` files are
+> created. Loaded unconditionally at launch instead, same priority as `CLAUDE.md`.
 > Complements `~/.claude/rules/typescript.md` (global). Softn.io specifics only.
 
 ---
@@ -35,7 +37,7 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 
 ## Exports
 
-- **Named exports only** in `lib/`, `components/` and `content/`. No `export default`.
+- **Named exports only** in `lib/`, `components/` and `locales/`. No `export default`.
 - **Required exception**: Next.js special files need a default export (`page.tsx`, `layout.tsx`, `error.tsx`, `loading.tsx`, `not-found.tsx`, `template.tsx`, `default.tsx`, `opengraph-image.tsx`, `sitemap.ts`, `robots.ts`, `next.config.ts`). Route Handlers export `GET`, `POST`… by name.
 - Re-export through an `index.ts` barrel only when a folder exposes several items to other modules.
 - Type re-export uses `export type { Foo }` — never implicit.
