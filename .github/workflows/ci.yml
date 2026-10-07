@@ -127,7 +127,7 @@ jobs:
           case "$GITHUB_REF_NAME" in
             main)    echo "environment=production"  >> "$GITHUB_OUTPUT"; echo "build_flags=--prod" >> "$GITHUB_OUTPUT" ;;
             staging) echo "environment=preview"     >> "$GITHUB_OUTPUT"; echo "build_flags=" >> "$GITHUB_OUTPUT" ;;
-            develop) echo "environment=development" >> "$GITHUB_OUTPUT"; echo "build_flags=--target=development" >> "$GITHUB_OUTPUT" ;;
+            develop) echo "environment=preview"     >> "$GITHUB_OUTPUT"; echo "build_flags=" >> "$GITHUB_OUTPUT" ;;
           esac
       - run: pnpm install --frozen-lockfile
       - name: Vercel pull

@@ -38,11 +38,13 @@ Assertions in `lighthouserc.json`, level `error`: Performance, Accessibility, Be
 
 | Branch | Vercel environment | Command flags |
 |---|---|---|
-| `develop` | Development | `--target=development` |
+| `develop` | Preview | none |
 | `staging` | Preview | none |
 | `main` | Production | `--prod` |
 
 Steps: `vercel pull`, `vercel build`, `vercel deploy --prebuilt`, with the CLI run through `pnpm exec vercel` (devDependency, version pinned by the lockfile; the job runs `pnpm install --frozen-lockfile`). The Vercel credentials are set as env only on these three steps, not on the whole job. The job never runs on `pull_request`, so fork code never reaches a secret or a deployment.
+
+`develop` deploys as Preview because Vercel's built-in Development environment is for `vercel dev` and cannot be a deploy target: `--target=development` is looked up as a custom environment and fails with "Project not found". `develop` and `staging` therefore share the Vercel Preview environment variables.
 
 The job targets a GitHub environment derived from the branch: `main` -> `production`, `staging` -> `preview`, `develop` -> `development`.
 
