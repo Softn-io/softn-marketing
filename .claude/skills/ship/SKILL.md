@@ -15,8 +15,10 @@ You run in the **main conversation**: this is where Mel validates, since a neste
 
 - If `$ARGUMENTS` is a GitHub issue reference (`#12`, `12`, or an issue URL), run `gh issue view <number> --json title,body,labels` and use it as the task's scope instead of asking Mel to restate it. Keep the issue number for later steps.
 - Read `CLAUDE.md` and the task context (handoff bundle, `docs/brand-voice.md`, `docs/seo-brief.md` if useful).
+- Present Mel with a plan (files involved, agents used, risks). **Validate before continuing**.
 - Create the branch from `develop`: `feat/…`, `fix/…` or `chore/…` — when an issue number is known, prefix it (`feat/12-offer-section`).
-- Present Mel with a short plan (files involved, agents used, risks). **Validate before continuing** if the task is more than a small fix.
+- Transition the issue from `To Do` to `In Progress` status on GitHub.
+
 
 ## Step 2 — Content (if any copy is involved)
 
