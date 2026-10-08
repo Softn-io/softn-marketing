@@ -64,7 +64,7 @@
 - Never presented as human. If it cannot answer, it says so and offers to book a call with Mel.
 - **Before** asking for a name or email: explain why, ask for explicit consent, link to the privacy policy.
 - Emojis: at most one, rarely, never in error or consent messages.
-- The first name lives in **a single constant** (`content/fr/chatbot.ts`): changing it touches one line.
+- The first name lives in **a single constant** (`locales/fr/chatbot.ts`): changing it touches one line.
 
 ## Editorial SEO
 

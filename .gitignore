@@ -7,6 +7,7 @@
 
 # testing
 /coverage
+.lighthouseci
 
 # next.js
 /.next/
@@ -39,7 +40,7 @@ next-env.d.ts
 # project files
 /.idea
 /.vscode
-/docs
+/docs/design
 
 # claude
 /.claude/agent-memory
