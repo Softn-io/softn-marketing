@@ -4,12 +4,3 @@ allowBuilds:
 overrides:
   tar@<7.5.21: '>=7.5.21'
   source-map-js@<1.2.2: '>=1.2.2'
-minimumReleaseAgeExclude:
-  - '@vercel/next@20.0.1'
-  - '@vercel/vc-native-darwin-arm64@62.5.0'
-  - '@vercel/vc-native-darwin-x64@62.5.0'
-  - '@vercel/vc-native-linux-arm64@62.5.0'
-  - '@vercel/vc-native-linux-x64@62.5.0'
-  - '@vercel/vc-native-win32-arm64@62.5.0'
-  - '@vercel/vc-native-win32-x64@62.5.0'
-  - vercel@62.5.0
