@@ -28,10 +28,10 @@ Target scripts, to be created at project init (do not invent other names):
 ## Architecture
 
 - `app/` routes, layout, `api/` (Route Handlers)
-- `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`
+- `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns)
 - `locales/fr/` typed copy (single source of content)
 - `lib/` env, airtable, fillout, consent, analytics
-- `tests/` unit · `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR
+- `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover: no `tests/` folder
 
 ## Git workflow
 
@@ -46,7 +46,7 @@ Target scripts, to be created at project init (do not invent other names):
 
 ## Dependencies
 
-A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dependency request"** raised to `/ship`, which submits it to Mel (package + version, justification, alternatives including "no dependency", size, license, advisories, personal data). Anticipated candidates, to be validated: `@softnio-labs/tokens`, `zod`, `@fillout/react`, `vitest`, `@playwright/test`, `@lhci/cli`, `next-intl` (later).
+A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dependency request"** raised to `/ship`, which submits it to Mel (package + version, justification, alternatives including "no dependency", size, license, advisories, personal data). Anticipated candidates, to be validated: `@softnio-labs/tokens`, `zod`, `@fillout/react`, `vitest`, `@playwright/test`, `jsdom`, `@testing-library/react` (with its peer `@testing-library/dom`), `lucide-react` (icons), `@lhci/cli`, `next-intl` (later).
 
 ## Content
 
