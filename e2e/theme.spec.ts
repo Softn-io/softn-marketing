@@ -8,8 +8,10 @@ const html = (page: Page) => page.locator("html")
 const toggle = (page: Page, name: string) => page.getByRole("button", { name })
 
 test.describe("theme", () => {
-  test("dark by default without system preference", async ({ page }) => {
-    await page.emulateMedia({ colorScheme: "no-preference" })
+  // Chromium has no "no preference" state for prefers-color-scheme (it reports light),
+  // so the dark default is asserted with a dark system and no stored choice.
+  test("dark when the system prefers dark and nothing is stored", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
     await page.goto("/")
     await expect(html(page)).not.toHaveAttribute("data-theme", /.*/)
     await expect(toggle(page, TO_LIGHT)).toBeVisible()
@@ -34,7 +36,7 @@ test.describe("theme", () => {
         if (w.__firstTheme === undefined && document.body) {
           w.__firstTheme = document.documentElement.getAttribute("data-theme")
         }
-      }).observe(document.documentElement, { childList: true, subtree: true })
+      }).observe(document, { childList: true, subtree: true })
     })
     await page.goto("/")
     // data-theme is set by the head inline script, before <body> exists.
@@ -71,8 +73,20 @@ test.describe("theme", () => {
     await page.keyboard.press("Tab")
     const button = toggle(page, TO_LIGHT)
     await expect(button).toBeFocused()
-    const shadow = await button.evaluate((el) => getComputedStyle(el).boxShadow)
-    expect(shadow).not.toBe("none")
+    const style = await button.evaluate((el) => {
+      const cs = getComputedStyle(el)
+      const probe = document.createElement("span")
+      probe.style.color = "var(--softn-border-active)"
+      document.body.appendChild(probe)
+      const active = getComputedStyle(probe).color
+      probe.remove()
+      return { w: cs.outlineWidth, st: cs.outlineStyle, c: cs.outlineColor, active, bw: cs.borderTopWidth, bs: cs.borderTopStyle }
+    })
+    expect(style.w).toBe("2px")
+    expect(style.st).toBe("solid")
+    expect(style.c).toBe(style.active)
+    expect(style.bw).toBe("1px")
+    expect(style.bs).toBe("solid")
     await page.keyboard.press("Enter")
     await expect(html(page)).toHaveAttribute("data-theme", "light")
     await page.keyboard.press("Space")
