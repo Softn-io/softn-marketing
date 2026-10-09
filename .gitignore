@@ -47,3 +47,7 @@ next-env.d.ts
 
 # Serena project files
 /.serena/
+
+# playwright
+/playwright-report/
+/test-results/
