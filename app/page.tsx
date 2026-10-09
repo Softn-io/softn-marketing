@@ -1,4 +1,4 @@
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { ThemeToggle } from "@components/ui/ThemeToggle";
 
 /**
  * Foundation shell only: the real one-page sections (hero, offer, process…)
