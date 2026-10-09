@@ -1,0 +1,95 @@
+import { expect, test, type Page } from "@playwright/test"
+
+const STORAGE_KEY = "softn-theme"
+const TO_LIGHT = "Passer au mode clair"
+const TO_DARK = "Passer au mode sombre"
+
+const html = (page: Page) => page.locator("html")
+const toggle = (page: Page, name: string) => page.getByRole("button", { name })
+
+test.describe("theme", () => {
+  // Chromium has no "no preference" state for prefers-color-scheme (it reports light),
+  // so the dark default is asserted with a dark system and no stored choice.
+  test("dark when the system prefers dark and nothing is stored", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.goto("/")
+    await expect(html(page)).not.toHaveAttribute("data-theme", /.*/)
+    await expect(toggle(page, TO_LIGHT)).toBeVisible()
+    const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)
+    expect(scheme).toBe("dark")
+  })
+
+  test("light when the system prefers light", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "light" })
+    await page.goto("/")
+    await expect(toggle(page, TO_DARK)).toBeVisible()
+    const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)
+    expect(scheme).toBe("light")
+  })
+
+  test("stored choice is applied before first paint (no flash)", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.addInitScript((key) => localStorage.setItem(key, "light"), STORAGE_KEY)
+    await page.addInitScript(() => {
+      new MutationObserver(() => {
+        const w = window as unknown as { __firstTheme?: string | null }
+        if (w.__firstTheme === undefined && document.body) {
+          w.__firstTheme = document.documentElement.getAttribute("data-theme")
+        }
+      }).observe(document, { childList: true, subtree: true })
+    })
+    await page.goto("/")
+    // data-theme is set by the head inline script, before <body> exists.
+    const first = await page.evaluate(() => (window as unknown as { __firstTheme?: string | null }).__firstTheme)
+    expect(first).toBe("light")
+    await expect(html(page)).toHaveAttribute("data-theme", "light")
+  })
+
+  test("toggle switches theme and persists across reload", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.goto("/")
+    await toggle(page, TO_LIGHT).click()
+    await expect(html(page)).toHaveAttribute("data-theme", "light")
+    await expect(toggle(page, TO_DARK)).toBeVisible()
+    expect(await page.evaluate((k) => localStorage.getItem(k), STORAGE_KEY)).toBe("light")
+    await page.reload()
+    await expect(html(page)).toHaveAttribute("data-theme", "light")
+    await toggle(page, TO_DARK).click()
+    await expect(html(page)).toHaveAttribute("data-theme", "dark")
+    expect(await page.evaluate((k) => localStorage.getItem(k), STORAGE_KEY)).toBe("dark")
+  })
+
+  test("system preference change updates the icon label when no data-theme", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.goto("/")
+    await expect(toggle(page, TO_LIGHT)).toBeVisible()
+    await page.emulateMedia({ colorScheme: "light" })
+    await expect(toggle(page, TO_DARK)).toBeVisible()
+  })
+
+  test("keyboard operable with visible focus ring", async ({ page }) => {
+    await page.emulateMedia({ colorScheme: "dark" })
+    await page.goto("/")
+    await page.keyboard.press("Tab")
+    const button = toggle(page, TO_LIGHT)
+    await expect(button).toBeFocused()
+    const activeColor = await page.evaluate(() => {
+      const probe = document.createElement("span")
+      probe.style.color = "var(--softn-border-active)"
+      document.body.appendChild(probe)
+      const resolved = getComputedStyle(probe).color
+      probe.remove()
+      return resolved
+    })
+    // transition-colors animates outline-color, so the ring colour settles after focus.
+    await expect(button).toHaveCSS("outline-color", activeColor)
+    await expect(button).toHaveCSS("outline-width", "2px")
+    await expect(button).toHaveCSS("outline-style", "solid")
+    await expect(button).toHaveCSS("border-top-width", "1px")
+    await expect(button).toHaveCSS("border-top-style", "solid")
+    await page.keyboard.press("Enter")
+    await expect(html(page)).toHaveAttribute("data-theme", "light")
+    await page.keyboard.press("Space")
+    await expect(html(page)).toHaveAttribute("data-theme", "dark")
+  })
+})
