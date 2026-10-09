@@ -73,20 +73,20 @@ test.describe("theme", () => {
     await page.keyboard.press("Tab")
     const button = toggle(page, TO_LIGHT)
     await expect(button).toBeFocused()
-    const style = await button.evaluate((el) => {
-      const cs = getComputedStyle(el)
+    const activeColor = await page.evaluate(() => {
       const probe = document.createElement("span")
       probe.style.color = "var(--softn-border-active)"
       document.body.appendChild(probe)
-      const active = getComputedStyle(probe).color
+      const resolved = getComputedStyle(probe).color
       probe.remove()
-      return { w: cs.outlineWidth, st: cs.outlineStyle, c: cs.outlineColor, active, bw: cs.borderTopWidth, bs: cs.borderTopStyle }
+      return resolved
     })
-    expect(style.w).toBe("2px")
-    expect(style.st).toBe("solid")
-    expect(style.c).toBe(style.active)
-    expect(style.bw).toBe("1px")
-    expect(style.bs).toBe("solid")
+    // transition-colors animates outline-color, so the ring colour settles after focus.
+    await expect(button).toHaveCSS("outline-color", activeColor)
+    await expect(button).toHaveCSS("outline-width", "2px")
+    await expect(button).toHaveCSS("outline-style", "solid")
+    await expect(button).toHaveCSS("border-top-width", "1px")
+    await expect(button).toHaveCSS("border-top-style", "solid")
     await page.keyboard.press("Enter")
     await expect(html(page)).toHaveAttribute("data-theme", "light")
     await page.keyboard.press("Space")

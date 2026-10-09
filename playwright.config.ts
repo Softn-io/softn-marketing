@@ -5,6 +5,8 @@ const PORT = 3100
 
 export default defineConfig({
   testDir: "./e2e",
+  timeout: 30_000,
+  globalTimeout: 600_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
@@ -15,7 +17,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
-    command: `pnpm build && pnpm start -p ${PORT}`,
+    command: `./node_modules/.bin/next build && exec ./node_modules/.bin/next start -p ${PORT}`,
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 240_000,
