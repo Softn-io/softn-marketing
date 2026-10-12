@@ -102,8 +102,39 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      # Runs on a cache hit too: the browser binaries are cached, the system libraries are not.
+      - run: pnpm exec playwright install --with-deps chromium
+      # No separate build step: the Playwright webServer builds and starts the app.
+      - run: pnpm test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
   deploy:
-    needs: [lint, lint-tailwind, typecheck, test, build, lighthouse]
+    needs: [lint, lint-tailwind, typecheck, test, build, e2e, lighthouse]
     # Never on pull requests (forks included): only post-merge pushes or a manual run of develop/staging/main.
     if: ${{ github.event_name != 'pull_request' && contains(fromJSON('["refs/heads/develop","refs/heads/staging","refs/heads/main"]'), github.ref) }}
     runs-on: ubuntu-latest
