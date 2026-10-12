@@ -90,6 +90,7 @@ jobs:
           retention-days: 1
 
   lighthouse:
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -100,7 +101,11 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      # No build here: lhci only runs `next start` on the build job's output downloaded below.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: next-build
+          path: .next
       # Temporary: the page renders no content yet, so the budgets cannot be met. Set on the step, not the job: a job-level flag still reports a failed check on the PR. Remove once the first content section lands.
       - run: pnpm lighthouse
         continue-on-error: true
