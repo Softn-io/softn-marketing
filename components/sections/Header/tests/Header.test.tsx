@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { ASSISTANT_NAME } from "@/locales/fr/chatbot"
 import { nav } from "@/locales/fr/hero"
 import { interpolate } from "@/lib/interpolate"
-import { Header } from "./Header"
+import { Header } from "../Header"
 
 beforeEach(() => {
   vi.stubGlobal(

@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { OPEN_CHATBOT_EVENT } from "@/lib/chatbotEvents"
-import { BookingCta } from "./BookingCta"
+import { BookingCta } from "../components/BookingCta"
 
 describe("BookingCta", () => {
   const listeners: Array<(event: Event) => void> = []

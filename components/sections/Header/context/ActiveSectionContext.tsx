@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useMemo, type ReactNode } from "react"
 import type { SectionId } from "@/lib/anchors"
-import { useActiveSection, type ActiveSection } from "./useActiveSection"
+import { useActiveSection, type ActiveSection } from "../hooks/useActiveSection"
 
 const ActiveSectionContext = createContext<ActiveSection>({ activeId: null, select: () => undefined })
 

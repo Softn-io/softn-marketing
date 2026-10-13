@@ -2,8 +2,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { OPEN_CHATBOT_EVENT } from "@/lib/chatbotEvents"
-import { MobileMenu } from "./MobileMenu"
-import { getNavLinks } from "./navLinks"
+import { MobileMenu } from "../components/MobileMenu"
+import { getNavLinks } from "../data/navLinks"
 
 const MENU_LABEL = "Menu"
 const CLOSE_LABEL = "Fermer"

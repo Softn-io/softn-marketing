@@ -7,11 +7,11 @@ import { useEffect, useRef, useState, type MouseEvent } from "react"
 import { ThemeToggle } from "@components/ui/ThemeToggle"
 import { nav } from "@/locales/fr/hero"
 import { goToSection } from "@/lib/anchors"
-import { useActiveSectionContext } from "./ActiveSectionContext"
+import { useActiveSectionContext } from "../context/ActiveSectionContext"
 import { SectionLink } from "./SectionLink"
 import { BookingCta } from "./BookingCta"
-import type { NavLink } from "./navLinks"
-import styles from "./Header.module.css"
+import type { NavLink } from "../data/navLinks"
+import styles from "../styles/Header.module.css"
 
 type MobileMenuProps = {
   links: readonly NavLink[]

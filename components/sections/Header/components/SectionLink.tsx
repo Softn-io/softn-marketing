@@ -1,8 +1,8 @@
 "use client"
 
 import type { MouseEvent, ReactNode } from "react"
-import type { NavLink } from "./navLinks"
-import { useActiveSectionContext } from "./ActiveSectionContext"
+import type { NavLink } from "../data/navLinks"
+import { useActiveSectionContext } from "../context/ActiveSectionContext"
 
 type SectionLinkProps = {
   link: NavLink

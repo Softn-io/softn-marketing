@@ -2,7 +2,7 @@
 import { act, cleanup, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { HERO_CTA_ID } from "@/lib/anchors"
-import { ScrollRevealCta } from "./ScrollRevealCta"
+import { ScrollRevealCta } from "../components/ScrollRevealCta"
 
 type ObserverCallback = (entries: Array<Pick<IntersectionObserverEntry, "isIntersecting" | "boundingClientRect">>) => void
 
