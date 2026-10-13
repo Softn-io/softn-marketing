@@ -1,7 +1,8 @@
-import { expect, test, type Page } from "@playwright/test"
+import { expect, test, type Browser, type BrowserContext, type Page } from "@playwright/test"
 
 const SKIP_LINK = "Aller au contenu principal"
 const BURGER = "Menu de navigation"
+const CLOSE = "Fermer le menu"
 const MAIN_NAV = "Navigation principale"
 const CTA_LONG = "Réserver mon échange Spark"
 const CTA_SHORT = "Réserver mon échange"
@@ -281,7 +282,12 @@ test.describe("header: mobile drawer", () => {
     await page.goto("/")
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await expect(drawer(page).getByRole("button", { name: BURGER })).toHaveCount(1)
+    await expect(drawer(page).getByRole("button", { name: CLOSE })).toHaveCount(1)
+    // The only "Menu de navigation" button left is the header burger, inert and out of the a11y tree.
+    await expect(page.getByRole("button", { name: BURGER })).toHaveCount(0)
+    await expect(burger(page)).toHaveAttribute("aria-label", BURGER)
+    await expect(burger(page)).toHaveAttribute("aria-expanded", "true")
+    expect(await burger(page).evaluate((el) => el.closest("[aria-hidden='true'], [inert]") !== null)).toBe(true)
     await expect(drawer(page).getByRole("link", { name: LOGO })).toHaveCount(1)
     // The header sits behind the modal (aria-hidden/inert): the a11y tree holds exactly one logo and one toggle.
     await expect(page.getByRole("link", { name: LOGO })).toHaveCount(1)
@@ -293,7 +299,7 @@ test.describe("header: mobile drawer", () => {
     await page.goto("/")
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await expect(drawer(page).getByRole("button", { name: BURGER })).toBeFocused()
+    await expect(drawer(page).getByRole("button", { name: CLOSE })).toBeFocused()
   })
 
   const FOCUS_CYCLE = ["logo", "toggle", "close", "link", "link", "link", "link", "link", "cta"] as const
@@ -308,7 +314,7 @@ test.describe("header: mobile drawer", () => {
       const label = active.getAttribute("aria-label") ?? ""
       if (active.closest("nav") !== null) return "link"
       if (label.startsWith("Passer au mode")) return "toggle"
-      if (label === "Menu de navigation") return "close"
+      if (label === "Fermer le menu") return "close"
       if (active.tagName === "A" && active.getAttribute("href") === "/") return "logo"
       if (active.tagName === "A") return "cta"
       return "outside"
@@ -325,7 +331,7 @@ test.describe("header: mobile drawer", () => {
     await page.goto("/")
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await expect(drawer(page).getByRole("button", { name: BURGER })).toBeFocused()
+    await expect(drawer(page).getByRole("button", { name: CLOSE })).toBeFocused()
     const seen: string[] = []
     // Start on close (initial focus): 6 stops reach the CTA, then 3 more wrap through logo, toggle, close, and one more full loop.
     for (let i = 0; i < FOCUS_CYCLE.length * 2; i += 1) {
@@ -341,7 +347,7 @@ test.describe("header: mobile drawer", () => {
     await page.goto("/")
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await expect(drawer(page).getByRole("button", { name: BURGER })).toBeFocused()
+    await expect(drawer(page).getByRole("button", { name: CLOSE })).toBeFocused()
     const seen: string[] = []
     for (let i = 0; i < FOCUS_CYCLE.length * 2; i += 1) {
       seen.push(await pressSettled(page, "Shift+Tab"))
@@ -415,7 +421,7 @@ test.describe("header: mobile drawer", () => {
     await page.goto("/")
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await drawer(page).getByRole("button", { name: BURGER }).click()
+    await drawer(page).getByRole("button", { name: CLOSE }).click()
     await expect(drawer(page)).toBeHidden()
     await expect(burger(page)).toHaveAttribute("aria-expanded", "false")
   })
@@ -485,10 +491,14 @@ test.describe("header: drawer top row matches the header", () => {
                 toggle: box(scope?.querySelector(t as string) ?? null),
                 button: box(
                   scope?.querySelector("button[aria-expanded]") ??
-                    scope?.querySelector("button[aria-label='Menu de navigation']") ??
+                    scope?.querySelector("button[aria-label='Fermer le menu']") ??
                     null,
                 ),
-                bg: scope === null ? "" : getComputedStyle(scope).backgroundColor,
+                bg:
+                  scope === null
+                    ? ""
+                    : getComputedStyle(scope.getAttribute("role") === "dialog" ? (scope.firstElementChild ?? scope) : scope)
+                        .backgroundColor,
               }
             },
             [root, toggle],
@@ -512,7 +522,7 @@ test.describe("header: drawer top row matches the header", () => {
             expect(Math.abs(a.h - b.h), `${key} h`).toBeLessThanOrEqual(1)
           }
         }
-        expect(after.bg, "popup background equals header background").toBe(before.bg)
+        expect(after.bg, "drawer bar background equals header background").toBe(before.bg)
       })
     }
   }
@@ -544,25 +554,103 @@ test.describe("header: drawer top row matches the header", () => {
     }
   })
 
-  test("swipe down dismisses the drawer (touch emulation)", async ({ browser }) => {
-    const context = await browser.newContext({ viewport: { width: 375, height: 800 }, hasTouch: true, isMobile: true })
+  type Touch = (type: "touchStart" | "touchMove" | "touchEnd", y: number) => Promise<unknown>
+
+  const openTouchDrawer = async (
+    browser: Browser,
+    scheme: "dark" | "light",
+  ): Promise<{ context: BrowserContext; page: Page; touch: Touch }> => {
+    const context = await browser.newContext({
+      viewport: { width: 375, height: 800 },
+      hasTouch: true,
+      isMobile: true,
+      colorScheme: scheme,
+    })
+    await context.addInitScript((value) => localStorage.setItem("softn-theme", value), scheme)
     const page = await context.newPage()
     await page.goto("/")
+    await expect(page.locator("html")).toHaveAttribute("data-theme", scheme)
     await burger(page).tap()
     await expect(drawer(page)).toBeVisible()
+    await expect(drawer(page)).not.toHaveAttribute("data-starting-style", /.*/)
+    await expect.poll(() => drawer(page).evaluate((el) => getComputedStyle(el).opacity)).toBe("1")
     const session = await context.newCDPSession(page)
-    const x = 200
-    const touch = (type: "touchStart" | "touchMove" | "touchEnd", y: number) =>
+    const touch: Touch = (type, y) =>
       session.send("Input.dispatchTouchEvent", {
         type,
-        touchPoints: type === "touchEnd" ? [] : [{ x, y }],
+        touchPoints: type === "touchEnd" ? [] : [{ x: 200, y }],
       })
+    return { context, page, touch }
+  }
+
+  const barBox = (page: Page) => drawer(page).locator("> div").first().boundingBox()
+  const bodyOffset = (page: Page) =>
+    drawer(page)
+      .locator("> div")
+      .nth(1)
+      .evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)
+
+  test("partial swipe: bar stays put, body travels, then snaps back below threshold", async ({ browser }) => {
+    const { context, page, touch } = await openTouchDrawer(browser, "dark")
+    const before = await barBox(page)
+    expect(before).not.toBeNull()
+    await touch("touchStart", 300)
+    for (let y = 300; y <= 360; y += 10) await touch("touchMove", y)
+    await expect.poll(() => bodyOffset(page)).toBeGreaterThan(20)
+    const during = await barBox(page)
+    expect(during).not.toBeNull()
+    if (before && during) {
+      for (const key of ["x", "y", "width", "height"] as const) {
+        expect(Math.abs(before[key] - during[key]), `bar ${key} moved during swipe`).toBeLessThanOrEqual(1)
+      }
+    }
+    await expect(drawer(page)).toHaveCSS("transform", "none")
+    await touch("touchEnd", 360)
+    await expect(drawer(page)).toBeVisible()
+    await expect.poll(() => bodyOffset(page)).toBe(0)
+    const after = await barBox(page)
+    if (before && after) expect(Math.abs(before.y - after.y)).toBeLessThanOrEqual(1)
+    await context.close()
+  })
+
+  test("swipe past the threshold closes the drawer and returns focus to the header burger", async ({ browser }) => {
+    const { context, page, touch } = await openTouchDrawer(browser, "dark")
     await touch("touchStart", 300)
     for (let y = 300; y <= 700; y += 50) await touch("touchMove", y)
     await touch("touchEnd", 700)
     await expect(drawer(page)).toBeHidden()
+    await expect(burger(page)).toBeFocused()
+    await expect(burger(page)).toHaveAttribute("aria-expanded", "false")
+    await expect(page.getByRole("button", { name: BURGER })).toHaveCount(1)
     await context.close()
   })
+
+  for (const scheme of ["dark", "light"] as const) {
+    test(`no seam between drawer bar and header mid-swipe (${scheme})`, async ({ browser }) => {
+      const { context, page, touch } = await openTouchDrawer(browser, scheme)
+      const headerBg = await page.evaluate(() => {
+        const el = document.querySelector("header")
+        return el === null ? "" : getComputedStyle(el).backgroundColor
+      })
+      await touch("touchStart", 300)
+      for (let y = 300; y <= 360; y += 10) await touch("touchMove", y)
+      await expect.poll(() => bodyOffset(page)).toBeGreaterThan(20)
+      const bar = drawer(page).locator("> div").first()
+      await expect(bar).toHaveCSS("background-color", headerBg)
+      const body = drawer(page).locator("> div").nth(1)
+      await expect(body).toHaveCSS("background-color", headerBg)
+      const barRect = await bar.boundingBox()
+      const headerRect = await header(page).boundingBox()
+      expect(barRect).not.toBeNull()
+      expect(headerRect).not.toBeNull()
+      if (barRect && headerRect) {
+        expect(Math.abs(barRect.y - headerRect.y)).toBeLessThanOrEqual(1)
+        expect(Math.abs(barRect.height - headerRect.height)).toBeLessThanOrEqual(1)
+      }
+      await touch("touchEnd", 360)
+      await context.close()
+    })
+  }
 })
 
 test.describe("header: contrast in both themes", () => {
