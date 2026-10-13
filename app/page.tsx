@@ -1,14 +1,14 @@
-import { ThemeToggle } from "@components/ui/ThemeToggle";
+import { Header } from "@components/sections/Header";
+import { SECTION_IDS } from "@/lib/anchors";
 
 /**
- * Foundation shell only: the real one-page sections (hero, offer, process…)
- * land in issues #9-22, which depend on this one. No copy here — content
- * comes from `content/fr/*.ts` once written and validated by `content-seo`.
+ * Foundation shell: the page sections land in their own issues and mount inside `<main>`.
  */
 export default function Home() {
   return (
-    <main className="flex flex-1 flex-col bg-base text-foreground">
-      <ThemeToggle />
-    </main>
+    <>
+      <Header />
+      <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground" />
+    </>
   );
 }

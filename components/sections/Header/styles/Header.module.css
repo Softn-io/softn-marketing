@@ -1,0 +1,249 @@
+/*
+ * Layers: the drawer backdrop and viewport sit on --softn-z-drawer, above the sticky header
+ * (--softn-z-sticky): the popup repeats the header's top row so the header appears unchanged.
+ * Display, sizing and radius come from Tailwind utilities in the markup; this file only holds
+ * what has no utility (composite button tokens, transitions, drawer states, focus ring).
+ */
+
+.header {
+  padding-block: var(--softn-space-4);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--softn-space-2);
+  left: var(--softn-space-2);
+  z-index: var(--softn-z-toast);
+  padding: var(--softn-space-3) var(--softn-space-4);
+  border: 1px solid var(--softn-border-active);
+  border-radius: var(--softn-radius-md);
+  background-color: var(--softn-background-elevated);
+  color: var(--softn-color);
+  transform: translateY(calc(-100% - var(--softn-space-2)));
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+.nav-link {
+  color: var(--softn-color-tertiary);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--softn-space-2);
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    text-decoration-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.nav-link:hover {
+  color: var(--softn-color);
+}
+
+/* Active section: foreground color plus a brand underline, so the state never relies on color alone. */
+.nav-link[aria-current="location"],
+.drawer-link[aria-current="location"] {
+  color: var(--softn-color);
+  text-decoration-color: var(--softn-brand-accent);
+}
+
+.burger {
+  border: 0;
+  background-color: transparent;
+  color: var(--softn-color);
+  cursor: pointer;
+}
+
+/*
+ * Header CTA revealed on scroll. Hidden: faded and nudged down by one --softn-space-2 step, then
+ * visibility:hidden after the fade so it leaves the tab order even without `inert` support.
+ * Enter uses the screen-transition duration, exit the micro one (feels immediate).
+ */
+.scroll-reveal {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--softn-duration-screen-transition) var(--softn-easing-out),
+    transform var(--softn-duration-screen-transition) var(--softn-easing-out),
+    visibility 0s;
+}
+
+.scroll-reveal[data-state="hidden"] {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(var(--softn-space-2));
+  transition:
+    opacity var(--softn-duration-micro) var(--softn-easing-out),
+    transform var(--softn-duration-micro) var(--softn-easing-out),
+    visibility 0s linear var(--softn-duration-micro);
+}
+
+.logo:focus-visible,
+.nav-link:focus-visible,
+.burger:focus-visible,
+.skip-link:focus-visible,
+.drawer-link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.backdrop,
+.viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--softn-z-drawer);
+}
+
+/*
+ * Enter: --softn-duration-screen-transition (280ms) with ease-out. Exit: --softn-duration-micro
+ * (120ms) with ease-in, so closing feels immediate. Only opacity and a short translateY (one
+ * --softn-space-8 step) animate; the popup no longer travels the full viewport height.
+ */
+.backdrop {
+  background-color: var(--softn-background-overlay);
+  transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.backdrop[data-starting-style],
+.backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.backdrop[data-ending-style] {
+  transition-duration: var(--softn-duration-micro);
+  transition-timing-function: var(--softn-easing-in);
+}
+
+.popup {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+  opacity: 1;
+  transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/*
+ * The popup itself is transparent and never transformed: the top row (same background token as the
+ * sticky header, so no seam) stays on the header's position; only the menu body below it travels
+ * with the swipe, over the dimmed page.
+ */
+.drawer-bar {
+  flex: none;
+  background-color: var(--softn-background);
+}
+
+.drawer-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--softn-space-6);
+  padding-block: var(--softn-space-6) var(--softn-space-10);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+  background-color: var(--softn-background);
+  /* The library registers the movement variable as non-inherited, so children must opt in. */
+  --drawer-swipe-movement-y: inherit;
+  transform: translateY(var(--drawer-swipe-movement-y, 0));
+  transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* The library writes an inline translate3d/scale on the popup while swiping; only !important beats it. */
+.popup[data-swiping] {
+  transform: none !important;
+}
+
+.popup[data-starting-style],
+.popup[data-ending-style] {
+  opacity: 0;
+}
+
+.popup[data-starting-style] .drawer-body,
+.popup[data-ending-style] .drawer-body {
+  transform: translateY(var(--softn-space-8));
+}
+
+.popup[data-ending-style],
+.popup[data-ending-style] .drawer-body {
+  transition-duration: var(--softn-duration-micro);
+  transition-timing-function: var(--softn-easing-in);
+}
+
+.popup[data-swiping],
+.popup[data-swiping] .drawer-body {
+  transition: none;
+  user-select: none;
+}
+
+/* The backdrop fades with the swipe; its own transition is dropped so it tracks the finger. */
+.backdrop {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+}
+
+.portal:has(.popup[data-swiping]) .backdrop {
+  transition: none;
+}
+
+.drawer-nav {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room for the focus ring, which the scroll container would otherwise clip. */
+  padding: var(--softn-space-1);
+  /* Keyboard focus-scroll ignores padding; without this the edge link's outline is clipped. */
+  scroll-padding-block: var(--softn-space-1);
+  margin: calc(-1 * var(--softn-space-1));
+}
+
+.drawer-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-link {
+  min-height: var(--softn-size-xl);
+  gap: var(--softn-space-5);
+  border-bottom: 1px solid var(--softn-border-subtle);
+  color: var(--softn-color);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 2px;
+  text-underline-offset: var(--softn-space-1);
+  transition: text-decoration-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link,
+  .drawer-link {
+    transition: none;
+  }
+
+  .skip-link {
+    transition: none;
+  }
+
+  .scroll-reveal,
+  .scroll-reveal[data-state="hidden"] {
+    transform: none;
+    transition-property: opacity, visibility;
+  }
+
+  .backdrop,
+  .popup {
+    transition-property: opacity;
+    transition-duration: var(--softn-duration-micro);
+  }
+
+  .drawer-body,
+  .popup[data-swiping] .drawer-body,
+  .popup[data-starting-style] .drawer-body,
+  .popup[data-ending-style] .drawer-body {
+    transform: none;
+    transition: none;
+  }
+}

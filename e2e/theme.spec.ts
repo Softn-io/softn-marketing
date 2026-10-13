@@ -70,8 +70,11 @@ test.describe("theme", () => {
   test("keyboard operable with visible focus ring", async ({ page }) => {
     await page.emulateMedia({ colorScheme: "dark" })
     await page.goto("/")
-    await page.keyboard.press("Tab")
+    // Tab order up to the toggle (skip link, logo, nav links) is asserted in header.spec.ts.
     const button = toggle(page, TO_LIGHT)
+    await button.focus()
+    await page.keyboard.press("Tab")
+    await page.keyboard.press("Shift+Tab")
     await expect(button).toBeFocused()
     const activeColor = await page.evaluate(() => {
       const probe = document.createElement("span")

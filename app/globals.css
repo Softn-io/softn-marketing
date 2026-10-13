@@ -21,3 +21,14 @@
 body {
   @apply bg-base text-foreground font-body;
 }
+
+/* Keeps in-page anchor targets clear of the sticky header (button height plus its vertical padding). */
+html {
+  scroll-padding-top: calc(var(--softn-space-10) + var(--softn-space-8));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
