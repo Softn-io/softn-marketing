@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest"
 import { SECTION_IDS, type SectionId } from "@/lib/anchors"
 import { ActiveSectionProvider } from "../context/ActiveSectionContext"
-import { SectionLink } from "../components/SectionLink"
+import { SectionLink } from "../SectionLink"
 import { getNavLinks } from "../data/navLinks"
 
 type ObserverInstance = {

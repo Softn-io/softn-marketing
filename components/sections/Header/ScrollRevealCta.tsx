@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react"
 import { HERO_CTA_ID } from "@/lib/anchors"
-import styles from "../styles/Header.module.css"
+import styles from "./styles/Header.module.css"
 
 type ScrollRevealCtaProps = {
   children: ReactNode
