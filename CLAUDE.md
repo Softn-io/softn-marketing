@@ -28,10 +28,10 @@ Target scripts, to be created at project init (do not invent other names):
 ## Architecture
 
 - `app/` routes, layout, `api/` (Route Handlers)
-- `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns)
+- `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns). Small primitives stay flat. A composite component (`components/sections/Header/`) keeps its entry (`index.ts`, `Header.tsx`) at the folder root and splits the rest into `components/`, `hooks/`, `context/`, `data/`, `styles/` and `tests/` (unit tests live in `tests/`)
 - `locales/fr/` typed copy (single source of content)
 - `lib/` env, airtable, fillout, consent, analytics
-- `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover: no `tests/` folder
+- `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover (in the component's own `tests/` subfolder for composite components); no root `tests/` folder
 
 ## Git workflow
 
