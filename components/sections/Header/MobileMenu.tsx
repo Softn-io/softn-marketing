@@ -18,6 +18,8 @@ type MobileMenuProps = {
   ctaLabel: string
   /** Accessible name of the burger button and of the drawer dialog. */
   menuLabel: string
+  /** Accessible name of the close control inside the drawer. */
+  closeLabel: string
 }
 
 /** Reads the `lg` breakpoint from the published token so the drawer never outlives the burger. */
@@ -38,7 +40,7 @@ const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
  * Activating a link or the CTA closes the drawer first, then performs the action once the scroll lock is released;
  * a link also becomes the active section at that moment.
  */
-export const MobileMenu = ({ links, ctaLabel, menuLabel }: MobileMenuProps) => {
+export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMenuProps) => {
   const [open, setOpen] = useState(false)
   const { select } = useActiveSectionContext()
   const pendingAction = useRef<(() => void) | null>(null)
@@ -91,7 +93,7 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel }: MobileMenuProps) => {
       >
         <Menu size={20} aria-hidden="true" focusable="false" />
       </Drawer.Trigger>
-      <Drawer.Portal>
+      <Drawer.Portal className={styles.portal}>
         <Drawer.Backdrop className={styles.backdrop} />
         <Drawer.Viewport className={styles.viewport}>
           <Drawer.Popup className={styles.popup} aria-label={menuLabel} initialFocus={closeControl}>
@@ -109,7 +111,7 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel }: MobileMenuProps) => {
                 <ThemeToggle />
                 <Drawer.Close
                   ref={closeControl}
-                  aria-label={menuLabel}
+                  aria-label={closeLabel}
                   className={`${styles.burger} inline-flex size-10 items-center justify-center rounded-pill`}
                 >
                   <X size={20} aria-hidden="true" focusable="false" />
@@ -117,7 +119,7 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel }: MobileMenuProps) => {
               </div>
             </div>
             <div className={styles["drawer-body"]}>
-            <nav>
+            <nav className={styles["drawer-nav"]}>
               <ul className={styles["drawer-list"]}>
                 {links.map((link) => (
                   <li key={link.id}>

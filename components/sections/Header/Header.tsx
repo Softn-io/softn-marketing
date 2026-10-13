@@ -50,7 +50,7 @@ export const Header = () => {
               <span className="hidden xl:inline">{nav.cta}</span>
             </BookingCta>
           </ScrollRevealCta>
-          <MobileMenu links={links} ctaLabel={nav.cta} menuLabel={nav.menu.ariaLabel} />
+          <MobileMenu links={links} ctaLabel={nav.cta} menuLabel={nav.menu.ariaLabel} closeLabel={nav.menu.closeAriaLabel} />
         </div>
       </header>
     </ActiveSectionProvider>

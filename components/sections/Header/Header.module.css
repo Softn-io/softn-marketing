@@ -122,28 +122,39 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  background-color: var(--softn-background);
   outline: none;
   opacity: 1;
-  transform: translateY(var(--drawer-swipe-movement-y, 0));
   transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
 }
 
-/* The top row stays on the header's position; only the menu body below it travels. */
+/*
+ * The popup itself is transparent and never transformed: the top row (same background token as the
+ * sticky header, so no seam) stays on the header's position; only the menu body below it travels
+ * with the swipe, over the dimmed page.
+ */
 .drawer-bar {
   flex: none;
+  background-color: var(--softn-background);
 }
 
 .drawer-body {
   display: flex;
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
   gap: var(--softn-space-6);
   padding-block: var(--softn-space-6) var(--softn-space-10);
   padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+  background-color: var(--softn-background);
+  /* The library registers the movement variable as non-inherited, so children must opt in. */
+  --drawer-swipe-movement-y: inherit;
+  transform: translateY(var(--drawer-swipe-movement-y, 0));
   transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* The library writes an inline translate3d/scale on the popup while swiping; only !important beats it. */
+.popup[data-swiping] {
+  transform: none !important;
 }
 
 .popup[data-starting-style],
@@ -162,9 +173,31 @@
   transition-timing-function: var(--softn-easing-in);
 }
 
-.popup[data-swiping] {
+.popup[data-swiping],
+.popup[data-swiping] .drawer-body {
   transition: none;
   user-select: none;
+}
+
+/* The backdrop fades with the swipe; its own transition is dropped so it tracks the finger. */
+.backdrop {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+}
+
+.portal:has(.popup[data-swiping]) .backdrop {
+  transition: none;
+}
+
+.drawer-nav {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Room for the focus ring, which the scroll container would otherwise clip. */
+  padding: var(--softn-space-1);
+  /* Keyboard focus-scroll ignores padding; without this the edge link's outline is clipped. */
+  scroll-padding-block: var(--softn-space-1);
+  margin: calc(-1 * var(--softn-space-1));
 }
 
 .drawer-list {
@@ -207,6 +240,7 @@
   }
 
   .drawer-body,
+  .popup[data-swiping] .drawer-body,
   .popup[data-starting-style] .drawer-body,
   .popup[data-ending-style] .drawer-body {
     transform: none;

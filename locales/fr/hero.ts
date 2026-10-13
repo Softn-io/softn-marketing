@@ -49,6 +49,7 @@ export const nav = {
   },
   menu: {
     ariaLabel: "Menu de navigation",
+    closeAriaLabel: "Fermer le menu",
   },
   skipLink: "Aller au contenu principal",
 } as const

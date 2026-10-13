@@ -6,17 +6,18 @@ import { MobileMenu } from "./MobileMenu"
 import { getNavLinks } from "./navLinks"
 
 const MENU_LABEL = "Menu"
+const CLOSE_LABEL = "Fermer"
 const CTA_LABEL = "Réserver"
 
 const renderMenu = () =>
-  render(<MobileMenu links={getNavLinks()} ctaLabel={CTA_LABEL} menuLabel={MENU_LABEL} />)
+  render(<MobileMenu links={getNavLinks()} ctaLabel={CTA_LABEL} menuLabel={MENU_LABEL} closeLabel={CLOSE_LABEL} />)
 
 /** The page burger: while the modal drawer is open it is inert, so query it with `hidden: true`. */
 const burger = (): HTMLElement =>
   screen.getAllByRole("button", { name: MENU_LABEL, hidden: true }).find((button) => button.hasAttribute("aria-expanded")) as HTMLElement
 
 const closeButton = (dialog: HTMLElement): HTMLElement => {
-  const button = dialog.querySelector<HTMLElement>(`button[aria-label="${MENU_LABEL}"]`)
+  const button = dialog.querySelector<HTMLElement>(`button[aria-label="${CLOSE_LABEL}"]`)
   if (button === null) throw new Error("close control not found")
   return button
 }
@@ -99,7 +100,7 @@ describe("MobileMenu", () => {
     fireEvent.click(burger())
     const dialog = await screen.findByRole("dialog", { name: MENU_LABEL })
     expect(dialog.querySelector(`a[href="/"]`)).not.toBeNull()
-    expect(closeButton(dialog).getAttribute("aria-label")).toBe(MENU_LABEL)
+    expect(closeButton(dialog).getAttribute("aria-label")).toBe(CLOSE_LABEL)
     await waitFor(() => expect(document.activeElement).toBe(closeButton(dialog)))
   })
 
