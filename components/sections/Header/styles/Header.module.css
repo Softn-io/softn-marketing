@@ -117,24 +117,40 @@
   transition-timing-function: var(--softn-easing-in);
 }
 
+/*
+ * The swipe start zones (top row and handle) use touch-action: none so the browser never claims the
+ * vertical pan there (iOS Safari would otherwise cancel the touch stream and the drawer would not
+ * follow the finger). Everywhere else pinch-zoom stays available.
+ */
+.viewport {
+  touch-action: pan-y pinch-zoom;
+}
+
+/*
+ * The popup is transparent and never visually transformed: the top row (same background token as the
+ * sticky header, so no seam) stays on the header's position and only the menu body below it travels
+ * with the swipe. The library writes --drawer-swipe-movement-y on the popup only, as a non-inherited
+ * registered property that Safari cannot opt descendants in to; --drawer-body-offset is an ordinary
+ * custom property computed on the popup from it, which children inherit normally.
+ */
 .popup {
+  --drawer-body-offset: var(--drawer-swipe-movement-y, 0px);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   height: 100%;
   outline: none;
   opacity: 1;
+  touch-action: pan-y pinch-zoom;
   transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
 }
 
-/*
- * The popup itself is transparent and never transformed: the top row (same background token as the
- * sticky header, so no seam) stays on the header's position; only the menu body below it travels
- * with the swipe, over the dimmed page.
- */
 .drawer-bar {
   flex: none;
   background-color: var(--softn-background);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .drawer-body {
@@ -143,19 +159,20 @@
   flex-direction: column;
   min-height: 0;
   background-color: var(--softn-background);
-  /* The library registers the movement variable as non-inherited, so children must opt in. */
-  --drawer-swipe-movement-y: inherit;
-  transform: translateY(var(--drawer-swipe-movement-y, 0));
+  transform: translateY(var(--drawer-body-offset, 0px));
   transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
 }
 
-/* Decorative grab handle; the full-width strip is the swipe start zone (>= 44px tall). */
+/* Full-width strip (>= 44px tall) under the top row: a touch starting here starts the swipe. */
 .drawer-handle {
   display: flex;
   flex: none;
   align-items: center;
   justify-content: center;
   min-height: var(--softn-size-md);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .drawer-handle-pill {
@@ -214,11 +231,11 @@
 
 @keyframes drawer-swipe-exit {
   from {
-    transform: translateY(var(--drawer-swipe-movement-y, 0px));
+    transform: translateY(var(--drawer-body-offset, 0px));
   }
 
   to {
-    transform: translateY(calc(var(--drawer-swipe-movement-y, 0px) + 100%));
+    transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
   }
 }
 
@@ -229,7 +246,7 @@
 }
 
 .popup[data-ending-style][data-swipe-dismissed] .drawer-body {
-  transform: translateY(calc(var(--drawer-swipe-movement-y, 0px) + 100%));
+  transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
   transition: none;
   animation: drawer-swipe-exit calc(var(--drawer-swipe-strength, 1) * var(--softn-duration-screen-transition))
     var(--softn-easing-out) forwards;
@@ -238,6 +255,7 @@
 .popup[data-swiping],
 .popup[data-swiping] .drawer-body {
   transition: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -255,6 +273,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   /* Room for the focus ring, which the scroll container would otherwise clip. */
   padding: var(--softn-space-1);
   /* Keyboard focus-scroll ignores padding; without this the edge link's outline is clipped. */
@@ -308,8 +327,10 @@
     animation: none;
   }
 
-  .drawer-body,
-  .popup[data-swiping] .drawer-body,
+  .drawer-body {
+    transition: none;
+  }
+
   .popup[data-starting-style] .drawer-body,
   .popup[data-ending-style] .drawer-body,
   .popup[data-ending-style][data-swipe-dismissed] .drawer-body {
