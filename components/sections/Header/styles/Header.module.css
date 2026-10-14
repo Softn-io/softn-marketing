@@ -117,24 +117,40 @@
   transition-timing-function: var(--softn-easing-in);
 }
 
+/*
+ * The swipe start zones (top row and handle) use touch-action: none so the browser never claims the
+ * vertical pan there (iOS Safari would otherwise cancel the touch stream and the drawer would not
+ * follow the finger). Everywhere else pinch-zoom stays available.
+ */
+.viewport {
+  touch-action: pan-y pinch-zoom;
+}
+
+/*
+ * The popup is transparent and never visually transformed: the top row (same background token as the
+ * sticky header, so no seam) stays on the header's position and only the menu body below it travels
+ * with the swipe. The library writes --drawer-swipe-movement-y on the popup only, as a non-inherited
+ * registered property that Safari cannot opt descendants in to; --drawer-body-offset is an ordinary
+ * custom property computed on the popup from it, which children inherit normally.
+ */
 .popup {
+  --drawer-body-offset: var(--drawer-swipe-movement-y, 0px);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
   height: 100%;
   outline: none;
   opacity: 1;
+  touch-action: pan-y pinch-zoom;
   transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
 }
 
-/*
- * The popup itself is transparent and never transformed: the top row (same background token as the
- * sticky header, so no seam) stays on the header's position; only the menu body below it travels
- * with the swipe, over the dimmed page.
- */
 .drawer-bar {
   flex: none;
   background-color: var(--softn-background);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .drawer-body {
@@ -142,14 +158,40 @@
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
-  gap: var(--softn-space-6);
-  padding-block: var(--softn-space-6) var(--softn-space-10);
-  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
   background-color: var(--softn-background);
-  /* The library registers the movement variable as non-inherited, so children must opt in. */
-  --drawer-swipe-movement-y: inherit;
-  transform: translateY(var(--drawer-swipe-movement-y, 0));
+  transform: translateY(var(--drawer-body-offset, 0px));
   transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* Full-width strip (>= 44px tall) under the top row: a touch starting here starts the swipe. */
+.drawer-handle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--softn-size-md);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drawer-handle-pill {
+  display: block;
+  width: var(--softn-space-10);
+  height: var(--softn-space-1);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-color-tertiary);
+}
+
+/* Marked swipe-ignore in the markup: a touch starting here scrolls or taps, it never starts a dismissal. */
+.drawer-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--softn-space-6);
+  padding-block: var(--softn-space-2) var(--softn-space-10);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
 }
 
 /* The library writes an inline translate3d/scale on the popup while swiping; only !important beats it. */
@@ -173,9 +215,47 @@
   transition-timing-function: var(--softn-easing-in);
 }
 
+/*
+ * Dismissed by swipe: the body keeps going from where the finger released it to below the viewport,
+ * for a duration scaled by the release velocity (--drawer-swipe-strength, 0.1 to 1). The library
+ * clears its inline `transition: none` in the same frame as data-ending-style, so a CSS transition
+ * is never created and the popup would unmount at once; only a running animation keeps it mounted,
+ * which is why the popup holds its opacity and the body travels with keyframes.
+ */
+@keyframes drawer-swipe-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-swipe-exit {
+  from {
+    transform: translateY(var(--drawer-body-offset, 0px));
+  }
+
+  to {
+    transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
+  }
+}
+
+.popup[data-ending-style][data-swipe-dismissed] {
+  opacity: 1;
+  transition: none;
+  animation: drawer-swipe-hold calc(var(--drawer-swipe-strength, 1) * var(--softn-duration-screen-transition));
+}
+
+.popup[data-ending-style][data-swipe-dismissed] .drawer-body {
+  transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
+  transition: none;
+  animation: drawer-swipe-exit calc(var(--drawer-swipe-strength, 1) * var(--softn-duration-screen-transition))
+    var(--softn-easing-out) forwards;
+}
+
 .popup[data-swiping],
 .popup[data-swiping] .drawer-body {
   transition: none;
+  -webkit-user-select: none;
   user-select: none;
 }
 
@@ -193,6 +273,7 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   /* Room for the focus ring, which the scroll container would otherwise clip. */
   padding: var(--softn-space-1);
   /* Keyboard focus-scroll ignores padding; without this the edge link's outline is clipped. */
@@ -234,16 +315,27 @@
   }
 
   .backdrop,
-  .popup {
+  .popup,
+  .popup[data-ending-style][data-swipe-dismissed] {
     transition-property: opacity;
     transition-duration: var(--softn-duration-micro);
+    transition-delay: 0s;
   }
 
-  .drawer-body,
-  .popup[data-swiping] .drawer-body,
+  .popup[data-ending-style][data-swipe-dismissed] {
+    opacity: 0;
+    animation: none;
+  }
+
+  .drawer-body {
+    transition: none;
+  }
+
   .popup[data-starting-style] .drawer-body,
-  .popup[data-ending-style] .drawer-body {
+  .popup[data-ending-style] .drawer-body,
+  .popup[data-ending-style][data-swipe-dismissed] .drawer-body {
     transform: none;
     transition: none;
+    animation: none;
   }
 }

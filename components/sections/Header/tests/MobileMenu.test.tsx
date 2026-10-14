@@ -164,4 +164,27 @@ describe("MobileMenu", () => {
     fireEvent.click(dialog.querySelector(`a[href="#reservation"]`) as Element)
     await waitFor(() => expect(window.location.hash).toBe("#reservation"))
   })
+
+  it("renders a decorative handle with no text and no accessible role", async () => {
+    renderMenu()
+    fireEvent.click(burger())
+    const dialog = await screen.findByRole("dialog", { name: MENU_LABEL })
+    const handle = dialog.querySelector<HTMLElement>('[aria-hidden="true"] > span')?.parentElement
+    expect(handle).not.toBeNull()
+    expect(handle?.getAttribute("aria-hidden")).toBe("true")
+    expect(handle?.textContent).toBe("")
+    expect(handle?.querySelector("a, button, [tabindex]")).toBeNull()
+  })
+
+  it("marks the links and the CTA as swipe-ignored but not the top row or the handle", async () => {
+    renderMenu()
+    fireEvent.click(burger())
+    const dialog = await screen.findByRole("dialog", { name: MENU_LABEL })
+    const ignore = (element: Element | null): boolean => element?.closest("[data-base-ui-swipe-ignore]") != null
+    expect(ignore(dialog.querySelector(`nav a[href="#services"]`))).toBe(true)
+    expect(ignore(dialog.querySelector(`a[href="#reservation"]`))).toBe(true)
+    expect(ignore(closeButton(dialog))).toBe(false)
+    expect(ignore(dialog.querySelector(`a[href="/"]`))).toBe(false)
+    expect(ignore(dialog.querySelector('[aria-hidden="true"] > span'))).toBe(false)
+  })
 })

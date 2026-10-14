@@ -33,7 +33,7 @@ const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
 
 /**
  * Burger button and full-screen navigation drawer shown below the `lg` breakpoint.
- * The drawer is modal: focus is trapped, Escape and a swipe down close it, focus returns to the burger.
+ * The drawer is modal: focus is trapped, Escape and a swipe down close it (a swipe can only start from the top row and the handle, the links and CTA are marked swipe-ignore), focus returns to the burger.
  * The drawer layers sit above the sticky header and cover it; the popup repeats the header's top row
  * (logo, theme toggle, close control in the burger's spot) so the focus trap and the accessibility tree stay correct.
  * Focus lands on the close control on open, which is where the burger was.
@@ -42,6 +42,7 @@ const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
  */
 export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMenuProps) => {
   const [open, setOpen] = useState(false)
+  const [dismissedBySwipe, setDismissedBySwipe] = useState(false)
   const { select } = useActiveSectionContext()
   const pendingAction = useRef<(() => void) | null>(null)
   const closeControl = useRef<HTMLButtonElement | null>(null)
@@ -56,6 +57,11 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
     media.addEventListener("change", closeOnDesktop)
     return () => media.removeEventListener("change", closeOnDesktop)
   }, [])
+
+  const handleOpenChange = (nextOpen: boolean, details: Drawer.Root.ChangeEventDetails): void => {
+    setDismissedBySwipe(!nextOpen && details.reason === "swipe")
+    setOpen(nextOpen)
+  }
 
   const closeThen = (action: () => void): void => {
     pendingAction.current = action
@@ -81,7 +87,7 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
   return (
     <Drawer.Root
       open={open}
-      onOpenChange={setOpen}
+      onOpenChange={handleOpenChange}
       onOpenChangeComplete={handleOpenChangeComplete}
       swipeDirection="down"
       modal
@@ -96,7 +102,9 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
       <Drawer.Portal className={styles.portal}>
         <Drawer.Backdrop className={styles.backdrop} />
         <Drawer.Viewport className={styles.viewport}>
-          <Drawer.Popup className={styles.popup} aria-label={menuLabel} initialFocus={closeControl}>
+          <Drawer.Popup className={styles.popup} aria-label={menuLabel} initialFocus={closeControl}
+            data-swipe-dismissed={dismissedBySwipe ? "" : undefined}
+          >
             <div className={`${styles.header} ${styles["drawer-bar"]} flex items-center justify-between gap-6`}>
               <Link
                 href="/"
@@ -119,25 +127,30 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
               </div>
             </div>
             <div className={styles["drawer-body"]}>
-            <nav className={styles["drawer-nav"]}>
-              <ul className={styles["drawer-list"]}>
-                {links.map((link) => (
-                  <li key={link.id}>
-                    <SectionLink
-                      link={link}
-                      onClick={(event) => handleLinkClick(event, link)}
-                      className={`${styles["drawer-link"]} flex items-center justify-between font-display text-title-sm`}
-                    >
-                      {link.label}
-                      <ArrowRight size={16} aria-hidden="true" focusable="false" className="text-brand-vivid" />
-                    </SectionLink>
-                  </li>
-                ))}
-              </ul>
-            </nav>
-            <BookingCta onBeforeActivate={closeThen} size="lg" className="self-start">
-              {ctaLabel}
-            </BookingCta>
+              <div className={styles["drawer-handle"]} aria-hidden="true">
+                <span className={styles["drawer-handle-pill"]} />
+              </div>
+              <div className={styles["drawer-content"]} data-base-ui-swipe-ignore="">
+                <nav className={styles["drawer-nav"]}>
+                  <ul className={styles["drawer-list"]}>
+                    {links.map((link) => (
+                      <li key={link.id}>
+                        <SectionLink
+                          link={link}
+                          onClick={(event) => handleLinkClick(event, link)}
+                          className={`${styles["drawer-link"]} flex items-center justify-between font-display text-title-sm`}
+                        >
+                          {link.label}
+                          <ArrowRight size={16} aria-hidden="true" focusable="false" className="text-brand-vivid" />
+                        </SectionLink>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
+                <BookingCta onBeforeActivate={closeThen} size="lg" className="self-start">
+                  {ctaLabel}
+                </BookingCta>
+              </div>
             </div>
           </Drawer.Popup>
         </Drawer.Viewport>
