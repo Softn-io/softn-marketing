@@ -225,7 +225,6 @@ test.describe("header: no horizontal overflow", () => {
         type: "measure",
         description: `w=${width} logo=${JSON.stringify(m.logo)} nav=${JSON.stringify(m.nav)} actions=${JSON.stringify(m.actions)} headerScroll=${m.headerScroll}/${m.headerClient}`,
       })
-      console.log(`[measure] ${width}px`, JSON.stringify(m))
       expect(m.docScroll).toBeLessThanOrEqual(m.docClient)
       expect(m.headerScroll).toBeLessThanOrEqual(m.headerClient)
       const { logo, nav, actions } = m
@@ -606,6 +605,7 @@ test.describe("header: drawer top row matches the header", () => {
   const handleLocator = (page: Page) => bodyLocator(page).locator("> div").nth(0)
   const bodyOffset = (page: Page) =>
     bodyLocator(page).evaluate((el) => new DOMMatrixReadOnly(getComputedStyle(el).transform).m42)
+  const bodyTop = async (page: Page) => (await bodyLocator(page).boundingBox())?.y ?? Number.NaN
 
   const centerOf = async (locator: Locator): Promise<{ x: number; y: number }> => {
     const box = await locator.boundingBox()
@@ -669,21 +669,20 @@ test.describe("header: drawer top row matches the header", () => {
   }, testInfo) => {
     const { context, page, touch } = await openTouchDrawer(browser, "dark")
     const before = await barBox(page)
+    const topBefore = await bodyTop(page)
     expect(before).not.toBeNull()
     const handle = await centerOf(handleLocator(page))
     await startRecorder(page)
     const travel = 100
     await drag(touch, handle.y, handle.y + travel)
     await expect.poll(() => bodyOffset(page)).toBeGreaterThan(20)
-    // Let the last move settle (no transition while swiping).
     await page.waitForTimeout(100)
     const offset = await bodyOffset(page)
-    const ratio = offset / travel
-    testInfo.annotations.push({ type: "measure", description: `finger=${travel}px body=${offset}px ratio=${ratio.toFixed(2)}` })
-    console.log(`[measure] finger ${travel}px -> body ${offset}px (ratio ${ratio.toFixed(2)})`)
+    testInfo.annotations.push({ type: "measure", description: `finger=${travel}px body=${offset}px` })
     // The library absorbs the first move (touch slop) so the body trails the finger by a small constant.
     expect(offset).toBeLessThanOrEqual(travel + 1)
     expect(travel - offset).toBeLessThanOrEqual(25)
+    expect(Math.abs((await bodyTop(page)) - topBefore - offset)).toBeLessThanOrEqual(1)
     expect(await backdropOpacity(page)).toBeLessThan(1)
     const during = await barBox(page)
     if (before && during) {
@@ -697,10 +696,32 @@ test.describe("header: drawer top row matches the header", () => {
     await expect.poll(() => bodyOffset(page)).toBe(0)
     await expect.poll(() => backdropOpacity(page)).toBe(1)
     await expect(drawer(page)).not.toHaveAttribute("data-swipe-dismissed", /.*/)
-    const after = await barBox(page)
-    if (before && after) expect(Math.abs(before.y - after.y)).toBeLessThanOrEqual(1)
     const samples = await readSamples(page)
     expect(samples.some((sample) => sample.dismissed)).toBe(false)
+    for (const sample of samples) expect(Math.abs(sample.barTop - (before?.y ?? 0))).toBeLessThanOrEqual(1)
+    await context.close()
+  })
+
+  test("body rect tracks the finger during touchmove, before touchend", async ({ browser }) => {
+    const { context, page, touch } = await openTouchDrawer(browser, "dark")
+    const handle = await centerOf(handleLocator(page))
+    const topBefore = await bodyTop(page)
+    await touch("touchStart", handle.y)
+    // Small steps like a real finger; the library absorbs the first move as touch slop.
+    for (let travel = 10; travel <= 150; travel += 10) {
+      await touch("touchMove", handle.y + travel)
+      if (travel % 30 !== 0) continue
+      await expect
+        .poll(
+          async () => {
+            const delta = (await bodyTop(page)) - topBefore
+            return delta <= travel + 1 && travel - delta <= 25
+          },
+          { message: `body follows finger at ${travel}px` },
+        )
+        .toBe(true)
+    }
+    await touch("touchEnd", handle.y + 150)
     await context.close()
   })
 
@@ -709,7 +730,6 @@ test.describe("header: drawer top row matches the header", () => {
     const bar = await barBox(page)
     expect(bar).not.toBeNull()
     const startY = (bar?.y ?? 0) + (bar?.height ?? 0) / 2
-    // Midway between the logo (left) and the toggle/close controls (right).
     await startRecorder(page)
     await drag(touch, startY, startY + 80, 200)
     await expect.poll(() => bodyOffset(page)).toBeGreaterThan(20)
@@ -718,6 +738,51 @@ test.describe("header: drawer top row matches the header", () => {
     await expect.poll(() => bodyOffset(page)).toBe(0)
     const samples = await readSamples(page)
     for (const sample of samples) expect(Math.abs(sample.barTop - (bar?.y ?? 0))).toBeLessThanOrEqual(1)
+    await context.close()
+  })
+
+  test("pinch-zoom is not blocked: popup and viewport touch-action keep pinch-zoom", async ({ browser }) => {
+    const { context, page } = await openTouchDrawer(browser, "dark")
+    const popupAction = await drawer(page).evaluate((el) => getComputedStyle(el).touchAction)
+    expect(popupAction).toContain("pinch-zoom")
+    expect(popupAction).not.toBe("none")
+    const viewportAction = await drawer(page).evaluate((el) => {
+      const viewport = el.parentElement
+      return viewport === null ? "" : getComputedStyle(viewport).touchAction
+    })
+    expect(viewportAction).toContain("pinch-zoom")
+    await context.close()
+  })
+
+  test("slow short drag released: the drawer stays open and snaps back", async ({ browser }) => {
+    const { context, page, touch } = await openTouchDrawer(browser, "dark")
+    const handle = await centerOf(handleLocator(page))
+    await touch("touchStart", handle.y)
+    for (let travel = 10; travel <= 80; travel += 10) {
+      await touch("touchMove", handle.y + travel)
+      await page.waitForTimeout(40)
+    }
+    await expect.poll(() => bodyOffset(page)).toBeGreaterThan(20)
+    await page.waitForTimeout(300)
+    await touch("touchEnd", handle.y + 80)
+    await page.waitForTimeout(500)
+    await expect(drawer(page)).toBeVisible()
+    await expect(drawer(page)).not.toHaveAttribute("data-swipe-dismissed", /.*/)
+    await expect.poll(() => bodyOffset(page)).toBe(0)
+    await context.close()
+  })
+
+  test("long slow drag released: the drawer dismisses", async ({ browser }) => {
+    const { context, page, touch } = await openTouchDrawer(browser, "dark")
+    const handle = await centerOf(handleLocator(page))
+    await touch("touchStart", handle.y)
+    for (let travel = 20; travel <= 560; travel += 20) {
+      await touch("touchMove", handle.y + travel)
+      await page.waitForTimeout(25)
+    }
+    await page.waitForTimeout(300)
+    await touch("touchEnd", handle.y + 560)
+    await expect(drawer(page)).toBeHidden()
     await context.close()
   })
 
@@ -796,14 +861,19 @@ test.describe("header: drawer top row matches the header", () => {
     const link = await centerOf(nav.getByRole("link").first())
     // Finger moves up: content scrolls down.
     await drag(touch, link.y, link.y - 120, link.x, 10)
+    expect(await bodyOffset(page), "body does not travel while the list scrolls").toBe(0)
     await touch("touchEnd", link.y - 120, link.x)
     await expect.poll(() => nav.evaluate((el) => el.scrollTop)).toBeGreaterThan(0)
     await expect(drawer(page)).toBeVisible()
     expect(await bodyOffset(page)).toBe(0)
     // Finger moves down at the top edge of the list must not dismiss either.
     const scrolled = await nav.evaluate((el) => el.scrollTop)
-    const back = await centerOf(nav.getByRole("link").first())
+    // The first link has scrolled out of view: start inside the visible part of the list instead.
+    const navBox = await nav.boundingBox()
+    if (navBox === null) throw new Error("nav has no bounding box")
+    const back = { x: navBox.x + navBox.width / 2, y: navBox.y + 30 }
     await drag(touch, back.y, back.y + 200, back.x, 10)
+    expect(await bodyOffset(page), "body does not travel on a pull at the list top").toBe(0)
     await touch("touchEnd", back.y + 200, back.x)
     await page.waitForTimeout(400)
     await expect(drawer(page)).toBeVisible()
@@ -878,13 +948,12 @@ test.describe("header: drawer top row matches the header", () => {
         },
         [pillColor, bgColor],
       )
-      console.log(`[measure] handle contrast ${scheme}: ${ratio.toFixed(2)} (${pillColor} on ${bgColor})`)
       expect(ratio).toBeGreaterThanOrEqual(3)
       await context.close()
     })
   }
 
-  test("reduced motion: a swipe dismissal fades only, no transform on the body at any time", async ({ browser }) => {
+  test("reduced motion: the body follows the finger live, the dismissal fades only with no transform", async ({ browser }) => {
     const { context, page, touch } = await openTouchDrawer(browser, "dark", { reducedMotion: "reduce" })
     const handle = await centerOf(handleLocator(page))
     await startRecorder(page)
@@ -893,7 +962,11 @@ test.describe("header: drawer top row matches the header", () => {
     await expect(drawer(page)).toBeHidden()
     const samples = await readSamples(page)
     expect(samples.length).toBeGreaterThan(0)
-    for (const sample of samples) {
+    // The body still follows the finger live; only the exit after release is a plain fade.
+    expect(samples.some((sample) => !sample.dismissed && sample.bodyTop - sample.barBottom > 20)).toBe(true)
+    const dismissed = samples.filter((sample) => sample.dismissed)
+    expect(dismissed.length).toBeGreaterThan(0)
+    for (const sample of dismissed) {
       expect(sample.bodyTransform).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
       expect(Math.abs(sample.bodyTop - sample.barBottom)).toBeLessThanOrEqual(1)
     }
