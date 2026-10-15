@@ -9,7 +9,6 @@ export const metadataContent = {
         "Softn.io : sites, web apps, automatisation et agents IA",
       description:
         "Création de sites et d'applications, automatisation avec des agents IA. Échange Spark offert, plan d'action sous 3 jours, relecture humaine à chaque étape.",
-      imageAlt: "Logo Softn.io",
       locale: "fr_FR",
     },
   },
