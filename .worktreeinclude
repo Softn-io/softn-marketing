@@ -1,0 +1,5 @@
+.serena/project.yml
+.serena/memories
+.claude/agent-memory
+docs/design
+next-env.d.ts
