@@ -76,7 +76,7 @@ That content belongs in the PR description or an ADR (`docs/decisions/`) — nev
 
 ```ts
 /** Retries up to 3x: the Airtable API returns 429 under bursts of requests. */
-async function fetchWithRetry() {
+const fetchWithRetry = async (): Promise<void> => {
   /* … */
 }
 ```
@@ -85,7 +85,7 @@ Not:
 
 ```ts
 // decided to bump retries to 3 after review feedback
-async function fetchWithRetry() {
+const fetchWithRetry = async (): Promise<void> => {
   /* … */
 }
 ```

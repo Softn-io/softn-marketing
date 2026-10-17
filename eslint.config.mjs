@@ -15,6 +15,16 @@ const eslintConfig = defineConfig([
     // Project documentation.
     "docs/**",
   ]),
+  // Project source only: top-level functions must be const arrow expressions
+  // (`.claude/rules/typescript.md` § Functions). Tests declare helpers and
+  // fixtures freely, and config files stay out of scope.
+  {
+    files: ["app/**/*.{ts,tsx}", "components/**/*.{ts,tsx}", "lib/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
+    rules: {
+      "func-style": ["error", "expression"],
+    },
+  },
 ]);
 
 export default eslintConfig;
