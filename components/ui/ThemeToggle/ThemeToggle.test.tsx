@@ -10,7 +10,7 @@ type MediaListener = () => void
 let prefersLight = false
 let listeners: MediaListener[] = []
 
-function stubMatchMedia() {
+const stubMatchMedia = () => {
   vi.stubGlobal(
     "matchMedia",
     vi.fn(() => ({

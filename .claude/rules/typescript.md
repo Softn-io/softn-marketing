@@ -42,6 +42,12 @@ export type Result<T, E = string> = { ok: true; data: T } | { ok: false; error: 
 - Re-export through an `index.ts` barrel only when a folder exposes several items to other modules.
 - Type re-export uses `export type { Foo }` — never implicit.
 
+## Functions
+
+- Top-level exports in `components/` and `lib/` use **arrow function const expressions** — never `function` declarations. This overrides the global rule (`~/.claude/rules/typescript.md` §6), which prefers `function` declarations for top-level module exports.
+- Exception: Next.js special files (`page.tsx`, `layout.tsx`, `error.tsx`, …) still need `export default`, but with arrow syntax anyway: `const RootLayout = (…): JSX.Element => { /* … */ }; export default RootLayout`.
+- Callbacks and local helpers stay arrow functions, as in the global rule.
+
 ## Forbidden patterns
 
 - `any` — use `unknown` then narrow. A genuine third-party escape hatch needs a one-line `// reason: …` comment.

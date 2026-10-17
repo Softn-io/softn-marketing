@@ -13,12 +13,12 @@ const EnvSchema = z.object({
 export type Env = z.infer<typeof EnvSchema>;
 
 /** Throws at startup, not at first use, if a required variable is missing or malformed. */
-function loadEnv(): Env {
+const loadEnv = (): Env => {
   const result = EnvSchema.safeParse(process.env);
   if (!result.success) {
     throw new Error(`Invalid environment variables: ${result.error.message}`);
   }
   return result.data;
-}
+};
 
 export const env = loadEnv();

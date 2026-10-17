@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { buildContentSecurityPolicy, buildSecurityHeaders } from "./securityHeaders"
 
-function directiveOf(policy: string, name: string): string | undefined {
+const directiveOf = (policy: string, name: string): string | undefined => {
   return policy.split("; ").find((directive) => directive.startsWith(`${name} `) || directive === name)
 }
 

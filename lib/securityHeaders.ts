@@ -41,9 +41,9 @@ const DENIED_PERMISSIONS = [
  * needs `'unsafe-inline'` too, for the inline style attributes and `<style>`
  * tags that React and Next.js emit.
  */
-export function buildContentSecurityPolicy({
+export const buildContentSecurityPolicy = ({
   isDev,
-}: ContentSecurityPolicyOptions): string {
+}: ContentSecurityPolicyOptions): string => {
   const directives = [
     "default-src 'self'",
     `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
@@ -57,7 +57,7 @@ export function buildContentSecurityPolicy({
     "upgrade-insecure-requests",
   ]
   return directives.join("; ")
-}
+};
 
 /**
  * Builds the security header rules applied to every path, static assets included.
@@ -65,9 +65,9 @@ export function buildContentSecurityPolicy({
  * `Strict-Transport-Security` omits `preload` on purpose: preloading is a
  * hard-to-reverse commitment for the whole domain.
  */
-export function buildSecurityHeaders({
+export const buildSecurityHeaders = ({
   isDev,
-}: ContentSecurityPolicyOptions): HeaderRule[] {
+}: ContentSecurityPolicyOptions): HeaderRule[] => {
   return [
     {
       source: "/:path*",
@@ -89,4 +89,4 @@ export function buildSecurityHeaders({
       ],
     },
   ]
-}
+};
