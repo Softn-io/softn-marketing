@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /backlog — turn the design handoff into a tracked task list
 
-You run in the **main conversation**: creating 15–25 GitHub issues in bulk is expensive to redo, so Mel validates the breakdown before anything is created. Talk to Mel in French.
+You run in the **main conversation**: creating 15–25 GitHub issues in bulk is expensive to redo, so Mel validates the breakdown before anything is created. 
 
 ## Step 1 — Read the scope
 

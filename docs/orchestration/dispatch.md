@@ -32,9 +32,9 @@ Read by the `orca-ship` skill. Copy to `docs/orchestration/dispatch.md` in the r
 | Role | Agent file | Harness | Model | Mode |
 |---|---|---|---|---|
 | content-seo | `.claude/agents/content-seo.md` | claude | (blank) | writes `docs/content-proposals/` only |
-| nextjs-dev | `.claude/agents/nextjs-dev.md` | claude | (blank) | writes, one writer at a time |
+| nextjs-dev | `.opencode/agents/nextjs-dev.md` | opencode2 | (none: set in the agent file) | writes, one writer at a time |
 | chatbot-dev | `.claude/agents/chatbot-dev.md` | claude | (blank) | writes, never alongside nextjs-dev |
-| qa | `.opencode/agents/qa.md` | opencode | (none: set in the agent file) | writes only `tests/`, `e2e/` and `.orchestration/reports/qa.md` |
+| qa | `.opencode/agents/qa.md` | opencode2 | (none: set in the agent file) | writes only `tests/`, `e2e/` and `.orchestration/reports/qa.md` |
 | security | `.claude/agents/security.md` | claude | (blank) | read-only, writes only its report in `.orchestration/reports/` |
 | git-pr | `.claude/agents/git-pr.md` | claude | (blank) | commits and PR, never merges |
 
