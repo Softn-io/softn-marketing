@@ -97,7 +97,7 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
       USER_SCROLL_EVENTS.forEach((type) => window.removeEventListener(type, releaseLock))
     }
 
-    function releaseLock(): void {
+    const releaseLock = (): void => {
       if (!isLocked) return
       clearLock()
       setActiveId(computeActive())

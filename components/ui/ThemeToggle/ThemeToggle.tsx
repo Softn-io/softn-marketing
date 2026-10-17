@@ -9,13 +9,13 @@ import styles from "./ThemeToggle.module.css"
 const LIGHT_THEME_PREFERENCE = "(prefers-color-scheme: light)"
 
 /** Effective theme: explicit `data-theme` on <html>, else the system preference, else dark (brand default). */
-function readEffectiveTheme(): Theme {
+const readEffectiveTheme = (): Theme => {
   const dataTheme = document.documentElement.getAttribute("data-theme")
   if (dataTheme === "light" || dataTheme === "dark") return dataTheme
   return window.matchMedia(LIGHT_THEME_PREFERENCE).matches ? "light" : "dark"
 }
 
-function subscribeToThemeChanges(onChange: () => void): () => void {
+const subscribeToThemeChanges = (onChange: () => void): (() => void) => {
   const media = window.matchMedia(LIGHT_THEME_PREFERENCE)
   const observer = new MutationObserver(onChange)
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
@@ -27,11 +27,11 @@ function subscribeToThemeChanges(onChange: () => void): () => void {
 }
 
 /** Server snapshot: dark is the brand default; the client corrects it on hydration. */
-function getServerSnapshot(): Theme {
+const getServerSnapshot = (): Theme => {
   return "dark"
 }
 
-function applyDataTheme(theme: Theme): void {
+const applyDataTheme = (theme: Theme): void => {
   document.documentElement.setAttribute("data-theme", theme)
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme)
@@ -44,7 +44,7 @@ function applyDataTheme(theme: Theme): void {
  * Icon-only button switching between dark and light. Its label and icon follow the
  * effective theme; a click stores an explicit choice and sets `data-theme` on <html>.
  */
-export function ThemeToggle() {
+export const ThemeToggle = () => {
   const theme = useSyncExternalStore(subscribeToThemeChanges, readEffectiveTheme, getServerSnapshot)
   const isDark = theme === "dark"
   const label = isDark ? nav.themeToggle.toLight : nav.themeToggle.toDark

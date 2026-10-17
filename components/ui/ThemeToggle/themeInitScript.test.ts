@@ -4,7 +4,7 @@ import { THEME_STORAGE_KEY, themeInitScript } from "@/lib/theme"
 
 type Attrs = Record<string, string>
 
-function runInitScript(storage: { getItem: (key: string) => string | null }): Attrs {
+const runInitScript = (storage: { getItem: (key: string) => string | null }): Attrs => {
   const attrs: Attrs = {}
   runInNewContext(themeInitScript, {
     localStorage: storage,
