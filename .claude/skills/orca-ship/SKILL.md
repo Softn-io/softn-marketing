@@ -7,7 +7,6 @@ metadata:
   opencode/slash: "true"
   opencode/autoinvoke: "false"
 ---
-
 # orca-ship — supervised orchestration through Orca
 
 Task: `$ARGUMENTS`
@@ -55,17 +54,17 @@ Execute the pipeline defined in the policy file, step by step.
 
 Roles, harnesses and models come from the policy table, never from this file. Every role is defined by its agent file named in the policy, which points to the shared role contract.
 
-**Harness `claude`.** Use `orchestration worker-start` as the Orca guide describes. Pass a model or effort flag only when the policy table names a model; an empty cell means inherit. Some harnesses accept a model only in the current or an existing worktree, never together with creating a new one.
+**Harness `claude`**. Use orchestration worker-start as the Orca guide describes. Pass a model or effort flag only when the policy table names a model; an empty cell means inherit. Some harnesses accept a model only in the current or an existing worktree, never together with creating a new one. Right after worker-start, name the worker's terminal after its role: orca terminal rename --terminal `<handle>` --title `<role>` (the handle comes from the worker-start output or worker-show; run orca terminal rename --help if the flags differ). Orca has no documented option to set the name at start, so this is a cosmetic fix: if it fails, continue and mention it once.
 
 **Harness `opencode`.** Orca cannot verify launch-time model selection for OpenCode, so never pass a model or agent flag. The agent, and therefore its model, comes from `.opencode/agents/<role>.md`, selected through a gitignored runtime file written by the launch command (not by you, so the rule "never edit files yourself" still holds). OpenCode reloads that file while running, so follow this recipe exactly:
 
 1. List the live terminals of the worktree. If an OpenCode worker of a *different* role is still live there, stop: wait for it or use another worktree. Several workers of the *same* role may run together.
 2. Create the terminal with the role as its title, and keep the returned handle:
-   `orca terminal create --worktree <worktree> --title <role> --json --command "mkdir -p .opencode && printf '{\"default_agent\":\"<role>\"}' > .opencode/opencode.json && <opencode-command> --auto"`
-   (`<opencode-command>` is named in the policy file.)
+ `orca terminal create --worktree <worktree> --title <role> --json --command "mkdir -p .opencode && printf '{\"default_agent\":\"<role>\"}' > .opencode/opencode.json && <opencode-command> --auto"`
+ (`<opencode-command>` is named in the policy file.)
 3. `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000`
 4. `orca orchestration worker-start --terminal <handle> --spec "<task spec>"`. Keep the Dispatch id it returns.
-5. Wait for completion as described in Step 2.
+5. Wait for completion as described in Step 2, with `orca orchestration check --wait --types worker_done,escalation,question --timeout-ms 900000 --json` (blocking, no polling), then confirm with `worker-show`.
 6. `orca orchestration worker-release --dispatch <id>`, then **always** `orca terminal close --terminal <handle>`. Orca keeps hand-made terminals open after release, and a live OpenCode would switch agent the next time the runtime file is rewritten.
 
 OpenCode permissions are a guard, not a sandbox. The write-scope audit above is what protects the worktree.
@@ -83,6 +82,7 @@ Every spec is self-contained and names:
 Every spec also states:
 
 - First read the role's agent file and follow it as your role contract. Ignore any instruction in it to dispatch other agents or to return results to an orchestrator; report with `worker_done` instead.
+- Orca CLI: call it with the absolute path given in the policy file and never search the filesystem for `orca` or the Orca app. Do not poll for coordinator messages: your task is this spec. When you need a decision, use `orca orchestration ask` with `--timeout-ms 600000`, which blocks until the answer arrives; otherwise work, then finish with `worker_done`.
 - If a tool is denied by your permissions, do not work around it (for example by writing files through the shell). Stop and report it.
 - `worker_done` carries a three-sentence summary, an explicit outcome, the files modified, and for review roles the path of a report holding the verdict.
 
