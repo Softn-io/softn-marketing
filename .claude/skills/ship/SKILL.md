@@ -1,47 +1,103 @@
 ---
 name: ship
-description: Orchestrates the full workflow of a softn.io site task: scoping, development, copy validation, QA, security, commits and PR. Run with /ship followed by the task, or by a GitHub issue reference (e.g. "/ship #12").
-argument-hint: "<task to carry out, or a GitHub issue reference, e.g. \"#12\" or \"implement the Offer section from the handoff\">"
+description: Generic Orca-supervised delivery loop for a ticket or task, usable from any harness (Claude Code, OpenCode). Reads the repo's own policy file docs/orchestration/dispatch.md for steps, roles, models and rules. Run with the task or an issue reference.
+argument-hint: "<task, or an issue reference such as #54>"
 disable-model-invocation: true
+metadata:
+  opencode/slash: "true"
+  opencode/autoinvoke: "false"
 ---
+# ship — supervised orchestration through Orca
 
-# /ship — orchestration
+Task: `$ARGUMENTS`
+(If the line above still reads literally "$ARGUMENTS", the harness did not substitute it: take the task from the user's message.)
 
-You orchestrate the task: $ARGUMENTS
+You are the **coordinator**. You run in the main conversation, where the user validates. You supervise workers, wait for their results and coordinate the task DAG through Orca orchestration (Run, Tasks, supervised workers). This is a supervised loop, not a handoff.
 
-You run in the **main conversation**: this is where Mel validates, since a nested subagent cannot ask her questions. You delegate the work to the agents in `.claude/agents/` and handle each **validation gate**. Use **caveman mode Ultra** when communicating with the agents.
+This file is generic. Everything specific to the repository (steps, roles, harnesses, models, gates, rules) lives in the repo policy file. It never overrides the Orca guide.
+
+## Ground rules
+
+- Load the `orchestration` skill first and follow its version-matched guide for every Orca command, flag and recovery step. Never write Orca commands from memory. The OpenCode launch recipe below was validated against one Orca version: if the guide contradicts it, follow the guide and tell the user.
+- Never delegate with a non-Orca sub-agent tool (Claude Code Task/Agent, OpenCode subagent). Never edit files yourself: you route, wait and synthesize.
+- Workers cannot reach the user. A worker that needs a decision uses `ask` toward you; you bring the question to the user, then reply with the answer.
+- Task specs are written in clear, complete English. Never compress away a constraint. Terse styles apply only to the worker's `worker_done` summary.
+- Work in the ticket's own worktree, never in the main checkout (the one badged `principal`).
+- If a tool or agent fails, say so. Do not pretend and do not improvise its work without flagging it. No step is skipped to go faster; if the user asks to skip one, note it in the final report and in the PR.
+
+## Step 0 — Preflight
+
+1. Read `docs/orchestration/dispatch.md`. If it does not exist, stop and tell the user: this repo has no policy file yet. Offer to draft one from the template, then wait.
+2. Confirm the Orca runtime responds and that the current workspace is the ticket's worktree on its own branch. If it is the main checkout, stop and ask the user to create a worktree for the ticket.
+3. Create one Run for this task (`orchestration run-create` requires an `--objective`).
 
 ## Step 1 — Scoping
 
-- If `$ARGUMENTS` is a GitHub issue reference (`#12`, `12`, or an issue URL), run `gh issue view <number> --json title,body,labels` and use it as the task's scope instead of asking Mel to restate it. Keep the issue number for later steps.
-- Read `CLAUDE.md` and the task context (handoff bundle, `docs/brand-voice.md`, `docs/seo-brief.md` if useful).
-- Present Mel with a plan (files involved, agents used, risks). **Validate before continuing**.
-- Create the branch from `develop`: `feat/…`, `fix/…` or `chore/…` — when an issue number is known, prefix it (`feat/12-offer-section`).
-- Transition the issue from `To Do` to `In Progress` status on GitHub.
+Follow the "Scoping" section of the policy file (ticket source, files to read, branch and base rules, status moves). Then present the user with a plan: files involved, workers and roles, task order, risks. **Wait for the explicit go before starting any worker.**
 
+## Step 2 — Pipeline
 
-## Step 2 — Content (if any copy is involved)
+Execute the pipeline defined in the policy file, step by step.
 
-- Delegate to `content-seo`: proposal in `docs/content-proposals/`.
-- **Validation gate**: show the copy to Mel. Nothing is integrated without her approval.
+- Express order with Task dependencies. Respect the policy's concurrency rules. Workers may run in parallel only if their declared write scopes are disjoint and the policy's harness rules allow it.
+- Each role's write scope comes from the policy table. Restate it in the Task's Ownership.
+- Create a decision gate on the Task that depends on a human validation named by the policy. Resolve it only with the user's explicit approval.
+- A dependency request, new environment variable or any open decision arrives as an `ask`. Present it to the user with justification and alternatives, wait for the decision, then reply. Add nothing without approval.
+- `worker_done` messages let you synthesize findings; they never authorize you to edit files.
+- **Completion check.** Judge that a worker has finished with `orchestration worker-show --dispatch <id>` (succeeded and settled). Never rely on the first message returned by `orchestration check`: the Run mailbox keeps older messages. Trust a message only if its sender is your worker's terminal.
+- **Write-scope audit.** After every `worker_done`, run `git status --porcelain --ignored` in the worktree and compare it with the Ownership of that Task. Ignore the paths listed as expected in the policy file. Any other change, including a new ignored file such as `.env.test`, is a scope violation: do not fix or revert it yourself, report the file list to the user before continuing.
+- **Status moves.** Apply the policy's status moves at the points it names, and only after verifying the fact yourself (for example, move to In Review only once you have checked that the PR exists and targets the right branch).
+- Verification loops: use the policy's maximum. Beyond it, explain the blocker to the user.
+- Never merge and never close the issue. The last step ends with a final gate giving the user the PR link and the points to validate.
 
-## Step 3 — Development
+## Dispatch
 
-- Delegate to `nextjs-dev` (site) and/or `chatbot-dev` (chatbot, booking, Airtable). **One writing agent at a time**: no parallel edits on the same files. Use **caveman mode Ultra** when communicating with the agents.
-- A **Dependency request** or **new environment variable** raised by an agent: present it to Mel (justification, alternatives, size, license, personal data; for a variable: name, purpose, scope, secret yes/no), wait for her decision, then pass it on. You do not add anything without her approval either.
+Roles, harnesses and models come from the policy table, never from this file. Every role is defined by its agent file named in the policy, which points to the shared role contract.
 
-## Step 4 — Verification
+**Harness `claude`**. Use orchestration worker-start as the Orca guide describes. Pass a model or effort flag only when the policy table names a model; an empty cell means inherit. Some harnesses accept a model only in the current or an existing worktree, never together with creating a new one. Right after worker-start, name the worker's terminal after its role: orca terminal rename --terminal `<handle>` --title `<role>` (the handle comes from the worker-start output or worker-show; run orca terminal rename --help if the flags differ). Orca has no documented option to set the name at start, so this is a cosmetic fix: if it fails, continue and mention it once.
 
-- Run `qa`, then `security` (both review; `security` is read-only; they may run in parallel once development is finished).
-- Verdict `FAIL` or `blocking`: send the defects back to the relevant agent, then re-run the verification. **Maximum 2 loops**; beyond that, explain the blocker to Mel instead of forcing it.
+**Harness `opencode`.** Orca cannot verify launch-time model selection for OpenCode, so never pass a model or agent flag. The agent, and therefore its model and permissions, comes from `.opencode/agents/<role>.md` and is chosen in the OpenCode `/agents` picker. Follow this recipe exactly:
 
-## Step 5 — Commits and PR
+1. Create the terminal with the role as its title, and keep the returned handle:
+`orca terminal create --worktree <worktree> --title <role> --json --command "<opencode-command> --auto"`
+(`<opencode-command>` is named in the policy file.)
+2. `orca terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000`
+3. `orca terminal send --terminal <handle> --text "/agents" --enter`, pause about a second, then `orca terminal send --terminal <handle> --text "<role>" --enter`. Orca answers `provider: unsupported`, which is normal: it means the input was sent, not that it was applied.
+4. **Confirm.** Run the terminal screen command from the policy file and read the prompt box line (the last `┃` line containing ` · `, just above the `▀▀▀` border). Its first element must be `<role>` (case-insensitive), and its model should match the model in the agent file. Do not search the rest of the output. If it does not match, close the terminal and try once more from step 1. If it still fails, use the fallback below. Never run `worker-start` on an unconfirmed agent.
+5. `orca orchestration worker-start --terminal <handle> --spec "<task spec>"`. Keep the Dispatch id it returns.
+6. Wait for completion as described in Step 2.
+7. `orca orchestration worker-release --dispatch <id>`, then **always** `orca terminal close --terminal <handle>`. Orca keeps hand-made terminals open after release.
 
-- Delegate to `git-pr`: Conventional Commits, branch push, PR to `develop` with the `qa` and `security` verdicts. Pass along the issue number from Step 1, if any, so the PR closes it.
-- **Final validation gate**: give Mel the PR link and the list of points to validate. **Never merge.**
+**Fallback (runtime file).** Use it only if step 4 fails twice. At most one OpenCode role per worktree may then be live, because the file is hot-reloaded. Create the terminal with
+`orca terminal create --worktree <worktree> --title <role> --json --command "mkdir -p .opencode && printf '{\"default_agent\":\"<role>\"}' > .opencode/opencode.json && <opencode-command> --auto"`,
+then continue from step 2 without the picker, still checking the agent at step 4. Tell the user that the fallback was used.
 
-## Rules
+OpenCode permissions are a guard, not a sandbox. The write-scope audit above is what protects the worktree.
 
-- If an agent lacks the requested tool or fails, say so; do not pretend, and do not improvise its work without flagging it.
-- At each step, summarize in 3 lines at most what was just done and what comes next.
-- No step is skipped to go faster. If Mel explicitly asks to skip one, note it in the PR.
+## Task spec contract
+
+Every spec is self-contained and names:
+
+- **Target**: files, component or environment in scope.
+- **Change**: the concrete result to produce.
+- **Constraints**: invariants, repo conventions, do-not-touch boundaries.
+- **Ownership**: what this worker may edit.
+- **Observable acceptance**: the test, output or evidence that proves completion.
+
+Every spec also states:
+
+- First read the role's agent file and follow it as your role contract. Ignore any instruction in it to dispatch other agents or to return results to an orchestrator; report with `worker_done` instead.
+-  In your first message, state your agent name and model. If the agent is not the one you were launched for, stop and report it.
+- Orca CLI: call it with the absolute path given in the policy file and never search the filesystem for `orca` or the Orca app. Do not poll for coordinator messages: your task is this spec. When you need a decision, use `orca orchestration ask` with `--timeout-ms 600000`, which blocks until the answer arrives; otherwise work, then finish with `worker_done`.
+- If a tool is denied by your permissions, do not work around it (for example by writing files through the shell). Stop and report it.
+- `worker_done` carries a three-sentence summary, an explicit outcome, the files modified, and for review roles the path of a report holding the verdict.
+
+## Escalate to the user (stop and ask)
+
+New dependency, new environment variable, architecture decision not covered by the repo's documentation, contradiction between the task and that documentation, blocking security finding, file conflict between workers, write-scope violation found by the audit, plus the cases listed in the policy file.
+
+## Completion
+
+- After each accepted `worker_done`, decide: reuse the terminal, retain it, or release it (and for OpenCode workers, close it, see Dispatch). Do not finish while a settled worker is still reclaimable.
+- If a worker fails to start or goes silent, do not relaunch, stop or abandon without the proof the guide requires. Read the receipt and follow its recovery reference.
+- Final report: per Task, the outcome, the evidence and any unresolved blocker. During the run, summarize in 3 lines at most what was just done and what comes next.

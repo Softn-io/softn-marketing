@@ -1,7 +1,7 @@
 ---
 description: QA engineer for the softn.io site. Verifies and writes tests, never fixes application code.
 mode: primary
-model: openrouter/qwen/qwen3.8-omni-flash
+model: openrouter/qwen/qwen3.8-flash
 permissions:
   - action: edit
     resource: "*"
