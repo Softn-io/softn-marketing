@@ -7,8 +7,8 @@ permissions:
     resource: "*"
     effect: deny
   - action: edit
-    resource ".orchestration/reports/**"
-    effect allow
+    resource: ".orchestration/reports/**"
+    effect: allow
   - action: read
     resource: "*.env"
     effect: deny
@@ -18,15 +18,6 @@ permissions:
   - action: read
     resource: "*.env.example"
     effect: allow
-  - action: shell
-    resource: "*.env"
-    effect: deny
-  - action: shell
-    resource: "*.env *"
-    effect: deny
-  - action: shell
-    resource: "*.env.*"
-    effect: deny
   - action: shell
     resource: "pnpm add *"
     effect: deny
@@ -52,6 +43,15 @@ permissions:
     resource: "zsh -c *"
     effect: deny
   - action: shell
+    resource: "*.env"
+    effect: deny
+  - action: shell
+    resource: "*.env *"
+    effect: deny
+  - action: shell
+    resource: "*.env.*"
+    effect: deny
+  - action: shell
     resource: "* > *"
     effect: deny
   - action: shell
@@ -71,4 +71,4 @@ permissions:
     effect: deny
 ---
 
-Your full role contract is in `docs/orchestration/roles/security.md`. Read it entirely first and follow it.
+Your full role contract is in `docs/orchestration/roles/security-audit.md`. Read it entirely first and follow it.

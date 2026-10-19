@@ -1,5 +1,6 @@
 .serena/project.yml
 .serena/memories
 .claude/agent-memory
+.orchestration/
 docs/design
 next-env.d.ts

@@ -47,4 +47,4 @@ Deliver it as your `worker_done` message when run as a supervised worker, or as 
 - Files created and modified
 - Deviations from the design (and why)
 - Dependency requests, if any
-- Points `qa` and `security` should check
+- Points `qa` and `security-audit` should check

@@ -27,7 +27,7 @@ In English
 
 - **Summary**: why, in 2–3 lines
 - **Changes**: short list
-- **Verifications**: lint, types, tests, build, Lighthouse, `qa` and `security` reports (verdicts)
+- **Verifications**: lint, types, tests, build, Lighthouse, `qa` and `security-audit` reports (verdicts)
 - **Preview**: Vercel preview link if available
 - **Points to validate**: copy, dependencies, GDPR choices
 - **Risks and rollback**

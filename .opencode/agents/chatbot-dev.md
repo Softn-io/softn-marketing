@@ -1,5 +1,5 @@
 ---
-description:Developer of the softn.io site chatbot: scripted Q&A flow, Fillout booking, lead sync to Airtable, GDPR consent and transparency. Use for anything touching the chatbot, booking or the Airtable sync.
+description: Developer of the softn.io site chatbot: scripted Q&A flow, Fillout booking, lead sync to Airtable, GDPR consent and transparency. Use for anything touching the chatbot, booking or the Airtable sync.
 mode: primary
 model: openrouter/deepseek/deepseek-v4.1-flash
 permissions:

@@ -29,4 +29,4 @@ No commit or push (`git-pr`'s role). No `.env*`. For any new environment variabl
 
 ## Final report
 
-Files modified · data flow described in 5 lines (what goes where, when) · new third parties to add to `docs/rgpd/processors.md` · dependency requests · points for `qa` and `security`.
+Files modified · data flow described in 5 lines (what goes where, when) · new third parties to add to `docs/rgpd/processors.md` · dependency requests · points for `qa` and `security-audit`.

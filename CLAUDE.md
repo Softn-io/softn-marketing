@@ -72,14 +72,14 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 
 ## Agent team (`.claude/agents/`)
 
-| Agent | Role |
-|---|---|
-| `nextjs-dev` | Next.js / Tailwind implementation, custom components, design fidelity |
-| `content-seo` | Proposes and reviews copy (SEO, tone) — writes only in `docs/` |
-| `chatbot-dev` | Chatbot, Fillout booking, Airtable sync, consent |
-| `qa` | Tests, accessibility, visual fidelity, Lighthouse budgets |
-| `security` | Security and GDPR review — read-only |
-| `git-pr` | Commits, branches, PRs — never merges |
+| Agent            | Role                                                                  |
+| ---------------- | --------------------------------------------------------------------- |
+| `nextjs-dev`     | Next.js / Tailwind implementation, custom components, design fidelity |
+| `content-seo`    | Proposes and reviews copy (SEO, tone) — writes only in `docs/`        |
+| `chatbot-dev`    | Chatbot, Fillout booking, Airtable sync, consent                      |
+| `qa`             | Tests, accessibility, visual fidelity, Lighthouse budgets             |
+| `security-audit` | Security and GDPR review — read-only                                  |
+| `git-pr`         | Commits, branches, PRs — never merges                                 |
 
 Read @AGENTS.md for latest updates and recommendations to write up-to-date Next.js code and practices.
 
