@@ -1,38 +1,38 @@
-"use client"
+'use client'
 
-import { Moon, SunDim } from "lucide-react"
-import { useSyncExternalStore } from "react"
-import { nav } from "@/locales/fr/hero"
-import { THEME_STORAGE_KEY, type Theme } from "@/lib/theme"
-import styles from "./ThemeToggle.module.css"
+import { Moon, SunDim } from 'lucide-react'
+import { useSyncExternalStore } from 'react'
+import { nav } from '@/locales/fr/hero'
+import { THEME_STORAGE_KEY, type Theme } from '@/lib/theme'
+import styles from './ThemeToggle.module.css'
 
-const LIGHT_THEME_PREFERENCE = "(prefers-color-scheme: light)"
+const LIGHT_THEME_PREFERENCE = '(prefers-color-scheme: light)'
 
 /** Effective theme: explicit `data-theme` on <html>, else the system preference, else dark (brand default). */
 const readEffectiveTheme = (): Theme => {
-  const dataTheme = document.documentElement.getAttribute("data-theme")
-  if (dataTheme === "light" || dataTheme === "dark") return dataTheme
-  return window.matchMedia(LIGHT_THEME_PREFERENCE).matches ? "light" : "dark"
+  const dataTheme = document.documentElement.getAttribute('data-theme')
+  if (dataTheme === 'light' || dataTheme === 'dark') return dataTheme
+  return window.matchMedia(LIGHT_THEME_PREFERENCE).matches ? 'light' : 'dark'
 }
 
 const subscribeToThemeChanges = (onChange: () => void): (() => void) => {
   const media = window.matchMedia(LIGHT_THEME_PREFERENCE)
   const observer = new MutationObserver(onChange)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] })
-  media.addEventListener("change", onChange)
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  media.addEventListener('change', onChange)
   return () => {
     observer.disconnect()
-    media.removeEventListener("change", onChange)
+    media.removeEventListener('change', onChange)
   }
 }
 
 /** Server snapshot: dark is the brand default; the client corrects it on hydration. */
 const getServerSnapshot = (): Theme => {
-  return "dark"
+  return 'dark'
 }
 
 const applyDataTheme = (theme: Theme): void => {
-  document.documentElement.setAttribute("data-theme", theme)
+  document.documentElement.setAttribute('data-theme', theme)
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme)
   } catch {
@@ -46,7 +46,7 @@ const applyDataTheme = (theme: Theme): void => {
  */
 export const ThemeToggle = () => {
   const theme = useSyncExternalStore(subscribeToThemeChanges, readEffectiveTheme, getServerSnapshot)
-  const isDark = theme === "dark"
+  const isDark = theme === 'dark'
   const label = isDark ? nav.themeToggle.toLight : nav.themeToggle.toDark
 
   return (
@@ -55,7 +55,7 @@ export const ThemeToggle = () => {
       aria-label={label}
       onClick={() => applyDataTheme(isDark ? 'light' : 'dark')}
       suppressHydrationWarning
-      className={`${styles["toggle-theme"]} inline-flex size-10 items-center justify-center rounded-pill text-foreground-secondary transition-colors hover:text-foreground`}
+      className={`${styles['toggle-theme']} inline-flex size-10 items-center justify-center rounded-pill text-foreground-secondary transition-colors hover:text-foreground`}
     >
       {isDark ? (
         <SunDim size={20} aria-hidden="true" focusable="false" />
@@ -63,5 +63,5 @@ export const ThemeToggle = () => {
         <Moon size={20} aria-hidden="true" focusable="false" />
       )}
     </button>
-  );
+  )
 }

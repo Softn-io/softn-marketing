@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import { useEffect, useState, type ReactNode } from "react"
-import { HERO_CTA_ID } from "@/lib/anchors"
-import styles from "./styles/Header.module.css"
+import { useEffect, useState, type ReactNode } from 'react'
+import { HERO_CTA_ID } from '@/lib/anchors'
+import styles from './styles/Header.module.css'
 
 type ScrollRevealCtaProps = {
   children: ReactNode
@@ -27,7 +27,7 @@ export const ScrollRevealCta = ({ children, className }: ScrollRevealCtaProps) =
 
   useEffect(() => {
     const heroCta = document.getElementById(HERO_CTA_ID)
-    if (heroCta === null || typeof IntersectionObserver === "undefined") return undefined
+    if (heroCta === null || typeof IntersectionObserver === 'undefined') return undefined
 
     const observer = new IntersectionObserver(([entry]) => {
       if (entry === undefined) return
@@ -40,8 +40,8 @@ export const ScrollRevealCta = ({ children, className }: ScrollRevealCtaProps) =
 
   return (
     <div
-      className={[styles["scroll-reveal"], className].filter((value) => value !== undefined).join(" ")}
-      data-state={isRevealed ? "visible" : "hidden"}
+      className={[styles['scroll-reveal'], className].filter((value) => value !== undefined).join(' ')}
+      data-state={isRevealed ? 'visible' : 'hidden'}
       inert={!isRevealed}
     >
       {children}

@@ -1,7 +1,7 @@
-import { ASSISTANT_NAME } from "@/locales/fr/chatbot"
-import { nav } from "@/locales/fr/hero"
-import { SECTION_IDS, type SectionId } from "@/lib/anchors"
-import { interpolate } from "@/lib/interpolate"
+import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
+import { nav } from '@/locales/fr/hero'
+import { SECTION_IDS, type SectionId } from '@/lib/anchors'
+import { interpolate } from '@/lib/interpolate'
 
 export type NavLink = {
   id: SectionId
@@ -17,11 +17,7 @@ export const getNavLinks = (): readonly NavLink[] => {
   const entries: ReadonlyArray<readonly [SectionId, string, string]> = [
     [SECTION_IDS.offers, nav.items.offers, nav.itemsAria.offers],
     [SECTION_IDS.method, nav.items.method, nav.itemsAria.method],
-    [
-      SECTION_IDS.agent,
-      interpolate(nav.items.agent, assistantName),
-      interpolate(nav.itemsAria.agent, assistantName),
-    ],
+    [SECTION_IDS.agent, interpolate(nav.items.agent, assistantName), interpolate(nav.itemsAria.agent, assistantName)],
     [SECTION_IDS.thisSite, nav.items.thisSite, nav.itemsAria.thisSite],
     [SECTION_IDS.faq, nav.items.faq, nav.itemsAria.faq],
   ]

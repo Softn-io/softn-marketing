@@ -5,19 +5,19 @@
 // them as globals — remove this file once Next.js or TypeScript/@types/node align on that.
 
 interface URLPatternInit {
-  protocol?: string;
-  username?: string;
-  password?: string;
-  hostname?: string;
-  port?: string;
-  pathname?: string;
-  search?: string;
-  hash?: string;
-  baseURL?: string;
+  protocol?: string
+  username?: string
+  password?: string
+  hostname?: string
+  port?: string
+  pathname?: string
+  search?: string
+  hash?: string
+  baseURL?: string
 }
 
-type URLPatternInput = string | URLPatternInit;
+type URLPatternInput = string | URLPatternInit
 
 interface URLPatternOptions {
-  ignoreCase?: boolean;
+  ignoreCase?: boolean
 }

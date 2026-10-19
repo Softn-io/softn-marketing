@@ -43,8 +43,8 @@
 }
 
 /* Active section: foreground color plus a brand underline, so the state never relies on color alone. */
-.nav-link[aria-current="location"],
-.drawer-link[aria-current="location"] {
+.nav-link[aria-current='location'],
+.drawer-link[aria-current='location'] {
   color: var(--softn-color);
   text-decoration-color: var(--softn-brand-accent);
 }
@@ -71,7 +71,7 @@
     visibility 0s;
 }
 
-.scroll-reveal[data-state="hidden"] {
+.scroll-reveal[data-state='hidden'] {
   visibility: hidden;
   opacity: 0;
   transform: translateY(var(--softn-space-2));
@@ -309,7 +309,7 @@
   }
 
   .scroll-reveal,
-  .scroll-reveal[data-state="hidden"] {
+  .scroll-reveal[data-state='hidden'] {
     transform: none;
     transition-property: opacity, visibility;
   }
