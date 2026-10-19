@@ -41,10 +41,17 @@ jobs:
               pages/**
               components/**
               public/**
+              lib/**
+              locales/**
+              scripts/**
+              e2e/**
               next.config.js
               package.json
               pnpm-lock.yaml
               tsconfig.json
+              eslint.config.mjs
+              .prettierrc.json
+              .prettierignore
               src/**
             infra: |
               .github/**
@@ -69,6 +76,8 @@ jobs:
         run: pnpm lint
       - name: Lint Tailwind
         run: pnpm lint:tailwind
+      - name: Format
+        run: pnpm format:check
       - name: Typecheck
         run: pnpm typecheck
       - name: Unit tests
@@ -77,9 +86,9 @@ jobs:
   build:
     needs: filter
     if: needs.filter.outputs.web == 'true' && (
-          github.event_name == 'push' ||
-          (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
-        )
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -104,9 +113,9 @@ jobs:
   lighthouse:
     needs: [build]
     if: needs.build.result == 'success' && (
-          github.event_name == 'push' ||
-          (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
-        )
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -134,9 +143,9 @@ jobs:
   e2e:
     needs: [build]
     if: needs.build.result == 'success' && (
-          github.event_name == 'push' ||
-          (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
-        )
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -162,7 +171,7 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
         env:
-          PLAYWRIGHT_SKIP_BUILD: "1"
+          PLAYWRIGHT_SKIP_BUILD: '1'
       - if: failure()
         uses: actions/upload-artifact@v3
         with:
