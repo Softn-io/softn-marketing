@@ -36,27 +36,30 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            web: |
-              app/**
-              pages/**
-              components/**
-              public/**
-              lib/**
-              locales/**
-              scripts/**
-              e2e/**
-              next.config.js
-              package.json
-              pnpm-lock.yaml
-              tsconfig.json
-              eslint.config.mjs
-              .prettierrc.json
-              .prettierignore
-              src/**
-            infra: |
-              .github/**
-              docs/**
-              '*.md'
+            web:
+              - 'app/**'
+              - 'components/**'
+              - 'public/**'
+              - 'lib/**'
+              - 'locales/**'
+              - 'scripts/**'
+              - 'e2e/**'
+              - 'types/**'
+              - 'next.config.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig.json'
+              - 'eslint.config.mjs'
+              - 'postcss.config.mjs'
+              - 'vitest.config.mts'
+              - 'playwright.config.ts'
+              - 'lighthouserc.json'
+              - '.prettierrc.json'
+              - '.prettierignore'
+            infra:
+              - '.github/**'
+              - 'docs/**'
+              - '*.md'
 
   checks:
     needs: filter
