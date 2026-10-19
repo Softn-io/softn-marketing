@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { nav } from "@/locales/fr/hero"
-import { THEME_STORAGE_KEY } from "@/lib/theme"
-import { ThemeToggle } from "./ThemeToggle"
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nav } from '@/locales/fr/hero'
+import { THEME_STORAGE_KEY } from '@/lib/theme'
+import { ThemeToggle } from './ThemeToggle'
 
 type MediaListener = () => void
 
@@ -12,7 +12,7 @@ let listeners: MediaListener[] = []
 
 const stubMatchMedia = () => {
   vi.stubGlobal(
-    "matchMedia",
+    'matchMedia',
     vi.fn(() => ({
       get matches() {
         return prefersLight
@@ -28,7 +28,7 @@ const stubMatchMedia = () => {
 beforeEach(() => {
   prefersLight = false
   listeners = []
-  document.documentElement.removeAttribute("data-theme")
+  document.documentElement.removeAttribute('data-theme')
   localStorage.clear()
   stubMatchMedia()
 })
@@ -39,44 +39,44 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const button = (name: string) => screen.getByRole("button", { name })
+const button = (name: string) => screen.getByRole('button', { name })
 
-describe("ThemeToggle", () => {
-  it("offers light mode when dark (default)", () => {
+describe('ThemeToggle', () => {
+  it('offers light mode when dark (default)', () => {
     render(<ThemeToggle />)
     expect(button(nav.themeToggle.toLight)).toBeTruthy()
   })
 
-  it("click sets data-theme, stores the choice and updates the label", async () => {
+  it('click sets data-theme, stores the choice and updates the label', async () => {
     render(<ThemeToggle />)
     await act(async () => fireEvent.click(button(nav.themeToggle.toLight)))
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light")
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("light")
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('light')
     expect(button(nav.themeToggle.toDark)).toBeTruthy()
 
     await act(async () => fireEvent.click(button(nav.themeToggle.toDark)))
-    expect(document.documentElement.getAttribute("data-theme")).toBe("dark")
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark")
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBe('dark')
   })
 
-  it("explicit data-theme wins over the system preference", () => {
+  it('explicit data-theme wins over the system preference', () => {
     prefersLight = true
-    document.documentElement.setAttribute("data-theme", "dark")
+    document.documentElement.setAttribute('data-theme', 'dark')
     render(<ThemeToggle />)
     expect(button(nav.themeToggle.toLight)).toBeTruthy()
   })
 
-  it("still applies the theme when storage throws", async () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
-      throw new Error("SecurityError")
+  it('still applies the theme when storage throws', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new Error('SecurityError')
     })
     render(<ThemeToggle />)
     await act(async () => fireEvent.click(button(nav.themeToggle.toLight)))
-    expect(document.documentElement.getAttribute("data-theme")).toBe("light")
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
     expect(button(nav.themeToggle.toDark)).toBeTruthy()
   })
 
-  it("system preference change updates the label when no data-theme", async () => {
+  it('system preference change updates the label when no data-theme', async () => {
     render(<ThemeToggle />)
     expect(button(nav.themeToggle.toLight)).toBeTruthy()
     prefersLight = true
@@ -84,7 +84,7 @@ describe("ThemeToggle", () => {
     expect(button(nav.themeToggle.toDark)).toBeTruthy()
   })
 
-  it("unsubscribes from the media query on unmount", () => {
+  it('unsubscribes from the media query on unmount', () => {
     const { unmount } = render(<ThemeToggle />)
     expect(listeners.length).toBeGreaterThan(0)
     unmount()

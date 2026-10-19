@@ -1,14 +1,14 @@
 /** Name of the window event asking the chatbot to open. */
-export const OPEN_CHATBOT_EVENT = "open-chatbot"
+export const OPEN_CHATBOT_EVENT = 'open-chatbot'
 
 /** Where the request to open the chatbot comes from. */
-export type OpenChatbotSource = "header"
+export type OpenChatbotSource = 'header'
 
 export type OpenChatbotDetail = { source: OpenChatbotSource }
 
 declare global {
   interface WindowEventMap {
-    "open-chatbot": CustomEvent<OpenChatbotDetail>
+    'open-chatbot': CustomEvent<OpenChatbotDetail>
   }
 }
 

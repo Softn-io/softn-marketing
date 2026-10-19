@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test"
+import { defineConfig, devices } from '@playwright/test'
 
 /** Dedicated port so the suite never reuses a developer's `next dev` on 3000. */
 const PORT = 3100
@@ -11,18 +11,18 @@ const webServerCommand = process.env.PLAYWRIGHT_SKIP_BUILD
   : `./node_modules/.bin/next build && ${startCommand}`
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: './e2e',
   timeout: 30_000,
   globalTimeout: 600_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? [["github"], ["html", { open: "never" }]] : "list",
+  reporter: process.env.CI ? [['github'], ['html', { open: 'never' }]] : 'list',
   use: {
     baseURL: `http://localhost:${PORT}`,
-    trace: "on-first-retry",
+    trace: 'on-first-retry',
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
     command: webServerCommand,
     url: `http://localhost:${PORT}`,

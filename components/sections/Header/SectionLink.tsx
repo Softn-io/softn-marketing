@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
-import type { MouseEvent, ReactNode } from "react"
-import type { NavLink } from "./data/navLinks"
-import { useActiveSectionContext } from "./context/ActiveSectionContext"
+import type { MouseEvent, ReactNode } from 'react'
+import type { NavLink } from './data/navLinks'
+import { useActiveSectionContext } from './context/ActiveSectionContext'
 
 type SectionLinkProps = {
   link: NavLink
@@ -29,8 +29,7 @@ export const SectionLink = ({ link, className, children, onClick }: SectionLinkP
       onClick(event)
       return
     }
-    const isPlainLeftClick =
-      event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
+    const isPlainLeftClick = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
     if (!event.defaultPrevented && isPlainLeftClick) select(link.id)
   }
 
@@ -39,7 +38,7 @@ export const SectionLink = ({ link, className, children, onClick }: SectionLinkP
       href={link.href}
       onClick={handleClick}
       aria-label={link.ariaLabel}
-      aria-current={activeId === link.id ? "location" : undefined}
+      aria-current={activeId === link.id ? 'location' : undefined}
       className={className}
     >
       {children ?? link.label}

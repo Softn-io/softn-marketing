@@ -1,15 +1,15 @@
-"use client"
+'use client'
 
-import type { MouseEvent, ReactNode } from "react"
-import { Button } from "@components/ui/Button"
-import { SECTION_IDS, goToSection } from "@/lib/anchors"
-import { dispatchOpenChatbot } from "@/lib/chatbotEvents"
+import type { MouseEvent, ReactNode } from 'react'
+import { Button } from '@components/ui/Button'
+import { SECTION_IDS, goToSection } from '@/lib/anchors'
+import { dispatchOpenChatbot } from '@/lib/chatbotEvents'
 
 type BookingCtaProps = {
   children: ReactNode
   /** Layout classes forwarded to the button. */
   className?: string
-  size?: "sm" | "lg"
+  size?: 'sm' | 'lg'
   /**
    * Runs instead of the immediate activation. Receives the activation to call once the caller is ready,
    * e.g. after a drawer finished closing.
@@ -26,7 +26,7 @@ const isPlainLeftClick = (event: MouseEvent<HTMLAnchorElement>): boolean =>
  */
 export const BookingCta = ({ children, className, size, onBeforeActivate }: BookingCtaProps) => {
   const activate = (): void => {
-    const claimed = dispatchOpenChatbot({ source: "header" })
+    const claimed = dispatchOpenChatbot({ source: 'header' })
     if (!claimed) goToSection(SECTION_IDS.booking)
   }
 

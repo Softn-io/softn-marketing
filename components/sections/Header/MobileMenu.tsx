@@ -1,17 +1,17 @@
-"use client"
+'use client'
 
-import { Drawer } from "@base-ui/react/drawer"
-import { ArrowRight, Menu, X } from "lucide-react"
-import Link from "next/link"
-import { useEffect, useRef, useState, type MouseEvent } from "react"
-import { ThemeToggle } from "@components/ui/ThemeToggle"
-import { nav } from "@/locales/fr/hero"
-import { goToSection } from "@/lib/anchors"
-import { useActiveSectionContext } from "./context/ActiveSectionContext"
-import { SectionLink } from "./SectionLink"
-import { BookingCta } from "./BookingCta"
-import type { NavLink } from "./data/navLinks"
-import styles from "./styles/Header.module.css"
+import { Drawer } from '@base-ui/react/drawer'
+import { ArrowRight, Menu, X } from 'lucide-react'
+import Link from 'next/link'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { ThemeToggle } from '@components/ui/ThemeToggle'
+import { nav } from '@/locales/fr/hero'
+import { goToSection } from '@/lib/anchors'
+import { useActiveSectionContext } from './context/ActiveSectionContext'
+import { SectionLink } from './SectionLink'
+import { BookingCta } from './BookingCta'
+import type { NavLink } from './data/navLinks'
+import styles from './styles/Header.module.css'
 
 type MobileMenuProps = {
   links: readonly NavLink[]
@@ -24,8 +24,8 @@ type MobileMenuProps = {
 
 /** Reads the `lg` breakpoint from the published token so the drawer never outlives the burger. */
 const readDesktopMediaQuery = (): string | undefined => {
-  const minWidth = getComputedStyle(document.documentElement).getPropertyValue("--softn-breakpoint-lg").trim()
-  return minWidth === "" ? undefined : `(min-width: ${minWidth})`
+  const minWidth = getComputedStyle(document.documentElement).getPropertyValue('--softn-breakpoint-lg').trim()
+  return minWidth === '' ? undefined : `(min-width: ${minWidth})`
 }
 
 const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
@@ -54,12 +54,12 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
     const closeOnDesktop = (): void => {
       if (media.matches) setOpen(false)
     }
-    media.addEventListener("change", closeOnDesktop)
-    return () => media.removeEventListener("change", closeOnDesktop)
+    media.addEventListener('change', closeOnDesktop)
+    return () => media.removeEventListener('change', closeOnDesktop)
   }, [])
 
   const handleOpenChange = (nextOpen: boolean, details: Drawer.Root.ChangeEventDetails): void => {
-    setDismissedBySwipe(!nextOpen && details.reason === "swipe")
+    setDismissedBySwipe(!nextOpen && details.reason === 'swipe')
     setOpen(nextOpen)
   }
 
@@ -102,10 +102,13 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
       <Drawer.Portal className={styles.portal}>
         <Drawer.Backdrop className={styles.backdrop} />
         <Drawer.Viewport className={styles.viewport}>
-          <Drawer.Popup className={styles.popup} aria-label={menuLabel} initialFocus={closeControl}
-            data-swipe-dismissed={dismissedBySwipe ? "" : undefined}
+          <Drawer.Popup
+            className={styles.popup}
+            aria-label={menuLabel}
+            initialFocus={closeControl}
+            data-swipe-dismissed={dismissedBySwipe ? '' : undefined}
           >
-            <div className={`${styles.header} ${styles["drawer-bar"]} flex items-center justify-between gap-6`}>
+            <div className={`${styles.header} ${styles['drawer-bar']} flex items-center justify-between gap-6`}>
               <Link
                 href="/"
                 aria-label={nav.logo.ariaLabel}
@@ -126,19 +129,19 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
                 </Drawer.Close>
               </div>
             </div>
-            <div className={styles["drawer-body"]}>
-              <div className={styles["drawer-handle"]} aria-hidden="true">
-                <span className={styles["drawer-handle-pill"]} />
+            <div className={styles['drawer-body']}>
+              <div className={styles['drawer-handle']} aria-hidden="true">
+                <span className={styles['drawer-handle-pill']} />
               </div>
-              <div className={styles["drawer-content"]} data-base-ui-swipe-ignore="">
-                <nav className={styles["drawer-nav"]}>
-                  <ul className={styles["drawer-list"]}>
+              <div className={styles['drawer-content']} data-base-ui-swipe-ignore="">
+                <nav className={styles['drawer-nav']}>
+                  <ul className={styles['drawer-list']}>
                     {links.map((link) => (
                       <li key={link.id}>
                         <SectionLink
                           link={link}
                           onClick={(event) => handleLinkClick(event, link)}
-                          className={`${styles["drawer-link"]} flex items-center justify-between font-display text-title-sm`}
+                          className={`${styles['drawer-link']} flex items-center justify-between font-display text-title-sm`}
                         >
                           {link.label}
                           <ArrowRight size={16} aria-hidden="true" focusable="false" className="text-brand-vivid" />

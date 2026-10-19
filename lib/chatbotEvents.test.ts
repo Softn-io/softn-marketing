@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest"
-import { OPEN_CHATBOT_EVENT, dispatchOpenChatbot } from "./chatbotEvents"
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { OPEN_CHATBOT_EVENT, dispatchOpenChatbot } from './chatbotEvents'
 
-describe("dispatchOpenChatbot", () => {
+describe('dispatchOpenChatbot', () => {
   const listeners: Array<(event: Event) => void> = []
 
   afterEach(() => {
@@ -14,19 +14,19 @@ describe("dispatchOpenChatbot", () => {
     window.addEventListener(OPEN_CHATBOT_EVENT, listener)
   }
 
-  it("returns false when no listener claims the event", () => {
-    expect(dispatchOpenChatbot({ source: "header" })).toBe(false)
+  it('returns false when no listener claims the event', () => {
+    expect(dispatchOpenChatbot({ source: 'header' })).toBe(false)
   })
 
-  it("returns true when a listener calls preventDefault", () => {
+  it('returns true when a listener calls preventDefault', () => {
     listen((event) => event.preventDefault())
-    expect(dispatchOpenChatbot({ source: "header" })).toBe(true)
+    expect(dispatchOpenChatbot({ source: 'header' })).toBe(true)
   })
 
-  it("passes the source in the event detail", () => {
+  it('passes the source in the event detail', () => {
     const received = vi.fn()
     listen((event) => received((event as CustomEvent).detail))
-    dispatchOpenChatbot({ source: "header" })
-    expect(received).toHaveBeenCalledWith({ source: "header" })
+    dispatchOpenChatbot({ source: 'header' })
+    expect(received).toHaveBeenCalledWith({ source: 'header' })
   })
 })

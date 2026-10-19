@@ -1,14 +1,14 @@
-import Link from "next/link"
-import { ThemeToggle } from "@components/ui/ThemeToggle"
-import { SECTION_IDS } from "@/lib/anchors"
-import { nav } from "@/locales/fr/hero"
-import { BookingCta } from "./BookingCta"
-import { MobileMenu } from "./MobileMenu"
-import { ScrollRevealCta } from "./ScrollRevealCta"
-import { ActiveSectionProvider } from "./context/ActiveSectionContext"
-import { SectionLink } from "./SectionLink"
-import { getNavLinks } from "./data/navLinks"
-import styles from "./styles/Header.module.css"
+import Link from 'next/link'
+import { ThemeToggle } from '@components/ui/ThemeToggle'
+import { SECTION_IDS } from '@/lib/anchors'
+import { nav } from '@/locales/fr/hero'
+import { BookingCta } from './BookingCta'
+import { MobileMenu } from './MobileMenu'
+import { ScrollRevealCta } from './ScrollRevealCta'
+import { ActiveSectionProvider } from './context/ActiveSectionContext'
+import { SectionLink } from './SectionLink'
+import { getNavLinks } from './data/navLinks'
+import styles from './styles/Header.module.css'
 
 /**
  * Sticky site header: skip link, logo, in-page navigation, theme toggle and booking call to action.
@@ -21,7 +21,7 @@ export const Header = () => {
 
   return (
     <ActiveSectionProvider ids={links.map((link) => link.id)}>
-      <a href={`#${SECTION_IDS.main}`} className={styles["skip-link"]}>
+      <a href={`#${SECTION_IDS.main}`} className={styles['skip-link']}>
         {nav.skipLink}
       </a>
       <header className={`${styles.header} sticky top-0 z-sticky flex items-center justify-between gap-6 bg-base`}>
@@ -37,7 +37,7 @@ export const Header = () => {
           <ul className="flex items-center justify-center gap-4">
             {links.map((link) => (
               <li key={link.id}>
-                <SectionLink link={link} className={`${styles["nav-link"]} text-body-sm`} />
+                <SectionLink link={link} className={`${styles['nav-link']} text-body-sm`} />
               </li>
             ))}
           </ul>
@@ -50,7 +50,12 @@ export const Header = () => {
               <span className="hidden xl:inline">{nav.cta}</span>
             </BookingCta>
           </ScrollRevealCta>
-          <MobileMenu links={links} ctaLabel={nav.cta} menuLabel={nav.menu.ariaLabel} closeLabel={nav.menu.closeAriaLabel} />
+          <MobileMenu
+            links={links}
+            ctaLabel={nav.cta}
+            menuLabel={nav.menu.ariaLabel}
+            closeLabel={nav.menu.closeAriaLabel}
+          />
         </div>
       </header>
     </ActiveSectionProvider>
