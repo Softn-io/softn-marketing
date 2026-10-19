@@ -1,4 +1,4 @@
-import { Header } from '@components/sections/Header'
+import { Header } from '@components/layout/Header'
 import { SECTION_IDS } from '@/lib/anchors'
 
 /**

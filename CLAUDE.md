@@ -27,11 +27,12 @@ Target scripts, to be created at project init (do not invent other names):
 
 ## Architecture
 
-- `app/` routes, layout, `api/` (Route Handlers)
-- `components/ui/` custom primitives (Button, Card…) · `components/sections/` · `components/chatbot/`. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns). Small primitives stay flat. A composite component (`components/sections/Header/`) keeps its entry (`index.ts`, `Header.tsx`) and its sub-components at the folder root, puts non-component code in `hooks/`, `context/`, `data/` and `styles/`, and its unit tests in `tests/`
+- `app/` **only** routes, layout, special files and `api/` (Route Handlers). No route-private folders (`_components/`, `_hooks/`, `_actions/`) under `app/`: route-specific code lives in the shared folders below. No route groups until a second route family exists (legal pages vs home)
+- `components/ui/` custom primitives (Button, Card…) · `components/layout/` page chrome (Header, Footer) · `components/sections/` real page sections only (hero, offers, method, FAQ…) · `components/chatbot/`; `components/forms/` added when the first form lands. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns). Small primitives stay flat. A composite component (`components/layout/Header/`) keeps its entry (`index.ts`, `Header.tsx`) and its sub-components at the folder root, puts non-component code in `hooks/`, `context/`, `data/` and `styles/`, and its unit tests in `tests/`. Anything reused by a second component is promoted to a shared folder (`lib/`, `hooks/`)
+- `lib/` integrations (env, airtable, fillout, consent, analytics) and pure helpers, site constants, nav config; once helpers pile up, group them in role-named subfolders (e.g. `lib/text/`). No `utils/`, `helpers/` or `config/` folder
+- `schemas/` Zod schemas at boundaries (added with the first one) · `hooks/` hooks shared across components (added when needed) · `actions/` shared Server Actions (added with the first one) · `types/` ambient and shared types
 - `locales/fr/` typed copy (single source of content)
-- `lib/` env, airtable, fillout, consent, analytics
-- `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover (in the component's own `tests/` subfolder for composite components); no root `tests/` folder
+- `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover (in the component's own `tests/` subfolder for composite components); no root `tests/` folder, no `src/`
 
 ## Git workflow
 
