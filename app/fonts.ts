@@ -1,4 +1,4 @@
-import localFont from "next/font/local";
+import localFont from 'next/font/local'
 
 /**
  * Full license text for both fonts below (SIL Open Font License 1.1) is in `../assets/fonts/OFL.txt`.
@@ -13,12 +13,12 @@ import localFont from "next/font/local";
  */
 export const plusJakartaSans = localFont({
   src: [
-    { path: "../assets/fonts/PlusJakartaSans-VariableFont_wght.woff2", weight: "200 800", style: "normal" },
-    { path: "../assets/fonts/PlusJakartaSans-Italic-VariableFont_wght.woff2", weight: "200 800", style: "italic" },
+    { path: '../assets/fonts/PlusJakartaSans-VariableFont_wght.woff2', weight: '200 800', style: 'normal' },
+    { path: '../assets/fonts/PlusJakartaSans-Italic-VariableFont_wght.woff2', weight: '200 800', style: 'italic' },
   ],
-  variable: "--font-plus-jakarta-sans",
-  display: "swap",
-});
+  variable: '--font-plus-jakarta-sans',
+  display: 'swap',
+})
 
 /**
  * Self-hosted variable font backing the `--softn-font-display` design token
@@ -28,9 +28,9 @@ export const plusJakartaSans = localFont({
  */
 export const zalandoSans = localFont({
   src: [
-    { path: "../assets/fonts/ZalandoSans-VariableFont_wdth_wght.woff2", weight: "200 900", style: "normal" },
-    { path: "../assets/fonts/ZalandoSans-Italic-VariableFont_wdth_wght.woff2", weight: "200 900", style: "italic" },
+    { path: '../assets/fonts/ZalandoSans-VariableFont_wdth_wght.woff2', weight: '200 900', style: 'normal' },
+    { path: '../assets/fonts/ZalandoSans-Italic-VariableFont_wdth_wght.woff2', weight: '200 900', style: 'italic' },
   ],
-  variable: "--font-zalando-sans",
-  display: "swap",
-});
+  variable: '--font-zalando-sans',
+  display: 'swap',
+})

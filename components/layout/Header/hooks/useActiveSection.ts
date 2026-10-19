@@ -1,10 +1,10 @@
-"use client"
+'use client'
 
-import { useCallback, useEffect, useRef, useState } from "react"
-import type { SectionId } from "@/lib/anchors"
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { SectionId } from '@/lib/anchors'
 
 /** Share of the viewport height, counted from the top, that is excluded from the reading band at its bottom edge. */
-const READING_BAND_BOTTOM_INSET = "60%"
+const READING_BAND_BOTTOM_INSET = '60%'
 
 /** Scroll silence after which a click lock is released. */
 const SCROLL_IDLE_MS = 150
@@ -13,7 +13,7 @@ const SCROLL_IDLE_MS = 150
 const MAX_LOCK_MS = 3000
 
 /** Gestures that mean the visitor takes the scroll back: they release a click lock immediately. */
-const USER_SCROLL_EVENTS = ["wheel", "touchstart", "keydown"] as const
+const USER_SCROLL_EVENTS = ['wheel', 'touchstart', 'keydown'] as const
 
 export type ActiveSection = {
   /** Id of the section highlighted in the navigation, or `null` when none applies (hero, footer). */
@@ -47,7 +47,7 @@ const readStickyOffset = (): number => {
 export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
   const [activeId, setActiveId] = useState<SectionId | null>(null)
   const startLock = useRef<(() => void) | null>(null)
-  const idsKey = ids.join(",")
+  const idsKey = ids.join(',')
 
   const select = useCallback((id: SectionId): void => {
     setActiveId(id)
@@ -55,20 +55,19 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
   }, [])
 
   useEffect(() => {
-    const ordered = idsKey === "" ? [] : (idsKey.split(",") as SectionId[])
+    const ordered = idsKey === '' ? [] : (idsKey.split(',') as SectionId[])
     const elements = ordered.flatMap((id) => {
       const element = document.getElementById(id)
       return element === null ? [] : [{ id, element }]
     })
-    if (elements.length === 0 || typeof IntersectionObserver === "undefined") return undefined
+    if (elements.length === 0 || typeof IntersectionObserver === 'undefined') return undefined
 
     const intersecting = new Set<SectionId>()
     let isLocked = false
     let idleTimer: ReturnType<typeof setTimeout> | undefined
     let capTimer: ReturnType<typeof setTimeout> | undefined
 
-    const computeActive = (): SectionId | null =>
-      elements.filter(({ id }) => intersecting.has(id)).at(-1)?.id ?? null
+    const computeActive = (): SectionId | null => elements.filter(({ id }) => intersecting.has(id)).at(-1)?.id ?? null
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -93,7 +92,7 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
       isLocked = false
       clearTimeout(idleTimer)
       clearTimeout(capTimer)
-      window.removeEventListener("scroll", armIdleTimer)
+      window.removeEventListener('scroll', armIdleTimer)
       USER_SCROLL_EVENTS.forEach((type) => window.removeEventListener(type, releaseLock))
     }
 
@@ -111,7 +110,7 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
       isLocked = true
       armIdleTimer()
       capTimer = setTimeout(releaseLock, MAX_LOCK_MS)
-      window.addEventListener("scroll", armIdleTimer, { passive: true })
+      window.addEventListener('scroll', armIdleTimer, { passive: true })
       USER_SCROLL_EVENTS.forEach((type) => window.addEventListener(type, releaseLock, { passive: true }))
     }
 

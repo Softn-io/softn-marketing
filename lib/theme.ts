@@ -1,7 +1,7 @@
 /** localStorage key holding the user's explicit theme choice. Absent means "follow the system". */
-export const THEME_STORAGE_KEY = "softn-theme"
+export const THEME_STORAGE_KEY = 'softn-theme'
 
-export type Theme = "dark" | "light"
+export type Theme = 'dark' | 'light'
 
 /**
  * Inline script run before first paint. Applies the stored explicit choice to
