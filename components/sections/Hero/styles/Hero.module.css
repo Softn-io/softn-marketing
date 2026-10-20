@@ -109,10 +109,12 @@
 
 @keyframes hero-reveal {
   from {
+    opacity: 0.2;
     transform: translateY(var(--softn-space-4));
   }
 
   to {
+    opacity: 1;
     transform: none;
   }
 }
@@ -129,12 +131,16 @@
 }
 
 /*
- * Entrance reveal, on load, in the design's per-element order.
+ * Entrance reveal, on load, in the design's per-element order: a short rise, combined with a fade.
  * Pure CSS, so the content is readable without JavaScript; `both` holds the `from` state during the
- * delay and leaves the element in its natural state afterwards, and no declaration ever sets
- * `opacity: 0`: the text of the hero is painted at full opacity on the first paint, which keeps it
- * eligible as the largest contentful paint instead of being hidden behind a fade. The reveal is
- * therefore transform-only — a compositor-only property, no paint and no layout.
+ * delay and leaves the element in its natural state afterwards.
+ * The fade starts at 0.2 and never at 0. Chromium does not keep an element painted at `opacity: 0`
+ * as an LCP candidate, so a fade from 0 would take the hero text out of the largest contentful paint
+ * until the reveal ends; at 0.2 the line is painted — and legible — on the first frame, which keeps
+ * the subtitle (the page's LCP element) eligible while the fade stays visible. The value is the
+ * opacity of a keyframe, not a colour or a type step: @softnio-labs/tokens publishes no opacity
+ * scale, so there is no token to read here (a `--softn-opacity-reveal-floor` is proposed in the
+ * report). `transform` is compositor-only; only the fade costs paint.
  * Delays are whole multiples of --softn-duration-micro, the only delay-sized step of the scale that
  * carries a token: the design's 0/60/140/220/300/380/460/620ms become 0/120/…/960ms.
  */
@@ -175,8 +181,9 @@
 }
 
 /* No hero animation runs when motion is reduced: no reveal, no fade, no drift, no hover transition.
-   `HeroGlow` reads the same preference and stops writing the pointer position, so the glow stays
-   where the stylesheet puts it. */
+   The hero text therefore stays at full opacity and in place from the first paint (no base rule
+   holds it back), and `HeroGlow` reads the same preference and stops writing the pointer position,
+   so the glow stays where the stylesheet puts it. */
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .drift {
