@@ -7,7 +7,6 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding-inline: var(--softn-space-5);
   border: 0;
   white-space: nowrap;
   text-decoration: none;
@@ -32,12 +31,16 @@
   color: var(--softn-button-primary-text-hover);
 }
 
+/* Padding follows the size, as the design system's Button does: a small button keeps the same
+   height but a tighter inline padding than a large one. */
 .size-sm {
   min-height: var(--softn-size-sm);
+  padding-inline: var(--softn-space-3);
 }
 
 .size-lg {
   min-height: var(--softn-size-lg);
+  padding-inline: var(--softn-space-5);
 }
 
 @media (prefers-reduced-motion: reduce) {

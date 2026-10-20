@@ -46,4 +46,26 @@ describe('Button', () => {
     expect(classes).toContain('intent-primary')
     expect(classes).toContain('size-sm')
   })
+
+  it('uses the body-sm step on the small size and body-md on the large one', () => {
+    render(
+      <Button href="#x" size="lg">
+        Go
+      </Button>,
+    )
+    const large = screen.getByRole('link').className
+    expect(large).toContain('font-body')
+    expect(large).toContain('leading-none')
+    expect(large).toContain('text-body-md')
+    expect(large).toContain('font-semibold')
+    expect(large).toContain('rounded-pill')
+    expect(large).not.toContain('font-display')
+
+    cleanup()
+    render(<Button href="#y">Go</Button>)
+    const small = screen.getByRole('link').className
+    expect(small).toContain('text-body-sm')
+    expect(small).toContain('font-semibold')
+    expect(small).not.toContain('text-body-md')
+  })
 })
