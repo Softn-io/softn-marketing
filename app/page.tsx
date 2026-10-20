@@ -1,4 +1,5 @@
 import { Header } from '@components/layout/Header'
+import { Hero } from '@components/sections/Hero'
 import { SECTION_IDS } from '@/lib/anchors'
 
 /**
@@ -8,7 +9,9 @@ const Home = () => {
   return (
     <>
       <Header />
-      <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground" />
+      <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground">
+        <Hero />
+      </main>
     </>
   )
 }

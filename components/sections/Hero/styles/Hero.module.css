@@ -1,0 +1,190 @@
+/*
+ * Hero section. Colors, typography, radii and spacing come from --softn-* tokens: Tailwind
+ * utilities in the markup, and this file for what has no utility — the fluid section rhythm,
+ * the text measures taken from the design, the two radial glows, the entrance keyframes and the
+ * interactive states (hover, focus, reduced motion).
+ *
+ * The stagger delays and the pointer position use hero-local custom properties (--hero-*), never a
+ * --softn-* token: the design staggers its entrance per element and no token family covers that.
+ */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+}
+
+.content {
+  position: relative;
+  /* 1080px in the design. No token covers a section width; see the report. */
+  max-inline-size: 67.5rem;
+  margin-inline: auto;
+  padding-block: clamp(var(--softn-space-12), 11vh, calc(var(--softn-space-10) * 3))
+    clamp(var(--softn-space-12), 9vw, calc(var(--softn-space-12) * 2));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      34% 40% at var(--hero-pointer-x, 50%) var(--hero-pointer-y, 10%),
+      var(--softn-warning-background),
+      transparent 68%
+    ),
+    radial-gradient(56% 62% at 50% -6%, var(--softn-brand-background), transparent 74%);
+}
+
+.subtitle {
+  margin-block-start: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+  max-inline-size: 40ch;
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(var(--softn-space-4), 3vw, var(--softn-space-8));
+  margin-block-start: clamp(var(--softn-space-6), 4vw, var(--softn-space-10));
+}
+
+.reassurance {
+  max-inline-size: 42ch;
+}
+
+.secondary {
+  display: inline-flex;
+  align-items: center;
+  padding-block-end: var(--softn-space-1);
+  border-bottom: 1px solid var(--softn-border-default);
+  color: var(--softn-color-secondary);
+  text-decoration: none;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.secondary:hover {
+  border-bottom-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--softn-space-3);
+  margin-block-start: clamp(var(--softn-space-8), 6vw, calc(var(--softn-space-12) + var(--softn-space-4)));
+  color: var(--softn-color-tertiary);
+  text-decoration: none;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.indicator:hover {
+  color: var(--softn-color);
+}
+
+.indicator-badge {
+  display: grid;
+  place-items: center;
+  width: var(--softn-size-sm);
+  height: var(--softn-size-sm);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-brand-background);
+  color: var(--softn-brand-glow);
+}
+
+/* The lucide icon is sized here, from the icon scale, rather than through its pixel size prop. */
+.indicator-badge svg {
+  width: var(--softn-icon-size-xs);
+  height: var(--softn-icon-size-xs);
+}
+
+.secondary:focus-visible,
+.indicator:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@keyframes hero-reveal {
+  from {
+    transform: translateY(var(--softn-space-4));
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+@keyframes hero-drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(calc(-1 * var(--softn-motion-translate-y)));
+  }
+}
+
+/*
+ * Entrance reveal, on load, in the design's per-element order.
+ * Pure CSS, so the content is readable without JavaScript; `both` holds the `from` state during the
+ * delay and leaves the element in its natural state afterwards, and no declaration ever sets
+ * `opacity: 0`: the text of the hero is painted at full opacity on the first paint, which keeps it
+ * eligible as the largest contentful paint instead of being hidden behind a fade. The reveal is
+ * therefore transform-only — a compositor-only property, no paint and no layout.
+ * Delays are whole multiples of --softn-duration-micro, the only delay-sized step of the scale that
+ * carries a token: the design's 0/60/140/220/300/380/460/620ms become 0/120/…/960ms.
+ */
+.reveal {
+  animation: hero-reveal var(--softn-duration-sheet-drawer) var(--softn-easing-out) var(--hero-reveal-delay, 0s) both;
+}
+
+.reveal-delay-1 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 1);
+}
+
+.reveal-delay-2 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 2);
+}
+
+.reveal-delay-3 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 3);
+}
+
+.reveal-delay-4 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 4);
+}
+
+.reveal-delay-5 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 5);
+}
+
+.reveal-delay-6 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 6);
+}
+
+.reveal-delay-8 {
+  --hero-reveal-delay: calc(var(--softn-duration-micro) * 8);
+}
+
+.drift {
+  animation: hero-drift var(--softn-duration-loading-sweep) ease-in-out infinite;
+}
+
+/* No hero animation runs when motion is reduced: no reveal, no fade, no drift, no hover transition.
+   `HeroGlow` reads the same preference and stops writing the pointer position, so the glow stays
+   where the stylesheet puts it. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .drift {
+    animation: none;
+  }
+
+  .secondary,
+  .indicator {
+    transition: none;
+  }
+}
