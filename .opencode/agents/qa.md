@@ -7,7 +7,70 @@ permissions:
     resource: "*"
     effect: deny
   - action: edit
-    resource: "tests/**"
+    resource: "app/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "app/*.test.tsx"
+    effect: allow
+  - action: edit
+    resource: "components/tests/*"
+    effect: allow
+  - action: edit
+    resource: "components/*/tests/*"
+    effect: allow
+  - action: edit
+    resource: "components/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "components/*.test.tsx"
+    effect: allow
+  - action: edit
+    resource: "lib/tests/*"
+    effect: allow
+  - action: edit
+    resource: "lib/*/tests/*"
+    effect: allow
+  - action: edit
+    resource: "lib/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "lib/*.test.tsx"
+    effect: allow
+  - action: edit
+    resource: "hooks/tests/*"
+    effect: allow
+  - action: edit
+    resource: "hooks/*/tests/*"
+    effect: allow
+  - action: edit
+    resource: "hooks/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "hooks/*.test.tsx"
+    effect: allow
+  - action: edit
+    resource: "schemas/tests/*"
+    effect: allow
+  - action: edit
+    resource: "schemas/*/tests/*"
+    effect: allow
+  - action: edit
+    resource: "schemas/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "schemas/*.test.tsx"
+    effect: allow
+  - action: edit
+    resource: "actions/tests/*"
+    effect: allow
+  - action: edit
+    resource: "actions/*/tests/*"
+    effect: allow
+  - action: edit
+    resource: "actions/*.test.ts"
+    effect: allow
+  - action: edit
+    resource: "actions/*.test.tsx"
     effect: allow
   - action: edit
     resource: "e2e/**"
