@@ -1,20 +1,32 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { HERO_CTA_ID } from '../lib/anchors'
+import { interpolate } from '../lib/interpolate'
+import { ASSISTANT_NAME } from '../locales/fr/chatbot'
+import { hero, nav } from '../locales/fr/hero'
 
-const SKIP_LINK = 'Aller au contenu principal'
-const BURGER = 'Menu de navigation'
-const CLOSE = 'Fermer le menu'
-const MAIN_NAV = 'Navigation principale'
-const CTA_LONG = 'Réserver mon échange Spark'
-const CTA_SHORT = 'Réserver mon échange'
-const LOGO = "softn.io, retour à l'accueil"
+// Expected copy comes from the locale source, never hardcoded (QA rule for this suite).
+const SKIP_LINK = nav.skipLink
+const BURGER = nav.menu.ariaLabel
+const CLOSE = nav.menu.closeAriaLabel
+const MAIN_NAV = nav.ariaLabel
+const CTA_LONG = nav.cta
+const CTA_SHORT = nav.ctaShort
+const LOGO = nav.logo.ariaLabel
+const HERO_PRIMARY = hero.cta.primary
+const HERO_SECONDARY = hero.cta.secondary
+const HERO_INDICATOR = interpolate(hero.agentPrompt, { assistantName: ASSISTANT_NAME })
 
 const NAV_LINKS = [
-  { label: 'Comment je vous aide', aria: 'Comment je vous aide, services pour votre activité', id: 'services' },
-  { label: 'Du cadrage au suivi', aria: 'Du cadrage au suivi, ma méthode de travail', id: 'methode' },
-  { label: 'Demandez à', aria: 'Demandez à', id: 'assistant' },
-  { label: 'En coulisses', aria: 'En coulisses, comment ce site a été construit', id: 'coulisses' },
-  { label: 'FAQ', aria: 'FAQ, questions fréquentes', id: 'faq' },
-] as const
+  { label: nav.items.offers, aria: nav.itemsAria.offers, id: 'services' },
+  { label: nav.items.method, aria: nav.itemsAria.method, id: 'methode' },
+  {
+    label: interpolate(nav.items.agent, { assistantName: ASSISTANT_NAME }),
+    aria: interpolate(nav.itemsAria.agent, { assistantName: ASSISTANT_NAME }),
+    id: 'assistant',
+  },
+  { label: nav.items.thisSite, aria: nav.itemsAria.thisSite, id: 'coulisses' },
+  { label: nav.items.faq, aria: nav.itemsAria.faq, id: 'faq' },
+]
 
 const DESKTOP = { width: 1280, height: 800 }
 const BELOW_LG = { width: 1023, height: 800 }
@@ -81,10 +93,15 @@ test.describe('header: desktop', () => {
     await expect(page).toHaveURL(/#main$/)
   })
 
-  test('Tab order: skip link, logo, five nav links, theme toggle, CTA', async ({ page }) => {
+  test('Tab order: skip link, logo, five nav links, theme toggle, then the hero links while the header CTA is hidden', async ({
+    page,
+  }) => {
     await page.goto('/')
+    // Settle ScrollRevealCta first: before hydration the wrapper is still visible, which would make
+    // the header CTA the ninth tab stop. Once hidden + inert, the ninth stop is the hero CTA.
+    await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     const names: string[] = []
-    for (let i = 0; i < 9; i += 1) {
+    for (let i = 0; i < 11; i += 1) {
       await page.keyboard.press('Tab')
       names.push(await focusedName(page))
     }
@@ -94,7 +111,11 @@ test.describe('header: desktop', () => {
       expect(names[2 + i]).toContain(link.label)
     })
     expect(names[7]).toMatch(/Passer au mode/)
-    expect(names[8]).toBe(CTA_LONG)
+    // Since #10 the header CTA wrapper is inert while the hero CTA is on screen (ScrollRevealCta):
+    // the ninth stop is the hero's primary call to action, then its secondary and the scroll indicator.
+    expect(names[8]).toBe(HERO_PRIMARY)
+    expect(names[9]).toBe(HERO_SECONDARY)
+    expect(names[10]).toBe(HERO_INDICATOR)
   })
 
   test('nav accessible names start with the visible text (WCAG 2.5.3)', async ({ page }) => {
@@ -145,17 +166,42 @@ test.describe('header: desktop', () => {
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
   })
 
-  test('CTA is visible and not inert while the hero CTA does not exist', async ({ page }) => {
+  test('header CTA stays hidden and inert while the hero CTA is on screen, reveals once it scrolls out of view', async ({
+    page,
+  }) => {
+    await injectSections(page)
     await page.goto('/')
-    const cta = page.getByRole('link', { name: CTA_LONG })
-    await expect(cta).toBeVisible()
-    await expect(cta.locator('xpath=ancestor::div[@data-state][1]')).toHaveAttribute('data-state', 'visible')
+    const wrapper = page.locator('header [data-state]')
+    const heroCta = page.locator(`#${HERO_CTA_ID}`)
+    // The hero CTA is on screen: ScrollRevealCta hides its wrapper, so the page never shows two CTAs at once.
+    await expect(heroCta).toBeVisible()
+    await expect(wrapper).toHaveAttribute('data-state', 'hidden')
+    await expect(wrapper).toHaveJSProperty('inert', true)
+    await expect(page.locator("header a[href='#reservation']")).toBeHidden()
+    // Scrolling the hero CTA fully above the viewport reveals the header CTA again.
+    await page.evaluate((id) => {
+      const el = document.getElementById(id)
+      if (el === null) throw new Error('hero CTA missing')
+      window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
+    }, HERO_CTA_ID)
+    await expect(wrapper).toHaveAttribute('data-state', 'visible')
+    await expect(wrapper).toHaveJSProperty('inert', false)
+    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
   })
 
-  test('CTA click without a listener or section does not throw and sets #reservation', async ({ page }) => {
+  test('revealed header CTA click dispatches no listener, does not throw and sets #reservation', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
+    await injectSections(page)
     await page.goto('/')
+    // The header CTA is only clickable once the hero CTA has scrolled out of view (ScrollRevealCta).
+    await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
+    await page.evaluate((id) => {
+      const el = document.getElementById(id)
+      if (el === null) throw new Error('hero CTA missing')
+      window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
+    }, HERO_CTA_ID)
+    await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
     await page.getByRole('link', { name: CTA_LONG }).click()
     await expect(page).toHaveURL(/#reservation$/)
     expect(errors).toEqual([])
@@ -195,6 +241,32 @@ test.describe('header: single CTA label per breakpoint', () => {
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
     await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
   })
+})
+
+test.describe('header: booking CTA typography', () => {
+  /*
+   * The header booking call to action is the shared Button at its small size. The design system's
+   * Button paints the label in the *body* face (Plus Jakarta Sans, `--softn-font-body`) at weight 600
+   * on the body-sm step (14 px) and at line-height 1, so the label adds no leading to the token height
+   * of the size. Pinned per breakpoint: 1024 shows the short label, 1280 the long one, same size.
+   */
+  for (const width of [1024, 1280]) {
+    test(`the header CTA renders the small Button typography at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/')
+      // CSS locator on purpose: while the hero CTA is on screen the ScrollRevealCta keeps this wrapper
+      // hidden and inert, and computed typography resolves identically in that state — the contract is
+      // about the Button, not about the reveal, which has its own test above.
+      const cta = page.locator("header a[href='#reservation']")
+      await expect(cta).toHaveAttribute('class', /size-sm/)
+      await expect(cta).toHaveCSS('font-size', '14px')
+      await expect(cta).toHaveCSS('font-weight', '600')
+      await expect(cta).toHaveCSS('font-family', /plus.?jakarta/i)
+      await expect(cta).not.toHaveCSS('font-family', /zalando/i)
+      // line-height 1 on the 14 px step: a 14 px line box.
+      await expect(cta).toHaveCSS('line-height', '14px')
+    })
+  }
 })
 
 test.describe('header: no horizontal overflow', () => {
