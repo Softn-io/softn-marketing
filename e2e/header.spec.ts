@@ -28,6 +28,18 @@ const NAV_LINKS = [
   { label: nav.items.faq, aria: nav.itemsAria.faq, id: 'faq' },
 ]
 
+/**
+ * Common prefix of the two theme-toggle accessible names, read off the locale instead of hardcoding
+ * French in the suite. Used both as a role-name regex and as an attribute prefix, and passed into
+ * `page.evaluate` where the classification runs in the browser.
+ */
+const TOGGLE_PREFIX = nav.themeToggle.toDark.replace(/\s+\S+$/, '')
+const TOGGLE_NAME = new RegExp(TOGGLE_PREFIX)
+/** Same locale-derived anchoring for the section links (a prefix, as the accessible name continues). */
+const METHOD_NAME = new RegExp(`^${nav.items.method}`)
+const BACKSTAGE_NAME = new RegExp(`^${nav.items.thisSite}`)
+const FAQ_NAME = new RegExp(`^${nav.items.faq}`)
+
 const DESKTOP = { width: 1280, height: 800 }
 const BELOW_LG = { width: 1023, height: 800 }
 
@@ -35,7 +47,7 @@ const header = (page: Page) => page.locator('header')
 /** CSS locator: while the drawer is open the header is aria-hidden, so a role query would not find the burger. */
 const burger = (page: Page) => page.locator('header button[aria-expanded]')
 const drawer = (page: Page) => page.getByRole('dialog', { name: BURGER })
-const themeToggle = (page: Page) => page.getByRole('button', { name: /Passer au mode/ })
+const themeToggle = (page: Page) => page.getByRole('button', { name: TOGGLE_NAME })
 
 /** Accessible name of the element that currently holds focus (aria-label wins over text). */
 const focusedName = (page: Page) =>
@@ -67,6 +79,46 @@ const injectSections = async (page: Page) => {
   })
 }
 
+/** Scrolls the hero CTA fully above the viewport, then waits for the header CTA to be revealed. */
+const revealHeaderCta = async (page: Page): Promise<void> => {
+  await page.evaluate((id) => {
+    const el = document.getElementById(id)
+    if (el === null) throw new Error('hero CTA missing')
+    window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
+  }, HERO_CTA_ID)
+  await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
+}
+
+/**
+ * Right edge of the header's content (the header's border-box right minus its inline padding) and
+ * the horizontal boxes of the theme toggle and the booking CTA. While the CTA is hidden it is out of
+ * flow and takes no space, so the toggle must sit exactly on the content right edge; revealed, the
+ * CTA takes that edge and the toggle returns to its left.
+ */
+type HeaderBoxes = {
+  contentRight: number
+  toggle: { left: number; right: number }
+  cta: { left: number; right: number } | null
+}
+const headerBoxes = (page: Page): Promise<HeaderBoxes> =>
+  page.evaluate((toggleSelector) => {
+    const header = document.querySelector('header')
+    if (header === null) throw new Error('header missing')
+    const rect = header.getBoundingClientRect()
+    const contentRight = rect.right - Number.parseFloat(getComputedStyle(header).paddingRight)
+    const box = (selector: string) => {
+      const el = document.querySelector(selector)
+      if (el === null) return null
+      const r = el.getBoundingClientRect()
+      return { left: r.left, right: r.right }
+    }
+    return {
+      contentRight,
+      toggle: box(toggleSelector) ?? { left: Number.NaN, right: Number.NaN },
+      cta: box("header a[href='#reservation']"),
+    }
+  }, `header button[aria-label^='${TOGGLE_PREFIX}']`)
+
 test.describe('header: desktop', () => {
   test.use({ viewport: DESKTOP })
 
@@ -97,9 +149,13 @@ test.describe('header: desktop', () => {
     page,
   }) => {
     await page.goto('/')
-    // Settle ScrollRevealCta first: before hydration the wrapper is still visible, which would make
-    // the header CTA the ninth tab stop. Once hidden + inert, the ninth stop is the hero CTA.
+    // The wrapper ships `data-state="hidden"` in the server HTML (ScrollRevealCta, PR #75 review) and
+    // the client adds `inert` right after hydration: the header CTA is out of the tab order and out
+    // of the accessibility tree from the first frame (`visibility: hidden` does that on its own) —
+    // there is no visible pre-hydration state to settle away from any more. The ninth stop is
+    // therefore the hero's primary call to action.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
+    await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
     const names: string[] = []
     for (let i = 0; i < 11; i += 1) {
       await page.keyboard.press('Tab')
@@ -110,7 +166,7 @@ test.describe('header: desktop', () => {
     NAV_LINKS.forEach((link, i) => {
       expect(names[2 + i]).toContain(link.label)
     })
-    expect(names[7]).toMatch(/Passer au mode/)
+    expect(names[7]).toMatch(TOGGLE_NAME)
     // Since #10 the header CTA wrapper is inert while the hero CTA is on screen (ScrollRevealCta):
     // the ninth stop is the hero's primary call to action, then its secondary and the scroll indicator.
     expect(names[8]).toBe(HERO_PRIMARY)
@@ -131,18 +187,23 @@ test.describe('header: desktop', () => {
     }
   })
 
-  test('focus is visibly ringed on logo, nav link and CTA', async ({ page }) => {
+  test('focus is visibly ringed on logo, nav link and the CTAs', async ({ page }) => {
     await page.goto('/')
-    // Tab stops: skip link, logo, 5 nav links, theme toggle, CTA.
-    const expected = new Map([
+    // Tab stops at the top of the page: skip link, logo, 5 nav links, theme toggle, then the hero's
+    // primary CTA — the header CTA ships hidden in the server render and the client adds `inert`
+    // after hydration (ScrollRevealCta), so it is not the ninth stop until the hero CTA has scrolled
+    // out of view; its ring is covered after the reveal in
+    // `header: CTA starts hidden in the server render`.
+    const expected = new Map<number, string>([
       [2, 'logo'],
       [3, 'nav link'],
-      [9, 'CTA'],
+      [9, 'hero primary CTA'],
     ])
     for (let stop = 1; stop <= 9; stop += 1) {
       await page.keyboard.press('Tab')
       const label = expected.get(stop)
       if (label === undefined) continue
+      if (stop === 9) expect(await focusedName(page)).toBe(HERO_PRIMARY)
       const ring = await page.evaluate(() => {
         const style = getComputedStyle(document.activeElement as Element)
         return {
@@ -212,9 +273,9 @@ test.describe('header: desktop', () => {
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
     await expect(nav.locator('[aria-current]')).toHaveCount(0)
-    await nav.getByRole('link', { name: /^Du cadrage au suivi/ }).click()
+    await nav.getByRole('link', { name: METHOD_NAME }).click()
     await expect(page).toHaveURL(/#methode$/)
-    await expect(nav.getByRole('link', { name: /^Du cadrage au suivi/ })).toHaveAttribute('aria-current', 'location')
+    await expect(nav.getByRole('link', { name: METHOD_NAME })).toHaveAttribute('aria-current', 'location')
     await expect(nav.locator('[aria-current]')).toHaveCount(1)
   })
 
@@ -223,16 +284,27 @@ test.describe('header: desktop', () => {
     await page.goto('/')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
     await page.evaluate(() => document.getElementById('coulisses')?.scrollIntoView())
-    await expect(nav.getByRole('link', { name: /^En coulisses/ })).toHaveAttribute('aria-current', 'location')
+    await expect(nav.getByRole('link', { name: BACKSTAGE_NAME })).toHaveAttribute('aria-current', 'location')
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect(nav.locator('[aria-current]')).toHaveCount(0)
   })
 })
 
 test.describe('header: single CTA label per breakpoint', () => {
+  /*
+   * Since the PR #75 review the wrapper ships hidden in the server render (`inert` follows client-side
+   * right after hydration), so the booking link is not reachable by any role query at the top of the
+   * page; the label contract is read once the hero CTA has scrolled out of view and the header CTA is
+   * revealed (same scroll recipe as the reveal tests above).
+   */
   test('1279 shows the short label only, 1280 the long one only', async ({ page }) => {
+    await injectSections(page)
     await page.setViewportSize({ width: 1279, height: 800 })
     await page.goto('/')
+    // Hidden start: the CTA is neither visible nor in the accessibility tree at the top of the page.
+    await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
+    await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
+    await revealHeaderCta(page)
     await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
     await expect(page.locator("header a[href='#reservation']")).toHaveCount(1)
@@ -241,6 +313,428 @@ test.describe('header: single CTA label per breakpoint', () => {
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
     await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
   })
+})
+
+test.describe('header: CTA starts hidden in the server render (PR #75 review)', () => {
+  test.use({ viewport: DESKTOP })
+
+  /*
+   * The contract from Mel's review: hidden is the server state — the HTML ships `data-state="hidden"`
+   * and **no** `inert` (D-1: no CSS can lift an attribute, and the `scripting: none` override has to
+   * show an operable CTA), so no frame ever paints the header CTA at the top of the page; the client
+   * adds `inert` after hydration as belt and braces on top of `visibility: hidden`. While hidden the
+   * wrapper is out of flow and takes no space, which puts the theme toggle exactly on the header's
+   * content right edge; the CTA appears only once the hero CTA has scrolled above the viewport,
+   * becomes focusable, moves the toggle to its left, and disappears again on the way back up.
+   * Without JavaScript the `scripting: none` override shows the CTA on its own.
+   */
+  test('a hard reload at the top never paints the header CTA: the server HTML ships it hidden, without inert', async ({
+    page,
+  }) => {
+    const problems: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error' || message.type() === 'warning')
+        problems.push(`${message.type()}: ${message.text()}`)
+    })
+    // Per-frame recorder installed before any page script: samples what is painted from the first
+    // frame of the load. A pre-hydration flash would show up as `visible` samples.
+    await page.addInitScript(() => {
+      type Sample = { state: string | null; visibility: string; opacity: string }
+      const samples: Sample[] = []
+      Reflect.set(window, '__ctaSamples', samples)
+      const tick = () => {
+        const el = document.querySelector('header [data-state]')
+        if (el !== null) {
+          const style = getComputedStyle(el)
+          samples.push({ state: el.getAttribute('data-state'), visibility: style.visibility, opacity: style.opacity })
+        }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+    // `commit`: goto resolves as soon as the navigation is committed, before scripts and paint, so
+    // the recorder covers the whole hydration window.
+    const response = await page.goto('/', { waitUntil: 'commit' })
+    if (response === null) throw new Error('navigation returned no response')
+    const html = await response.text()
+    // The hidden state is in the markup itself, not written by a script after the fact. CSS-module
+    // class names are hashed in production builds, so the wrapper is picked out by its `data-state`
+    // attribute, which the component writes un-hashed.
+    expect(html).toContain('data-state="hidden"')
+    // No `inert` in the server markup (this assertion used to require it — that encoded defect D-1):
+    // no CSS can lift an attribute, and the `@media (scripting: none)` override must be able to show
+    // a fully operable CTA without any script. Checked on the wrapper's own opening tag, so the
+    // inlined React flight payload can neither produce a false match nor a false pass.
+    const wrapperTags = html.match(/<div[^>]*data-state="hidden"[^>]*>/g) ?? []
+    expect(wrapperTags.length, 'the served HTML carries the hidden wrapper').toBeGreaterThan(0)
+    for (const tag of wrapperTags) expect(tag, `served wrapper opening tag: ${tag}`).not.toMatch(/inert/)
+
+    // Sample across the full reveal window (1.31 s) plus hydration: every frame must paint nothing.
+    // The wait is the *sampling window*, not a settle signal: the assertions below read the frames.
+    await page.waitForTimeout(1600)
+    const samples = await page.evaluate(
+      () => Reflect.get(window, '__ctaSamples') as Array<{ state: string | null; visibility: string; opacity: string }>,
+    )
+    expect(samples.length, 'animation frames sampled during load').toBeGreaterThanOrEqual(10)
+    for (const [frame, sample] of samples.entries()) {
+      expect(sample.state, `frame ${String(frame)}: data-state`).toBe('hidden')
+      expect(sample.visibility, `frame ${String(frame)}: nothing is painted`).toBe('hidden')
+      expect(sample.opacity, `frame ${String(frame)}: fully transparent`).toBe('0')
+    }
+
+    // With JavaScript on, the client adds the belt-and-braces `inert` to the wrapper it hydrates in
+    // the hidden state (`isScripted && !isRevealed`, ScrollRevealCta): the attribute is absent from
+    // the served markup above, and present here, once hydration has swapped in the client snapshot.
+    const wrapper = page.locator('header [data-state]')
+    await expect(wrapper, 'the hydrated hidden wrapper is inert').toHaveJSProperty('inert', true)
+    expect(
+      await wrapper.evaluate((el) => el.hasAttribute('inert')),
+      'the hydrated hidden wrapper carries the inert attribute',
+    ).toBe(true)
+    await expect(wrapper).toHaveCSS('visibility', 'hidden')
+    await expect(wrapper).toHaveCSS('opacity', '0')
+
+    // And it is not operable while hidden: focus() on the inert, visibility-hidden link is refused
+    // by Chromium (the client-side `inert` plus `visibility: hidden`, not the server markup).
+    const focusLanded = await page.evaluate(() => {
+      const link = document.querySelector("header a[href='#reservation']") as HTMLElement | null
+      if (link === null) throw new Error('header CTA link missing')
+      link.focus()
+      return document.activeElement === link
+    })
+    expect(focusLanded, 'the hidden header CTA must not take focus').toBe(false)
+
+    expect(problems, `console noise during load: ${problems.join(' | ')}`).toEqual([])
+  })
+
+  for (const width of [1024, 1280]) {
+    test(`the theme toggle sits flush on the content right edge at ${width}px while the CTA is hidden`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/')
+      await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
+      const boxes = await headerBoxes(page)
+      expect(
+        Math.abs(boxes.toggle.right - boxes.contentRight),
+        `toggle.right ${String(boxes.toggle.right)} vs content right ${String(boxes.contentRight)}`,
+      ).toBeLessThanOrEqual(1)
+      // Out of flow, fully collapsed: absolute, invisible, transparent — and anchored exactly where
+      // the reveal lands, so the reveal only fades the CTA in without moving it. The rise itself is
+      // still written with JavaScript on (`--scroll-reveal-translate: 0 var(--softn-space-2)`, i.e.
+      // 8 px): the D-2 fix must cancel it in the no-JS override only, never here.
+      const hidden = await page.locator('header [data-state]').evaluate((el) => {
+        const style = getComputedStyle(el)
+        return {
+          position: style.position,
+          visibility: style.visibility,
+          opacity: style.opacity,
+          translate: style.translate,
+          right: el.getBoundingClientRect().right,
+        }
+      })
+      expect(hidden.position, 'the hidden wrapper leaves the flow').toBe('absolute')
+      expect(hidden.visibility).toBe('hidden')
+      expect(hidden.opacity).toBe('0')
+      expect(hidden.translate, 'the JS hidden state keeps its 8 px rise').toBe('0px 8px')
+      expect(
+        Math.abs(hidden.right - boxes.contentRight),
+        `hidden anchor right ${String(hidden.right)} vs content right ${String(boxes.contentRight)}`,
+      ).toBeLessThanOrEqual(1)
+    })
+  }
+
+  test('after scrolling past the hero CTA the header CTA is visible, keyboard focusable with a ring, and the toggle sits to its left', async ({
+    page,
+  }) => {
+    await injectSections(page)
+    await page.goto('/')
+    await revealHeaderCta(page)
+    const ctaLink = page.getByRole('link', { name: CTA_LONG })
+    await expect(ctaLink).toBeVisible()
+    await expect(page.locator('header [data-state]')).toHaveJSProperty('inert', false)
+    // Keyboard: nine stops reach it (skip link, logo, five nav links, theme toggle, header CTA).
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    for (let stop = 1; stop <= 9; stop += 1) await page.keyboard.press('Tab')
+    await expect(ctaLink).toBeFocused()
+    const ring = await page.evaluate(() => {
+      const style = getComputedStyle(document.activeElement as Element)
+      return {
+        outlineStyle: style.outlineStyle,
+        outlineWidth: Number.parseFloat(style.outlineWidth),
+        boxShadow: style.boxShadow,
+      }
+    })
+    const hasRing = (ring.outlineStyle !== 'none' && ring.outlineWidth > 0) || ring.boxShadow !== 'none'
+    expect(hasRing, `no focus ring on the revealed header CTA ${JSON.stringify(ring)}`).toBe(true)
+    // Geometry: the CTA takes the content right edge and the toggle returns to its left, one
+    // `gap-3` (space-3 = 12 px) away.
+    const boxes = await headerBoxes(page)
+    if (boxes.cta === null) throw new Error('revealed header CTA has no box')
+    expect(Math.abs(boxes.cta.right - boxes.contentRight), 'CTA on the content right edge').toBeLessThanOrEqual(1)
+    expect(
+      Math.abs(boxes.cta.left - boxes.toggle.right - 12),
+      `gap toggle→CTA ${String(boxes.cta.left - boxes.toggle.right)}`,
+    ).toBeLessThanOrEqual(1)
+  })
+
+  test('scrolling back to the top hides the CTA again and puts the toggle back on the edge', async ({ page }) => {
+    await injectSections(page)
+    await page.goto('/')
+    await revealHeaderCta(page)
+    await page.evaluate(() => window.scrollTo(0, 0))
+    const wrapper = page.locator('header [data-state]')
+    await expect(wrapper).toHaveAttribute('data-state', 'hidden')
+    await expect(wrapper).toHaveJSProperty('inert', true)
+    await expect(wrapper).toHaveCSS('visibility', 'hidden')
+    // Out of the accessibility tree and out of the tab order again.
+    await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
+    const boxes = await headerBoxes(page)
+    expect(
+      Math.abs(boxes.toggle.right - boxes.contentRight),
+      'the toggle returns to the content right edge',
+    ).toBeLessThanOrEqual(1)
+  })
+
+  test('reduced motion: the CTA still starts hidden and revealed, and its reveal is a plain fade', async ({ page }) => {
+    await injectSections(page)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/')
+    // The preference changes timings, never the semantics: hidden out of flow at the top.
+    await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
+    await expect(page.locator('header [data-state]')).toHaveCSS('position', 'absolute')
+    await expect(page.locator('header [data-state]')).toHaveCSS('visibility', 'hidden')
+    await revealHeaderCta(page)
+    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
+    // No rise is transitioned: the reduced-motion block keeps only `opacity` and `visibility`, at
+    // the reduced duration token (150 ms) — neither `translate` nor `transform`.
+    const transition = await page.locator('header [data-state]').evaluate((el) => {
+      const style = getComputedStyle(el)
+      return { property: style.transitionProperty, duration: style.transitionDuration }
+    })
+    expect(transition.property).not.toContain('translate')
+    expect(transition.property).not.toContain('transform')
+    expect(transition.property).toContain('opacity')
+    expect(transition.duration.split(',')[0]?.trim(), `reduced reveal duration ${transition.duration}`).toBe('0.15s')
+  })
+})
+
+test.describe('header: CTA without JavaScript', () => {
+  /*
+   * Mel's PR #75 decision: "without JavaScript the CTA is shown via `@media (scripting: none)`" — and
+   * shown means laid out like the revealed state and operable: the component contract
+   * (`BookingCta.tsx`: "Without JavaScript it is a plain `#reservation` link") is the baseline. This
+   * is the acceptance surface of the D-1 (no `inert` in the server markup) and D-2 (the no-JS rise
+   * reset survives the build) fixes; three separate tests so one run exposes every aspect at once.
+   */
+  const atDesktopWidth = async (browser: Browser, width: number, label: string, exact: boolean) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width, height: 800 } })
+    const page = await context.newPage()
+    await page.goto('/')
+    // The wrapper itself: nothing runs to flip `data-state`, so the CSS override carries the whole
+    // reveal. The `translate` check is the D-2 regression guard: the hidden rise lives in
+    // `--scroll-reveal-translate`, which the override resets to `none` through a `var()` (opaque to
+    // Lightning CSS, which used to drop a literal `translate: none` and leak the `0px 8px` rise).
+    const wrapper = page.locator('header [data-state]')
+    await expect(wrapper).toHaveAttribute('data-state', 'hidden')
+    await expect(wrapper).toHaveCSS('position', 'static')
+    await expect(wrapper).toHaveCSS('visibility', 'visible')
+    await expect(wrapper).toHaveCSS('opacity', '1')
+    // `none` or the identity matrix: Lightning CSS serializes the source's `transform: none` as
+    // `translate(0,0)` in the build, so the computed value is the identity — either spelling means
+    // "no transform", which is the contract.
+    await expect(wrapper).toHaveCSS('transform', /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
+    // The CTA must sit where the revealed state puts it: `translate` must be a no-offset value.
+    // A leaking `0px 8px` (the hidden rise) paints the dead-center button 8 px too low.
+    await expect(wrapper).toHaveCSS('translate', /^(none|matrix\(1, 0, 0, 1, 0, 0\)|0px 0px)$/)
+    // The label contract still holds in this state.
+    await expect(page.getByRole('link', { name: label, exact })).toBeVisible()
+    // Record the measured no-JS values in the report: this is the surface where D-2 lived, so the
+    // evidence that the built CSS carries the reset should be readable, not just "green".
+    const measured = await wrapper.evaluate((el) => {
+      const style = getComputedStyle(el)
+      const box = el.getBoundingClientRect()
+      return {
+        position: style.position,
+        visibility: style.visibility,
+        opacity: style.opacity,
+        translate: style.translate,
+        transform: style.transform,
+        customProperty: style.getPropertyValue('--scroll-reveal-translate').trim(),
+        top: Math.round(box.top),
+        height: Math.round(box.height),
+      }
+    })
+    test
+      .info()
+      .annotations.push({ type: 'measure', description: `no-JS ${String(width)}px: ${JSON.stringify(measured)}` })
+    // And the header still fits: in this state the CTA is a normal in-flow item on the right of the
+    // row, exactly like the revealed one, so the row must not overflow the viewport at any lg+ width.
+    const metrics = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+      headerScroll: (document.querySelector('header') as HTMLElement).scrollWidth,
+      headerClient: (document.querySelector('header') as HTMLElement).clientWidth,
+      ctaRight: (document.querySelector("header a[href='#reservation']") as HTMLElement).getBoundingClientRect().right,
+      rowRight: (document.querySelector('header > div:last-of-type') as HTMLElement).getBoundingClientRect().right,
+    }))
+    expect(metrics.scroll, `no document overflow at ${String(width)} without JavaScript`).toBeLessThanOrEqual(
+      metrics.client,
+    )
+    expect(metrics.headerScroll, `no header overflow at ${String(width)} without JavaScript`).toBeLessThanOrEqual(
+      metrics.headerClient,
+    )
+    expect(metrics.ctaRight, `the CTA stays inside the header row at ${String(width)}`).toBeLessThanOrEqual(
+      metrics.rowRight + 0.5,
+    )
+    await context.close()
+  }
+
+  test('is visually shown at 1024 and 1280, laid out with no leftover offset', async ({ browser }) => {
+    await atDesktopWidth(browser, 1024, CTA_SHORT, true)
+    await atDesktopWidth(browser, 1280, CTA_LONG, false)
+  })
+
+  test('the shown CTA is operable: not inert, focusable, and the plain anchor navigates', async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
+    const page = await context.newPage()
+    await page.goto('/')
+    const cta = page.locator("header a[href='#reservation']")
+    await expect(cta).toBeVisible()
+    // A painted call to action whose wrapper stays `inert` (server-rendered attribute, liftable by
+    // no CSS) is a dead button: the whole subtree is unfocusable and unclickable. Without any
+    // script there is nothing to remove the attribute, so it must not be in the served markup.
+    await expect(page.locator('header [data-state]')).toHaveJSProperty('inert', false)
+    const focusLanded = await cta.evaluate((el) => {
+      ;(el as HTMLElement).focus()
+      return document.activeElement === el
+    })
+    expect(focusLanded, 'the no-JS header CTA must be focusable').toBe(true)
+    await cta.click()
+    await expect(page).toHaveURL(/#reservation$/)
+    await context.close()
+  })
+
+  /*
+   * Mel's decision for this state says the CTA is also present in the accessibility tree. axe-core
+   * cannot answer that: `@axe-core/playwright` injects axe by running script in the page, and a
+   * `javaScriptEnabled: false` context refuses every injection — so axe in that context is
+   * `not verifiable` by construction, never skipped. The renderer's own accessibility tree is
+   * computed without page script, so the same claim is read straight off it through CDP
+   * (`Accessibility.getFullAXTree`): exactly one un-ignored `link` node carrying the long label.
+   */
+  test('the shown CTA is in the accessibility tree (renderer AX snapshot over CDP, axe cannot run without JS)', async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
+    const page = await context.newPage()
+    await page.goto('/')
+    const session = await context.newCDPSession(page)
+    await session.send('Accessibility.enable')
+    const { nodes } = (await session.send('Accessibility.getFullAXTree')) as {
+      nodes: Array<{ role?: { value?: string }; name?: { value?: string }; ignored?: boolean }>
+    }
+    const matches = nodes.filter((node) => node.role?.value === 'link' && (node.name?.value ?? '').includes(CTA_LONG))
+    expect(
+      matches.length,
+      `link nodes named "${CTA_LONG}" in the no-JS AX tree: ${JSON.stringify(matches)}`,
+    ).toBeGreaterThan(0)
+    for (const node of matches) expect(node.ignored, `AX node ${JSON.stringify(node)} must not be ignored`).toBe(false)
+    await context.close()
+  })
+
+  /*
+   * The two progressive-enhancement preferences stack: a no-JavaScript visitor who also asked for
+   * reduced motion must still get the visible, operable CTA (the `scripting` override and the
+   * `prefers-reduced-motion` block are independent media features, so a regression in either one
+   * that only shows up in the combination is caught here).
+   */
+  test('is shown and operable with reduced motion emulated as well', async ({ browser }) => {
+    const context = await browser.newContext({
+      javaScriptEnabled: false,
+      reducedMotion: 'reduce',
+      viewport: { width: 1280, height: 800 },
+    })
+    const page = await context.newPage()
+    await page.goto('/')
+    const wrapper = page.locator('header [data-state]')
+    await expect(wrapper).toHaveCSS('position', 'static')
+    await expect(wrapper).toHaveCSS('visibility', 'visible')
+    await expect(wrapper).toHaveCSS('opacity', '1')
+    await expect(wrapper).toHaveCSS('translate', /^(none|matrix\(1, 0, 0, 1, 0, 0\)|0px 0px)$/)
+    const cta = page.locator("header a[href='#reservation']")
+    await expect(cta).toBeVisible()
+    const focusLanded = await cta.evaluate((el) => {
+      ;(el as HTMLElement).focus()
+      return document.activeElement === el
+    })
+    expect(focusLanded, 'the no-JS + reduced-motion header CTA must be focusable').toBe(true)
+    await cta.click()
+    await expect(page).toHaveURL(/#reservation$/)
+    await context.close()
+  })
+
+  test('is out of the mobile header below lg, with no horizontal overflow', async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 375, height: 800 } })
+    const page = await context.newPage()
+    await page.goto('/')
+    // The breakpoint utilities keep deciding: no CTA box in the mobile header at all.
+    await expect(page.locator('header [data-state]')).toHaveCSS('display', 'none')
+    const metrics = await page.evaluate(() => ({
+      scroll: document.documentElement.scrollWidth,
+      client: document.documentElement.clientWidth,
+    }))
+    expect(metrics.scroll, 'no horizontal overflow at 375 without JavaScript').toBeLessThanOrEqual(metrics.client)
+    await context.close()
+  })
+})
+
+test.describe('header: no horizontal overflow with the CTA revealed', () => {
+  for (const width of [1024, 1050, 1100, 1279, 1280]) {
+    test(`fits at ${width}px with the CTA visible`, async ({ page }) => {
+      await injectSections(page)
+      await page.setViewportSize({ width, height: 800 })
+      await page.goto('/')
+      await revealHeaderCta(page)
+      const m = await page.evaluate(() => {
+        const h = document.querySelector('header')
+        const nav = document.querySelector('header nav')
+        const logo = document.querySelector('header a[aria-label]')
+        const actions = h?.lastElementChild ?? null
+        const cta = document.querySelector("header a[href='#reservation']")
+        const rect = (el: Element | null) => {
+          if (el === null) return null
+          const r = el.getBoundingClientRect()
+          return { left: r.left, right: r.right, height: r.height }
+        }
+        return {
+          docScroll: document.documentElement.scrollWidth,
+          docClient: document.documentElement.clientWidth,
+          headerScroll: h?.scrollWidth ?? 0,
+          headerClient: h?.clientWidth ?? 0,
+          logo: rect(logo),
+          nav: rect(nav),
+          actions: rect(actions),
+          cta: rect(cta),
+          linkHeights: Array.from(document.querySelectorAll('header nav a'))
+            .map((a) => a.getBoundingClientRect().height)
+            .filter((height) => height > 0),
+        }
+      })
+      expect(m.docScroll, 'document scrollWidth').toBeLessThanOrEqual(m.docClient)
+      expect(m.headerScroll, 'header scrollWidth').toBeLessThanOrEqual(m.headerClient)
+      if (m.logo === null || m.nav === null || m.actions === null || m.cta === null) {
+        throw new Error(`header parts missing at ${String(width)}: ${JSON.stringify(m)}`)
+      }
+      expect(m.logo.right).toBeLessThanOrEqual(m.nav.left + 0.5)
+      expect(m.nav.right).toBeLessThanOrEqual(m.actions.left + 0.5)
+      expect(m.actions.right).toBeLessThanOrEqual(width)
+      expect(m.cta.right).toBeLessThanOrEqual(m.headerClient + 0.5)
+      // A wrapped nav link (two lines) is the visible symptom of the break reported in the review.
+      const singleLine = Math.min(...m.linkHeights)
+      for (const height of m.linkHeights) expect(height).toBeLessThanOrEqual(singleLine + 1)
+    })
+  }
 })
 
 test.describe('header: booking CTA typography', () => {
@@ -367,7 +861,7 @@ test.describe('header: mobile drawer', () => {
     // The header sits behind the modal (aria-hidden/inert): the a11y tree holds exactly one logo and one toggle.
     await expect(page.getByRole('link', { name: LOGO })).toHaveCount(1)
     await expect(themeToggle(page)).toHaveCount(1)
-    await expect(drawer(page).getByRole('button', { name: /Passer au mode/ })).toHaveCount(1)
+    await expect(drawer(page).getByRole('button', { name: TOGGLE_NAME })).toHaveCount(1)
   })
 
   test('initial focus lands on the close control', async ({ page }) => {
@@ -381,19 +875,22 @@ test.describe('header: mobile drawer', () => {
 
   /** Classifies the focused element against the dialog content, or "outside" when it is not inside the dialog. */
   const classifyFocus = (page: Page) =>
-    page.evaluate(() => {
-      const active = document.activeElement
-      const dialog = document.querySelector("[role='dialog']")
-      if (active !== null && active.hasAttribute('data-base-ui-focus-guard')) return 'guard'
-      if (active === null || dialog === null || !dialog.contains(active)) return 'outside'
-      const label = active.getAttribute('aria-label') ?? ''
-      if (active.closest('nav') !== null) return 'link'
-      if (label.startsWith('Passer au mode')) return 'toggle'
-      if (label === 'Fermer le menu') return 'close'
-      if (active.tagName === 'A' && active.getAttribute('href') === '/') return 'logo'
-      if (active.tagName === 'A') return 'cta'
-      return 'outside'
-    })
+    page.evaluate(
+      ([togglePrefix, closeLabel]) => {
+        const active = document.activeElement
+        const dialog = document.querySelector("[role='dialog']")
+        if (active !== null && active.hasAttribute('data-base-ui-focus-guard')) return 'guard'
+        if (active === null || dialog === null || !dialog.contains(active)) return 'outside'
+        const label = active.getAttribute('aria-label') ?? ''
+        if (active.closest('nav') !== null) return 'link'
+        if (label.startsWith(togglePrefix)) return 'toggle'
+        if (label === closeLabel) return 'close'
+        if (active.tagName === 'A' && active.getAttribute('href') === '/') return 'logo'
+        if (active.tagName === 'A') return 'cta'
+        return 'outside'
+      },
+      [TOGGLE_PREFIX, CLOSE] as const,
+    )
 
   /** Presses a key, then waits for the focus guard (transient wrap-around stop) to hand focus back to a real element. */
   const pressSettled = async (page: Page, key: string) => {
@@ -439,9 +936,7 @@ test.describe('header: mobile drawer', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
-    await drawer(page)
-      .getByRole('button', { name: /Passer au mode/ })
-      .click()
+    await drawer(page).getByRole('button', { name: TOGGLE_NAME }).click()
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
     await expect(drawer(page)).toBeVisible()
   })
@@ -480,7 +975,7 @@ test.describe('header: mobile drawer', () => {
     await injectSections(page)
     await page.goto('/')
     await burger(page).click()
-    await drawer(page).getByRole('link', { name: /^FAQ/ }).click()
+    await drawer(page).getByRole('link', { name: FAQ_NAME }).click()
     await expect(drawer(page)).toBeHidden()
     await expect(page).toHaveURL(/#faq$/)
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000)
@@ -554,9 +1049,9 @@ test.describe('header: drawer top row matches the header', () => {
         await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
         await page.goto('/')
         await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
-        const rects = (root: string, toggle: string) =>
+        const rects = (root: string, toggle: string, close: string) =>
           page.evaluate(
-            ([r, t]) => {
+            ([r, t, c]) => {
               const box = (el: Element | null) => {
                 if (el === null) return null
                 const { x, y, width: w, height: h } = el.getBoundingClientRect()
@@ -566,11 +1061,7 @@ test.describe('header: drawer top row matches the header', () => {
               return {
                 logo: box(scope?.querySelector('a[aria-label]') ?? null),
                 toggle: box(scope?.querySelector(t as string) ?? null),
-                button: box(
-                  scope?.querySelector('button[aria-expanded]') ??
-                    scope?.querySelector("button[aria-label='Fermer le menu']") ??
-                    null,
-                ),
+                button: box(scope?.querySelector('button[aria-expanded]') ?? scope?.querySelector(c as string) ?? null),
                 bg:
                   scope === null
                     ? ''
@@ -579,16 +1070,18 @@ test.describe('header: drawer top row matches the header', () => {
                       ).backgroundColor,
               }
             },
-            [root, toggle],
+            [root, toggle, close],
           )
-        const TOGGLE = "button[aria-label^='Passer au mode']"
-        const before = await rects('header', TOGGLE)
+        // Locales-derived selectors: the suite carries no hardcoded French copy.
+        const TOGGLE = `button[aria-label^='${TOGGLE_PREFIX}']`
+        const CLOSE_BUTTON = `button[aria-label='${CLOSE}']`
+        const before = await rects('header', TOGGLE, CLOSE_BUTTON)
         await burger(page).click()
         await expect(drawer(page)).toBeVisible()
         // Wait for the enter transition to finish so the body translate does not skew nothing and opacity is 1.
         await expect(drawer(page)).not.toHaveAttribute('data-starting-style', /.*/)
         await expect.poll(() => drawer(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
-        const after = await rects("[role='dialog']", TOGGLE)
+        const after = await rects("[role='dialog']", TOGGLE, CLOSE_BUTTON)
         for (const key of ['logo', 'toggle', 'button'] as const) {
           const a = before[key]
           const b = after[key]
@@ -1103,7 +1596,7 @@ test.describe('header: drawer top row matches the header', () => {
 
   test('a link tap after a swipe-over-link attempt still closes then scrolls to the section', async ({ browser }) => {
     const { context, page, touch } = await openTouchDrawer(browser, 'dark')
-    const link = drawer(page).getByRole('link', { name: /^FAQ/ })
+    const link = drawer(page).getByRole('link', { name: FAQ_NAME })
     const point = await centerOf(link)
     await drag(touch, point.y, point.y + 200, point.x, 25)
     await touch('touchEnd', point.y + 200, point.x)
@@ -1192,6 +1685,55 @@ test.describe('header: contrast in both themes', () => {
       expect(idle, 'idle link contrast').toBeGreaterThanOrEqual(4.5)
       expect(active, 'active link contrast').toBeGreaterThanOrEqual(4.5)
       expect(underline, 'active underline contrast').toBeGreaterThanOrEqual(3)
+    })
+
+    /*
+     * The revealed booking CTA is `visibility: hidden` at the top of the page, so the analyses above
+     * never see its colors: it is measured here, once revealed and fully faded in (the 0.2 floor of
+     * the hero fade was the PR #75 lesson — a mid-fade measurement is not a real contrast).
+     */
+    test(`revealed booking CTA label >= 4.5:1 on its background (${scheme})`, async ({ page }) => {
+      await injectSections(page)
+      await page.emulateMedia({ colorScheme: scheme })
+      await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
+      await page.goto('/')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
+      await revealHeaderCta(page)
+      await expect
+        .poll(() => page.locator('header [data-state]').evaluate((el) => getComputedStyle(el).opacity))
+        .toBe('1')
+      const ratio = await page.locator("header a[href='#reservation']").evaluate((el) => {
+        const toRgb = (css: string): [number, number, number] => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1
+          canvas.height = 1
+          const ctx = canvas.getContext('2d', { willReadFrequently: true })
+          if (ctx === null) throw new Error('no 2d context')
+          ctx.clearRect(0, 0, 1, 1)
+          ctx.fillStyle = css
+          ctx.fillRect(0, 0, 1, 1)
+          const [r = 0, g = 0, b = 0] = ctx.getImageData(0, 0, 1, 1).data
+          return [r, g, b]
+        }
+        const lum = ([r, g, b]: [number, number, number]) => {
+          const f = (v: number) => {
+            const c = v / 255
+            return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+          }
+          return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+        }
+        const style = getComputedStyle(el)
+        const [hi, lo] = [lum(toRgb(style.color)), lum(toRgb(style.backgroundColor))].sort((x, y) => y - x) as [
+          number,
+          number,
+        ]
+        return (hi + 0.05) / (lo + 0.05)
+      })
+      test.info().annotations.push({
+        type: 'measure',
+        description: `revealed booking CTA label contrast (${scheme}): ${ratio.toFixed(2)}:1`,
+      })
+      expect(ratio, `revealed CTA label contrast (${scheme})`).toBeGreaterThanOrEqual(4.5)
     })
   }
 })

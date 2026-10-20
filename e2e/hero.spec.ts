@@ -42,6 +42,19 @@ const expectRing = async (page: Page): Promise<void> => {
   expect(hasRing, `no focus ring on the active element ${JSON.stringify(ring)}`).toBe(true)
 }
 
+/**
+ * Resolves once every *finite* CSS animation on the page has finished (a settled reveal). Infinite
+ * ones — the decorative `hero-drift` loop — are filtered out, their `finished` promise never resolves.
+ */
+const awaitFiniteAnimations = async (page: Page): Promise<void> => {
+  await page.evaluate(async () => {
+    const running = document
+      .getAnimations()
+      .filter((animation) => Number.isFinite(animation.effect?.getComputedTiming().iterations ?? 1))
+    await Promise.all(running.map((animation) => animation.finished.catch(() => undefined)))
+  })
+}
+
 test.describe('hero: cursor-following glow', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
@@ -193,8 +206,9 @@ test.describe('hero: keyboard', () => {
 
   test('Tab reaches the three hero links, each with a visible focus ring', async ({ page }) => {
     await page.goto('/')
-    // Settle the header CTA into its hidden/inert state first: at the top of the page the hero links
-    // are stops 9, 10 and 11.
+    // The header CTA ships `data-state="hidden"` in the server render (ScrollRevealCta), so the hero
+    // links are tab stops 9, 10 and 11 at the top of the page: the wait below pins that state, it is
+    // not something the page has to settle into.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     for (let i = 0; i < 9; i += 1) await page.keyboard.press('Tab')
     await expect(primaryCta(page)).toBeFocused()
@@ -214,14 +228,16 @@ test.describe('hero: sequenced reveal', () => {
   /*
    * Acceptance criterion « animated title (sequenced reveal) ». The entrance is pure CSS: every revealed
    * block declares the same `hero-reveal` keyframes with a per-element delay that increases in reading
-   * order, so the three title lines arrive one after the other. The keyframes animate `transform` only
-   * — never opacity — which is what keeps the hero text painted on the first frame for the LCP and
-   * readable without JavaScript (the loop-1 decision). Timing is pinned to the token values the site
-   * uses today: duration `--softn-duration-sheet-drawer` (350 ms) and delays that are whole multiples
-   * of `--softn-duration-micro` (120 ms). Changing any of those is a deliberate design decision, so it
-   * should fail here first.
+   * order, so the three title lines arrive one after the other. Since the PR #75 review the keyframes
+   * animate `transform` and `opacity`: the fade rises from a non-zero floor (0.2) to 1, so the text is
+   * painted — and legible — on the very first frame, which keeps the subtitle an LCP candidate (a fade
+   * from 0 would drop it there) while the reveal still reads as a fade. No *base* rule ever lowers the
+   * opacity: without JavaScript and under `prefers-reduced-motion` the hero renders at full opacity.
+   * Timing is pinned to the token values the site uses today: duration `--softn-duration-sheet-drawer`
+   * (350 ms) and delays that are whole multiples of `--softn-duration-micro` (120 ms). Changing any of
+   * those is a deliberate design decision, so it should fail here first.
    */
-  test('the hero blocks reveal in sequence, on a transform-only animation', async ({ page }) => {
+  test('the hero blocks reveal in sequence, fading up from a non-zero floor opacity', async ({ page }) => {
     await page.goto('/')
     const data = await page.evaluate(() => {
       const section = document.querySelector('main section')
@@ -256,13 +272,37 @@ test.describe('hero: sequenced reveal', () => {
       return { steps, title, frames }
     })
 
+    // Keyframes (CSSOM): opacity and transform, nothing else. `from` fades up from a strictly
+    // non-zero floor and rises one space step; `to` lands at full opacity and no transform.
+    expect(data.frames.length, 'hero-reveal keyframe steps').toBeGreaterThanOrEqual(2)
+    for (const frame of data.frames) {
+      expect([...frame.properties].sort(), `keyframe ${frame.at} animates only opacity and transform`).toEqual([
+        'opacity',
+        'transform',
+      ])
+    }
+    const from = data.frames.find((frame) => frame.at === '0%' || frame.at === 'from')
+    const to = data.frames.find((frame) => frame.at === '100%' || frame.at === 'to')
+    expect(from, 'the keyframes carry a from step').toBeTruthy()
+    expect(to, 'the keyframes carry a to step').toBeTruthy()
+    const floor = Number.parseFloat(from?.opacity ?? 'NaN')
+    expect(Number.isNaN(floor), 'from keyframe opacity is a number').toBe(false)
+    expect(floor, 'the fade never starts from full transparency (LCP)').toBeGreaterThan(0)
+    expect(floor, 'from keyframe opacity is pinned to the 0.2 floor').toBeCloseTo(0.2, 5)
+    expect(from?.transform, 'the from step still rises').toContain('translateY')
+    expect(to?.opacity, 'to keyframe opacity').toBe('1')
+    expect(to?.transform, 'the to step lands without a transform').toBe('none')
+
     // Every revealed block runs the same entrance animation at the token duration.
     expect(data.steps.length, 'elements carrying the reveal class').toBeGreaterThanOrEqual(8)
     for (const [index, s] of data.steps.entries()) {
       expect(s.name, `animation-name of reveal step ${index}`).toMatch(/hero-reveal/)
       expect(s.duration, `animation-duration of reveal step ${index} (sheet-drawer token)`).toBe('0.35s')
-      // The reveal never hides the text: opacity stays 1 before, during and after the animation.
-      expect(s.opacity, `opacity of reveal step ${index}`).toBe('1')
+      // Sampled right after load, the fade is running (a step at its delay floor reads 0.2): the
+      // computed opacity must stay between the floor and 1 — the text is never fully transparent.
+      const sampled = Number.parseFloat(s.opacity)
+      expect(sampled, `opacity of reveal step ${index} during the fade is ≥ the floor`).toBeGreaterThanOrEqual(floor)
+      expect(sampled, `opacity of reveal step ${index} during the fade is ≤ 1`).toBeLessThanOrEqual(1)
     }
 
     // Sequenced: the delays strictly increase in reading order (eyebrow, the three title lines,
@@ -282,11 +322,15 @@ test.describe('hero: sequenced reveal', () => {
       expect(previous !== undefined && value > previous, `title line ${index + 1} delay`).toBe(true)
     }
 
-    // Transform-only keyframes: no opacity anywhere in the entrance (the LCP / no-JS guarantee).
-    expect(data.frames.length, 'hero-reveal keyframe steps').toBeGreaterThanOrEqual(2)
-    for (const frame of data.frames) {
-      expect(frame.properties, `keyframe ${frame.at} animates only transform`).toEqual(['transform'])
-      expect(frame.opacity, `keyframe ${frame.at} sets no opacity`).toBe('')
+    // Once every finite entrance animation has finished, each block sits at full opacity: the floor
+    // only exists inside the keyframes, no base rule holds the text back (no-JS, reduced motion).
+    await awaitFiniteAnimations(page)
+    const settled = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('main section [class*="reveal"]')).map((el) => getComputedStyle(el).opacity),
+    )
+    expect(settled.length, 'elements carrying the reveal class').toBeGreaterThanOrEqual(8)
+    for (const [index, value] of settled.entries()) {
+      expect(value, `opacity of reveal step ${index} after the reveal`).toBe('1')
     }
   })
 })
@@ -341,7 +385,17 @@ test.describe('hero: reduced motion', () => {
         { message: 'no pointer position written while motion is reduced', timeout: 1000 },
       )
       .toBe('')
-    // Content visible.
+    // Content visible, at full opacity from the first paint: under the preference no animation runs,
+    // so the reveal's 0.2 floor must not leak into any element — nothing waits behind a base rule.
+    const opacities = await page.evaluate(() => {
+      const section = document.querySelector('main section')
+      if (section === null) throw new Error('hero section missing')
+      return Array.from(section.querySelectorAll('[class*="reveal"]')).map((el) => getComputedStyle(el).opacity)
+    })
+    expect(opacities.length, 'elements carrying the reveal class').toBeGreaterThanOrEqual(8)
+    for (const [index, value] of opacities.entries()) {
+      expect(value, `computed opacity of reveal step ${index} under reduced motion`).toBe('1')
+    }
     await expect(heroSection(page).getByText(hero.eyebrow)).toBeVisible()
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
     await expect(heroSection(page).getByText(hero.subtitle)).toBeVisible()
