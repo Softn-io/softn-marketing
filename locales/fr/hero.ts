@@ -60,9 +60,9 @@ export type Nav = typeof nav
 export const hero = {
   eyebrow: 'Sites · Apps · Automatisations · IA',
   title: {
-    line1: 'Votre site,',
-    line2: 'vos apps,',
-    line3: 'vos automatisations et agents IA.',
+    line1: 'Vos apps,',
+    line2: 'vos automatisations',
+    line3: 'et agents IA.',
   },
   subtitle:
     "Votre site, vos applications et vos automatisations, réalisés avec l'appui d'agents IA et relus par un humain à chaque étape. L'IA peut aussi s'intégrer à vos processus métier, là où elle vous est utile. Je vous accompagne de l'idée à la prise en main.",
