@@ -18,15 +18,15 @@ export const Hero = () => {
   return (
     <section className={styles.hero}>
       <HeroGlow />
-      <div className={styles.content}>
+      <div className={`${styles.content} mx-auto max-w-6xl`}>
         <p className={`${styles.reveal} text-caption text-brand-foreground uppercase`}>{hero.eyebrow}</p>
-        <h1 className="mt-5 font-display text-display-md text-foreground md:text-display-lg">
+        <h1 className={`${styles.title} mt-5 font-display text-display-md text-foreground sm:text-display-xl`}>
           <span className={`${styles.reveal} ${styles['reveal-delay-1']} block`}>{hero.title.line1}</span>{' '}
           <span className={`${styles.reveal} ${styles['reveal-delay-2']} block`}>{hero.title.line2}</span>{' '}
           <span className={`${styles.reveal} ${styles['reveal-delay-3']} block`}>{hero.title.line3}</span>
         </h1>
         <p
-          className={`${styles.subtitle} ${styles.reveal} ${styles['reveal-delay-4']} text-body-md text-foreground-secondary`}
+          className={`${styles.subtitle} ${styles.reveal} ${styles['reveal-delay-4']} text-body-md text-foreground-secondary md:text-body-lg`}
         >
           {hero.subtitle}
         </p>
