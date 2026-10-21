@@ -1,0 +1,8 @@
+allowBuilds:
+  esbuild: false
+  unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@softnio-labs/tokens@0.3.0 || 0.3.1'
+overrides:
+  tar@<7.5.21: '>=7.5.21'
+  source-map-js@<1.2.2: '>=1.2.2'

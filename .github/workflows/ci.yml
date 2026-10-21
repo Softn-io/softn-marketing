@@ -1,0 +1,228 @@
+# Optimized CI: reduce runs and avoid repeated installs; heavy jobs gated by 'run-e2e'
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    branches: [develop, staging, main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - '.github/**'
+  push:
+    branches: [develop, staging, main]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
+      - '.github/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      web: ${{ steps.filter.outputs.web }}
+      infra: ${{ steps.filter.outputs.infra }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            web:
+              - 'app/**'
+              - 'components/**'
+              - 'public/**'
+              - 'lib/**'
+              - 'locales/**'
+              - 'scripts/**'
+              - 'e2e/**'
+              - 'types/**'
+              - 'next.config.ts'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'tsconfig.json'
+              - 'eslint.config.mjs'
+              - 'postcss.config.mjs'
+              - 'vitest.config.mts'
+              - 'playwright.config.ts'
+              - 'lighthouserc.json'
+              - '.prettierrc.json'
+              - '.prettierignore'
+            infra:
+              - '.github/**'
+              - 'docs/**'
+              - '*.md'
+
+  checks:
+    needs: filter
+    if: needs.filter.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Lint Tailwind
+        run: pnpm lint:tailwind
+      - name: Format
+        run: pnpm format:check
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Unit tests
+        run: pnpm test
+
+  build:
+    needs: filter
+    if: needs.filter.outputs.web == 'true' && (
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: next-build
+          path: |
+            .next
+            !.next/cache
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  lighthouse:
+    needs: [build]
+    if: needs.build.result == 'success' && (
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - run: pnpm lighthouse
+        continue-on-error: true
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: .lighthouseci
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e:
+    needs: [build]
+    if: needs.build.result == 'success' && (
+      github.event_name == 'push' ||
+      (github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'run-e2e'))
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: next-build
+          path: .next
+      - name: Resolve Playwright version
+        id: playwright
+        run: echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e
+        env:
+          PLAYWRIGHT_SKIP_BUILD: '1'
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          if-no-files-found: warn
+          retention-days: 14
+
+  deploy:
+    needs: [checks, build, e2e, lighthouse]
+    if: ${{ github.event_name != 'pull_request' && contains(fromJSON('["refs/heads/develop","refs/heads/staging","refs/heads/main"]'), github.ref) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-${{ github.ref }}
+      cancel-in-progress: false
+    environment: ${{ github.ref_name == 'main' && 'production' || github.ref_name == 'staging' && 'preview' || 'development' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - name: Map branch to Vercel environment
+        id: target
+        run: |
+          case "$GITHUB_REF_NAME" in
+            main)    echo "environment=production"  >> "$GITHUB_OUTPUT"; echo "build_flags=--prod" >> "$GITHUB_OUTPUT" ;;
+            staging) echo "environment=preview"     >> "$GITHUB_OUTPUT"; echo "build_flags=" >> "$GITHUB_OUTPUT" ;;
+            develop) echo "environment=preview"     >> "$GITHUB_OUTPUT"; echo "build_flags=" >> "$GITHUB_OUTPUT" ;;
+          esac
+      - run: pnpm install --frozen-lockfile
+      - name: Vercel pull
+        run: pnpm exec vercel pull --yes --environment=${{ steps.target.outputs.environment }} --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Vercel build
+        run: pnpm exec vercel build ${{ steps.target.outputs.build_flags }} --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      - name: Vercel deploy
+        run: pnpm exec vercel deploy --prebuilt ${{ steps.target.outputs.build_flags }} --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}

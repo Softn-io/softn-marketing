@@ -1,0 +1,30 @@
+# Dependencies and resolved packages
+node_modules/
+
+# Framework and build output
+.next/
+out/
+build/
+
+# Test, coverage and audit artifacts
+coverage/
+test-results/
+playwright-report/
+.lighthouseci/
+
+# Generated lockfile entries and Next.js type declarations
+pnpm-lock.yaml
+next-env.d.ts
+*.tsbuildinfo
+
+# Local tool state and runtime scratch directories (untracked)
+.vercel/
+.orchestration/
+.serena/
+.claude/agent-memory/
+docs/design/
+
+# Markdown is editorial content: docs/ and the agent instructions are
+# written and validated by hand (French copy, `docs/`), and most of them
+# are not Prettier-clean today, so formatting them is out of scope here.
+*.md

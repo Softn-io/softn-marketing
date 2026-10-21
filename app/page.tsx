@@ -1,8 +1,19 @@
+import { Header } from '@components/layout/Header'
+import { Hero } from '@components/sections/Hero'
+import { SECTION_IDS } from '@/lib/anchors'
+
 /**
- * Foundation shell only: the real one-page sections (hero, offer, process…)
- * land in issues #9-22, which depend on this one. No copy here — content
- * comes from `content/fr/*.ts` once written and validated by `content-seo`.
+ * Foundation shell: the page sections land in their own issues and mount inside `<main>`.
  */
-export default function Home() {
-  return <main className="flex flex-1 flex-col bg-base text-foreground" />;
+const Home = () => {
+  return (
+    <>
+      <Header />
+      <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground">
+        <Hero />
+      </main>
+    </>
+  )
 }
+
+export default Home
