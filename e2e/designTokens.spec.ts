@@ -67,10 +67,11 @@ const auditInPage = ({
   const num = (v: string): number => Number.parseFloat(v)
   const norm = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ')
 
-  // Accepted deviation (Mel's decision, 2026-10-20; tracked in issue #73): the hero's section rhythm
-  // is a clamp interpolating between token bounds. At the 1280x800 audit viewport the hero content
-  // container computes padding-top 88px (11vh between space-12=48px and space-10*3=120px) and
-  // padding-bottom 96px (calc(space-12*2)). These are not defects but stay reported (annotations).
+  // Accepted deviation (Mel's decision, 2026-10-20; tracked in issue #73, tokenized in 0.3.0): the
+  // hero's section rhythm is a clamp interpolating between token bounds. At the 1280x800 audit
+  // viewport the hero content container computes padding-top 88px (11vh between --softn-space-16=64px
+  // and --softn-space-30=120px) and padding-bottom 96px (--softn-space-24, the 9vw branch clamped at
+  // its ceiling). These are not defects but stay reported (annotations).
   const acceptedFluidClamp: Record<string, number[]> = { heroContent: [88, 96] }
   const fluidAccepted: string[] = []
 

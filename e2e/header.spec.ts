@@ -79,7 +79,13 @@ const injectSections = async (page: Page) => {
   })
 }
 
-/** Scrolls the hero CTA fully above the viewport, then waits for the header CTA to be revealed. */
+/**
+ * Scrolls the hero CTA fully above the viewport, waits for the header CTA to be revealed, then waits
+ * for the `sn-pop` reveal to have **landed** (`opacity: 1`, no `translate`, no `scale`). The reveal
+ * runs on `--softn-duration-sheet-drawer` (350 ms) and the wrapper's painted box is scaled during it,
+ * so any geometry read straight after the state flip is a mid-animation measurement of a shrunken
+ * box; every caller that measures position or edges needs the settled state.
+ */
 const revealHeaderCta = async (page: Page): Promise<void> => {
   await page.evaluate((id) => {
     const el = document.getElementById(id)
@@ -87,6 +93,16 @@ const revealHeaderCta = async (page: Page): Promise<void> => {
     window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
   }, HERO_CTA_ID)
   await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
+  await expect
+    .poll(
+      () =>
+        page.locator('header [data-state]').evaluate((el) => {
+          const style = getComputedStyle(el)
+          return `${style.opacity}|${style.translate}|${style.scale}`
+        }),
+      { message: 'the sn-pop reveal must settle at rest: opaque, unoffset, unscaled' },
+    )
+    .toBe('1|none|none')
 }
 
 /**
@@ -420,26 +436,50 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
         `toggle.right ${String(boxes.toggle.right)} vs content right ${String(boxes.contentRight)}`,
       ).toBeLessThanOrEqual(1)
       // Out of flow, fully collapsed: absolute, invisible, transparent — and anchored exactly where
-      // the reveal lands, so the reveal only fades the CTA in without moving it. The rise itself is
-      // still written with JavaScript on (`--scroll-reveal-translate: 0 var(--softn-space-2)`, i.e.
-      // 8 px): the D-2 fix must cancel it in the no-JS override only, never here.
+      // the reveal lands. Since the PR #75 review the hidden state also carries the *start* of the
+      // `sn-pop` drop-in: `translate: 0 calc(-1 * var(--softn-space-2))` (8 px above rest) and
+      // `scale: var(--softn-motion-scale-from)` (0.96), read here with JavaScript on. The D-2 fix must
+      // cancel both in the no-JS override only, never here.
       const hidden = await page.locator('header [data-state]').evaluate((el) => {
         const style = getComputedStyle(el)
+        const rect = el.getBoundingClientRect()
         return {
           position: style.position,
           visibility: style.visibility,
           opacity: style.opacity,
           translate: style.translate,
-          right: el.getBoundingClientRect().right,
+          scale: style.scale,
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
         }
       })
       expect(hidden.position, 'the hidden wrapper leaves the flow').toBe('absolute')
       expect(hidden.visibility).toBe('hidden')
       expect(hidden.opacity).toBe('0')
-      expect(hidden.translate, 'the JS hidden state keeps its 8 px rise').toBe('0px 8px')
+      expect(hidden.translate, 'the JS hidden state holds the 8 px drop-in start (above rest)').toBe('0px -8px')
+      // `--softn-motion-scale-from` resolves to 0.96: the mockup's 0.94 is the accepted deviation
+      // (Mel's decision, tokens 0.3.0 — the published scale step is used instead of a literal).
+      expect(hidden.scale, 'the JS hidden state holds the sn-pop scale start').toBe('0.96')
+      // The painted rect is the *scaled* box, so its right edge sits inside the anchor by half the
+      // shortfall. Undo the transform (same centre, width divided by the scale) to compare the
+      // untransformed anchor with the content right edge: that is where the reveal lands.
+      const scale = Number.parseFloat(hidden.scale)
+      expect(Number.isNaN(scale), 'the hidden scale parses').toBe(false)
+      const anchorRight = (hidden.left + hidden.right) / 2 + hidden.width / scale / 2
       expect(
-        Math.abs(hidden.right - boxes.contentRight),
-        `hidden anchor right ${String(hidden.right)} vs content right ${String(boxes.contentRight)}`,
+        Math.abs(anchorRight - boxes.contentRight),
+        `hidden anchor right ${String(anchorRight)} vs content right ${String(boxes.contentRight)}`,
+      ).toBeLessThanOrEqual(1)
+      // …and the painted edge really is the inset one (the effect the review warns about): the
+      // shortfall is half the lost width, on the right because the transform origin is the centre.
+      expect(
+        boxes.contentRight - hidden.right,
+        `painted edge inset by the scale: ${String(boxes.contentRight - hidden.right)} px`,
+      ).toBeGreaterThan(1)
+      expect(
+        Math.abs(boxes.contentRight - hidden.right - (hidden.width / scale - hidden.width) / 2),
+        'the inset equals half the scaled-off width',
       ).toBeLessThanOrEqual(1)
     })
   }
@@ -496,7 +536,9 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     ).toBeLessThanOrEqual(1)
   })
 
-  test('reduced motion: the CTA still starts hidden and revealed, and its reveal is a plain fade', async ({ page }) => {
+  test('reduced motion: the CTA still starts hidden and revealed, and its reveal is a plain fade with no movement at all', async ({
+    page,
+  }) => {
     await injectSections(page)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/')
@@ -504,18 +546,164 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     await expect(page.locator('header [data-state]')).toHaveCSS('position', 'absolute')
     await expect(page.locator('header [data-state]')).toHaveCSS('visibility', 'hidden')
+    // The sn-pop start values are cancelled, not just un-transitioned: the reduced-motion block resets
+    // `--scroll-reveal-translate` and `--scroll-reveal-scale` to `none` on the hidden state itself, so
+    // the CTA never carries the 8 px offset or the 0.96 scale, not even on the frame it starts.
+    const hiddenState = await page.locator('header [data-state]').evaluate((el) => {
+      const style = getComputedStyle(el)
+      return {
+        translate: style.translate,
+        scale: style.scale,
+        customTranslate: style.getPropertyValue('--scroll-reveal-translate').trim(),
+        customScale: style.getPropertyValue('--scroll-reveal-scale').trim(),
+        paintedWidth: el.getBoundingClientRect().width,
+        layoutWidth: (el as HTMLElement).offsetWidth,
+      }
+    })
+    expect(hiddenState.translate, 'reduced motion: no drop-in offset on the hidden state').toBe('none')
+    expect(hiddenState.scale, 'reduced motion: no scale on the hidden state').toBe('none')
+    expect(hiddenState.customTranslate).toBe('none')
+    expect(hiddenState.customScale).toBe('none')
+    // With no scale applied, the painted box is exactly the layout box (regression guard: a leaking
+    // 0.96 would shrink it by 4 %).
+    expect(
+      Math.abs(hiddenState.paintedWidth - hiddenState.layoutWidth),
+      `reduced motion: painted ${String(hiddenState.paintedWidth)} vs layout ${String(hiddenState.layoutWidth)}`,
+    ).toBeLessThanOrEqual(1)
     await revealHeaderCta(page)
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
-    // No rise is transitioned: the reduced-motion block keeps only `opacity` and `visibility`, at
-    // the reduced duration token (150 ms) — neither `translate` nor `transform`.
+    // No movement is transitioned: the reduced-motion block keeps only `opacity` and `visibility`, at
+    // the reduced duration token (150 ms) — neither `translate`, `scale` nor `transform`.
     const transition = await page.locator('header [data-state]').evaluate((el) => {
       const style = getComputedStyle(el)
       return { property: style.transitionProperty, duration: style.transitionDuration }
     })
     expect(transition.property).not.toContain('translate')
     expect(transition.property).not.toContain('transform')
+    expect(transition.property).not.toContain('scale')
     expect(transition.property).toContain('opacity')
     expect(transition.duration.split(',')[0]?.trim(), `reduced reveal duration ${transition.duration}`).toBe('0.15s')
+    // And the revealed state is at rest: no offset, no scale, exactly the geometry of the animated
+    // build (the fade is the whole appearance).
+    const revealed = await page.locator('header [data-state]').evaluate((el) => {
+      const style = getComputedStyle(el)
+      return { translate: style.translate, scale: style.scale, transform: style.transform }
+    })
+    expect(revealed.translate).toBe('none')
+    expect(revealed.scale).toBe('none')
+    expect(revealed.transform).toMatch(/^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
+  })
+
+  /*
+   * The animation contract of the PR #75 review, sampled frame by frame: the reveal is the mockup's
+   * `sn-pop` drop-in — it starts **above** rest (8 px, `--softn-space-2`), scaled down (0.96,
+   * `--softn-motion-scale-from`) and transparent, and lands at rest over `--softn-duration-sheet-drawer`
+   * (350 ms) with `--softn-easing-out`. Mel's accepted deviations from the mockup stay as they are: the
+   * mockup uses `translateY(-10px) scale(.94)` over 460 ms, the site uses the nearest published tokens.
+   * Sampling the painted frames is the only way to prove the *start* of the movement: the settled state
+   * alone would also be reached by a plain fade.
+   */
+  test('the reveal is the sn-pop drop-in: above rest, scaled and transparent at the start, at rest when it lands', async ({
+    page,
+  }) => {
+    type Frame = { state: string; opacity: number; translate: string; scale: number; top: number }
+    await injectSections(page)
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await page.goto('/')
+    const wrapper = page.locator('header [data-state]')
+    await expect(wrapper).toHaveAttribute('data-state', 'hidden')
+    // Per-frame recorder: samples the wrapper's painted state every frame from here on.
+    await page.evaluate(() => {
+      const frames: Array<{
+        state: string
+        opacity: number
+        translate: string
+        scale: number
+        top: number
+      }> = []
+      Reflect.set(window, '__revealFrames', frames)
+      const tick = (): void => {
+        const el = document.querySelector('header [data-state]')
+        if (el !== null) {
+          const style = getComputedStyle(el)
+          frames.push({
+            state: el.getAttribute('data-state') ?? '',
+            opacity: Number.parseFloat(style.opacity),
+            translate: style.translate,
+            scale: style.scale === 'none' ? 1 : Number.parseFloat(style.scale),
+            top: el.getBoundingClientRect().top,
+          })
+        }
+        requestAnimationFrame(tick)
+      }
+      requestAnimationFrame(tick)
+    })
+
+    await revealHeaderCta(page)
+
+    // The transition of the revealed rule: the three sn-pop properties at the sheet-drawer token.
+    const timings = await wrapper.evaluate((el) => {
+      const style = getComputedStyle(el)
+      return {
+        duration: style.transitionDuration,
+        easing: style.transitionTimingFunction,
+        property: style.transitionProperty,
+      }
+    })
+    expect(timings.property, 'the reveal transitions opacity, translate and scale').toContain('translate')
+    expect(timings.property).toContain('scale')
+    expect(timings.duration, 'sn-pop duration is the sheet-drawer token on all three properties').toBe(
+      '0.35s, 0.35s, 0.35s, 0s',
+    )
+    expect(timings.easing, 'the easing is the out token').toContain('cubic-bezier(0, 0, 0.2, 1)')
+
+    // Rest geometry, measured after the reveal has settled (the helper above waits for it).
+    const rest = await wrapper.evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      const style = getComputedStyle(el)
+      return { top: box.top, translate: style.translate, scale: style.scale, opacity: style.opacity }
+    })
+    expect(rest.opacity, 'settled reveal is fully opaque').toBe('1')
+    expect(rest.translate, 'settled reveal carries no offset').toBe('none')
+    expect(rest.scale, 'settled reveal carries no scale').toBe('none')
+
+    const frames = (await page.evaluate(() => Reflect.get(window, '__revealFrames'))) as Frame[]
+    const paint = frames.filter((frame) => frame.state === 'visible')
+    expect(paint.length, 'visible frames sampled during the reveal').toBeGreaterThanOrEqual(4)
+    const first = paint[0]
+    expect(first, 'the recorder caught the first painted frame').toBeTruthy()
+    if (first) {
+      // The three acceptance criteria of the drop-in, on the first frame that paints the CTA. The
+      // frame is sampled *after* the transition has started, so the offset is somewhere inside the
+      // declared start: above rest by at most the 8 px of `--softn-space-2` (the exact start value is
+      // pinned on the hidden state in the test above).
+      expect(first.opacity, 'first painted frame is transparent').toBeLessThan(1)
+      expect(first.scale, 'first painted frame is scaled down').toBeLessThan(1)
+      expect(first.top, 'first painted frame starts above the resting position').toBeLessThan(rest.top)
+      const offset = Number.parseFloat(/^\d+px (-[\d.]+)px$/.exec(first.translate)?.[1] ?? 'NaN')
+      expect(Number.isNaN(offset), `first painted frame carries a rise offset (${first.translate})`).toBe(false)
+      expect(offset, `drop-in offset stays within the 8 px token step: ${first.translate}`).toBeLessThan(0)
+      expect(
+        offset,
+        `drop-in offset starts at most one --softn-space-2 above rest: ${first.translate}`,
+      ).toBeGreaterThanOrEqual(-8)
+    }
+    // The movement is monotonic towards rest and never overshoots: it comes from above (top grows to
+    // the resting top) and the scale only increases towards 1.
+    for (const [index, frame] of paint.entries()) {
+      expect(frame.scale, `frame ${String(index)}: scale stays at or under 1`).toBeLessThanOrEqual(1.001)
+      expect(frame.opacity, `frame ${String(index)}: opacity stays at or under 1`).toBeLessThanOrEqual(1.001)
+      if (index === 0) continue
+      const previous = paint[index - 1]
+      if (previous === undefined) continue
+      expect(frame.top, `frame ${String(index)}: the box moves down towards rest`).toBeGreaterThanOrEqual(
+        previous.top - 0.5,
+      )
+      expect(frame.scale, `frame ${String(index)}: the scale grows towards rest`).toBeGreaterThanOrEqual(
+        previous.scale - 0.001,
+      )
+    }
+    expect(paint.at(-1)?.top, 'the last sampled frame has landed at rest').toBeCloseTo(rest.top, 0)
   })
 })
 
@@ -532,9 +720,10 @@ test.describe('header: CTA without JavaScript', () => {
     const page = await context.newPage()
     await page.goto('/')
     // The wrapper itself: nothing runs to flip `data-state`, so the CSS override carries the whole
-    // reveal. The `translate` check is the D-2 regression guard: the hidden rise lives in
-    // `--scroll-reveal-translate`, which the override resets to `none` through a `var()` (opaque to
-    // Lightning CSS, which used to drop a literal `translate: none` and leak the `0px 8px` rise).
+    // reveal. The `translate` / `scale` checks are the D-2 regression guard, extended to the sn-pop
+    // scale: the drop-in start values live in `--scroll-reveal-translate` and `--scroll-reveal-scale`,
+    // which the override resets to `none` through a `var()` (opaque to Lightning CSS, which used to
+    // drop a literal `translate: none` and leak the offset).
     const wrapper = page.locator('header [data-state]')
     await expect(wrapper).toHaveAttribute('data-state', 'hidden')
     await expect(wrapper).toHaveCSS('position', 'static')
@@ -545,8 +734,10 @@ test.describe('header: CTA without JavaScript', () => {
     // "no transform", which is the contract.
     await expect(wrapper).toHaveCSS('transform', /^(none|matrix\(1, 0, 0, 1, 0, 0\))$/)
     // The CTA must sit where the revealed state puts it: `translate` must be a no-offset value.
-    // A leaking `0px 8px` (the hidden rise) paints the dead-center button 8 px too low.
+    // A leaking `0px -8px` (the hidden drop-in start) paints the button 8 px above its row.
     await expect(wrapper).toHaveCSS('translate', /^(none|matrix\(1, 0, 0, 1, 0, 0\)|0px 0px)$/)
+    // And unscaled: a leaking `0.96` would shrink the painted box by 4 % of its width.
+    await expect(wrapper).toHaveCSS('scale', /^(none|1)$/)
     // The label contract still holds in this state.
     await expect(page.getByRole('link', { name: label, exact })).toBeVisible()
     // Record the measured no-JS values in the report: this is the surface where D-2 lived, so the
@@ -559,12 +750,23 @@ test.describe('header: CTA without JavaScript', () => {
         visibility: style.visibility,
         opacity: style.opacity,
         translate: style.translate,
+        scale: style.scale,
         transform: style.transform,
         customProperty: style.getPropertyValue('--scroll-reveal-translate').trim(),
+        customScale: style.getPropertyValue('--scroll-reveal-scale').trim(),
         top: Math.round(box.top),
         height: Math.round(box.height),
+        // No scale applied ⇒ the painted box is the layout box.
+        paintedWidth: box.width,
+        layoutWidth: (el as HTMLElement).offsetWidth,
       }
     })
+    expect(measured.customProperty, 'no-JS: the rise custom property is reset').toBe('none')
+    expect(measured.customScale, 'no-JS: the scale custom property is reset').toBe('none')
+    expect(
+      Math.abs(measured.paintedWidth - measured.layoutWidth),
+      `no-JS: painted ${String(measured.paintedWidth)} vs layout ${String(measured.layoutWidth)}`,
+    ).toBeLessThanOrEqual(1)
     test
       .info()
       .annotations.push({ type: 'measure', description: `no-JS ${String(width)}px: ${JSON.stringify(measured)}` })
@@ -662,6 +864,7 @@ test.describe('header: CTA without JavaScript', () => {
     await expect(wrapper).toHaveCSS('visibility', 'visible')
     await expect(wrapper).toHaveCSS('opacity', '1')
     await expect(wrapper).toHaveCSS('translate', /^(none|matrix\(1, 0, 0, 1, 0, 0\)|0px 0px)$/)
+    await expect(wrapper).toHaveCSS('scale', /^(none|1)$/)
     const cta = page.locator("header a[href='#reservation']")
     await expect(cta).toBeVisible()
     const focusLanded = await cta.evaluate((el) => {

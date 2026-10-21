@@ -62,7 +62,7 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { HERO_CTA_ID } from '../lib/anchors'
-import { nav } from '../locales/fr/hero'
+import { hero, nav } from '../locales/fr/hero'
 
 /** localStorage key the inline theme script reads; same contract as `lib/theme`. */
 const THEME_STORAGE_KEY = 'softn-theme'
@@ -159,7 +159,69 @@ test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
       await expect(page.getByRole('main')).toBeVisible()
       await awaitFonts(page)
       await awaitRevealSettled(page)
-      await expectNoViolations(new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]), `home (${scheme}, settled)`)
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
+      assertNoViolations(results, `home (${scheme}, settled)`)
+      /*
+       * Non-vacuity, and an honest account of what axe does *not* look at. The hero paints its text
+       * over the two radial glows, so axe cannot resolve a background colour for those nodes: they
+       * come back in `incomplete` ("Element's background color could not be determined due to a
+       * background gradient"), never as violations. The audit is therefore only meaningful if (a) the
+       * nodes axe *can* measure really are measured, and (b) the gradient-backed hero text is measured
+       * somewhere else — it is, in `e2e/hero.spec.ts` ("hero text keeps AA contrast over the painted
+       * glow"), which samples the real pixels behind each line. Asserted here so a change that moves
+       * the hero text out of one list and into the other fails.
+       */
+      const contrast = results.passes.find((rule) => rule.id === 'color-contrast')
+      expect(contrast, 'axe reported no color-contrast passes at all').toBeTruthy()
+      const passNodes = (contrast?.nodes ?? []).map((node) => node.html ?? '')
+      expect(
+        passNodes.some((html) => html.includes(hero.cta.primary)),
+        'axe did not measure the hero primary CTA',
+      ).toBe(true)
+      const gradientNodes = (results.incomplete.find((item) => item.id === 'color-contrast')?.nodes ?? []).filter(
+        (node) => (node.html ?? '').includes('Hero-module'),
+      )
+      test.info().annotations.push({
+        type: 'axe-incomplete-color-contrast',
+        description: `${scheme}: ${String(gradientNodes.length)} hero node(s) unmeasurable by axe (background gradient) — covered by the painted-pixel test`,
+      })
+      expect(gradientNodes.length, 'the hero text nodes axe cannot measure').toBeGreaterThanOrEqual(6)
+      /*
+       * Membership of the set is proven on the real elements, never on axe's `html` snippet: axe
+       * truncates that snippet far before a long paragraph's own text (the subtitle's opening tag
+       * alone eats the budget), so a text needle like `hero.subtitle.slice(0, 24)` cannot match it
+       * and a class-name match would not prove the copy. Each reported node also carries its
+       * `target` selector — resolved here against the live page (last part wins, through shadow
+       * roots if there were any), and the needles are matched on the resolved element's
+       * `textContent`. Stronger than a snippet check: every reported node has to resolve to a real
+       * element, and the needles have to be its real text.
+       */
+      const gradientTexts = await page.evaluate(
+        (targets) =>
+          targets.map((parts) => {
+            let root: ParentNode = document
+            let last: Element | null = null
+            for (const part of parts) {
+              const selector = typeof part === 'string' ? part : part.join('')
+              const found: Element | null = root.querySelector(selector)
+              if (found === null) return ''
+              last = found
+              root = found.shadowRoot ?? found
+            }
+            return last === null ? '' : (last.textContent ?? '')
+          }),
+        gradientNodes.map((node) => node.target),
+      )
+      expect(
+        gradientTexts.filter((text) => text !== '').length,
+        'every hero node axe reports as unmeasurable resolves to a real element',
+      ).toBe(gradientNodes.length)
+      for (const needle of [hero.title.line1, hero.subtitle.slice(0, 24), hero.cta.secondary]) {
+        expect(
+          gradientTexts.some((text) => text.includes(needle)),
+          `the unmeasurable set should still hold "${needle}"`,
+        ).toBe(true)
+      }
     })
 
     // The reduced-motion rendering is the state those users always get: full opacity from the first
