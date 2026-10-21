@@ -11,7 +11,7 @@ You may write only test code and your report:
 
 - Vitest unit tests: colocated with the code they cover, inside the shared code roots only (`components/`, `lib/`, `hooks/`, `schemas/`, `actions/`), either in a `tests/` folder at any depth (a component's own `tests/` subfolder, or a `tests/` folder directly under one of those roots) or in a `*.test.ts` / `*.test.tsx` file next to that code. Under `app/`, only a `*.test.ts` / `*.test.tsx` file is allowed: never a `tests/` folder there, and never any other file (a file under `app/` can become a live route);
 - Playwright tests, in `e2e/`;
-- your report, at the path given in your task spec (default: `.orchestration/reports/qa.md`). That folder is not committed.
+- your report, at the path given in your task spec (default: `.orchestration/reports/qa/qa<issue-number>.md`). That folder is not committed.
 
 You must never edit anything else. Application code stays forbidden, including non-test files inside a component folder that holds tests. Any application defect is reported to the coordinator, with file, line and reproduction steps.
 
@@ -48,8 +48,6 @@ You must never edit anything else. Application code stays forbidden, including n
 ## Running servers
 
 Other workers may run in parallel worktrees. Before starting a dev server, Playwright or Lighthouse, check that the port is free; if the default port is taken, use another one and say which. Stop every process you started before you finish.
-
-## Report
 
 ## Report 
 
