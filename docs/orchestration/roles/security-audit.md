@@ -14,7 +14,7 @@ You may run as a subagent (Claude Code) or as a supervised worker under Orca, on
 
 ## Write scope
 
-- You write only `.orchestration/reports/security-audit.md`. Nothing else, ever.
+- You write only `.orchestration/reports/security-audit/security-audit-<issue-number>.md`. Nothing else, ever.
 
 - Use Bash only for read-only commands: `git diff`, `git log`, `git grep`, `rg`, `grep` on named files, `pnpm audit`.
 
@@ -78,7 +78,7 @@ You are not a lawyer. For a compliance point, you flag the risk and point to the
 
 ## Report
 
-Write the report to `.orchestration/reports/security-audit.md`.
+Write the report to `.orchestration/reports/security-audit/security-audit-<issue-number>.md`.
 
 - **First line:** `Verdict: OK for PR`, `Verdict: OK with conditions (list)` or `Verdict: blocking`.
 
