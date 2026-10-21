@@ -174,8 +174,8 @@ importers:
         specifier: 1.9.0
         version: 1.9.0(@types/react@19.3.0)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@softnio-labs/tokens':
-        specifier: 0.2.0
-        version: 0.2.0
+        specifier: 0.3.1
+        version: 0.3.1
       lucide-react:
         specifier: 1.53.0
         version: 1.53.0(@types/react@19.3.0)(react@19.2.8)
@@ -1572,8 +1572,8 @@ packages:
   '@sinclair/typebox@0.25.24':
     resolution: {integrity: sha512-XJfwUVUKDHF5ugKwIcxEgc9k8b7HbznCp6eUfWgu710hMPNIO4aw4/zB5RogDQz8nd6gyCDpU9O/m6qYEWY6yQ==}
 
-  '@softnio-labs/tokens@0.2.0':
-    resolution: {integrity: sha512-RtBqNNYzbwFaI5WeLzgd9XTGCflqtjrseUj2fPbWP1TJIJ000zu9igPYHQBo46fbSLF6CykMTzrO1k1HGFESZQ==}
+  '@softnio-labs/tokens@0.3.1':
+    resolution: {integrity: sha512-Q8wQWbIkD12lmSWyH1Lj4SPvR3lKS1s2fCp58X3RPU4IDsZDEOufy+xPIv9qAJIA3xrmKhHG0V8MjW7qt/qhmQ==}
 
   '@swc/helpers@0.5.23':
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
@@ -6195,7 +6195,7 @@ snapshots:
 
   '@sinclair/typebox@0.25.24': {}
 
-  '@softnio-labs/tokens@0.2.0': {}
+  '@softnio-labs/tokens@0.3.1': {}
 
   '@swc/helpers@0.5.23':
     dependencies:

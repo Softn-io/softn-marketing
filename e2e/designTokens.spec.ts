@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { HERO_CTA_ID, SECTION_IDS } from '../lib/anchors'
 
 /**
  * QA check 4a-1 (role contract): every computed design value on the key elements must exist
@@ -15,16 +16,48 @@ import { expect, test } from '@playwright/test'
  * instead that the loaded faces back the two families the package declares.
  */
 
-type AuditParams = { theme: 'dark' | 'light'; thirdParty: string[] }
+type AuditParams = { theme: 'dark' | 'light'; thirdParty: string[]; heroCtaId: string; methodId: string }
+/**
+ * Typography box of a rendered Button: the type step and weight, the padding and height of the size
+ * scale, the face the label is painted in and its line-height as a ratio. The face and the ratio pin
+ * the design-system Button contract (`--softn-font-body` at line-height 1, not the display face).
+ */
+type ButtonSpec = {
+  fontSize: number
+  fontWeight: string
+  paddingInline: string
+  minHeight: number
+  fontFamily: string
+  lineHeightRatio: number
+}
 type AuditResult = {
   theme: string
   tokenCount: number
   mismatches: string[]
+  acceptedFluid: string[]
   fontStacks: string[]
   loadedFontFamilies: string[]
+  buttons: { primaryLg: ButtonSpec | null; headerSm: ButtonSpec | null }
+  /** First family name of `--softn-font-body` / `--softn-font-display`, as the package publishes them. */
+  bodyTokenFamily: string
+  displayTokenFamily: string
+  /** Control: the face the h1 uses, so a Button pinned to the body face cannot pass by accident. */
+  heroH1FontFamily: string
 }
 
-const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdParty: string[] } => {
+/** First family of a `font-family` list, unquoted and lowercased, for a case-insensitive comparison. */
+const firstFamily = (stack: string): string =>
+  (stack.split(',')[0] ?? '')
+    .trim()
+    .replace(/^['"]|['"]$/g, '')
+    .toLowerCase()
+
+const auditInPage = ({
+  theme,
+  thirdParty,
+  heroCtaId,
+  methodId,
+}: AuditParams): AuditResult & { thirdParty: string[] } => {
   // The probe wrapper carries this color so tokens that are not colors (invalid at
   // computed-value time) resolve to it instead of leaking an inherited real color.
   const SENTINEL = 'rgb(1, 2, 3)'
@@ -33,6 +66,14 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
 
   const num = (v: string): number => Number.parseFloat(v)
   const norm = (v: string): string => v.toLowerCase().replace(/\s+/g, ' ')
+
+  // Accepted deviation (Mel's decision, 2026-10-20; tracked in issue #73, tokenized in 0.3.0): the
+  // hero's section rhythm is a clamp interpolating between token bounds. At the 1280x800 audit
+  // viewport the hero content container computes padding-top 88px (11vh between --softn-space-16=64px
+  // and --softn-space-30=120px) and padding-bottom 96px (--softn-space-24, the 9vw branch clamped at
+  // its ceiling). These are not defects but stay reported (annotations).
+  const acceptedFluidClamp: Record<string, number[]> = { heroContent: [88, 96] }
+  const fluidAccepted: string[] = []
 
   // 1. Collect every --softn-* name declared anywhere in the stylesheets, plus those active on :root.
   const names = new Set<string>()
@@ -151,6 +192,8 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
   const shadowOk = (v: string): boolean => shadows.has(norm(v))
 
   // 3. Audit the key elements.
+  const heroTexts = Array.from(document.querySelectorAll('main section p'))
+  const heroLinks = Array.from(document.querySelectorAll('main section a'))
   const elements: Record<string, Element | null> = {
     body: document.body,
     header: document.querySelector('header'),
@@ -159,6 +202,18 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
     toggle: document.querySelector('header button'),
     cta: document.querySelector("header a[href='#reservation']"),
     main: document.querySelector('main'),
+    // Hero (#10): eyebrow, the page h1, subtitle, reassurance, the two CTAs, the indicator, its
+    // badge, the content container (section padding) and the section itself.
+    heroSection: document.querySelector('main section'),
+    heroEyebrow: heroTexts[0] ?? null,
+    heroH1: document.querySelector('main h1'),
+    heroSubtitle: heroTexts[1] ?? null,
+    heroReassurance: heroTexts[2] ?? null,
+    heroPrimaryCta: document.getElementById(heroCtaId),
+    heroSecondaryCta: heroLinks.find((a) => a.getAttribute('href') === `#${methodId}`) ?? null,
+    heroIndicator: heroLinks.at(-1) ?? null,
+    heroBadge: document.querySelector('main section a span[aria-hidden="true"]'),
+    heroContent: document.getElementById(heroCtaId)?.closest('div')?.parentElement ?? null,
   }
 
   const mismatches: string[] = []
@@ -198,7 +253,12 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
     }
     for (const v of c.padding.split(/\s+/)) {
       const p = num(v)
-      if (Number.isFinite(p) && !lengthOk(p)) mismatches.push(`${name}.padding: ${v} not in token scale`)
+      if (!Number.isFinite(p) || lengthOk(p)) continue
+      if ((acceptedFluidClamp[name] ?? []).includes(p)) {
+        fluidAccepted.push(`${name}.padding: ${v} — milieu de clamp entre bornes tokennees (accepté, #73)`)
+        continue
+      }
+      mismatches.push(`${name}.padding: ${v} not in token scale`)
     }
     if (!weights.has(c.fontWeight)) mismatches.push(`${name}.fontWeight: ${c.fontWeight} not a token weight`)
     if (c.lineHeight !== 'normal') {
@@ -212,6 +272,29 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
       if (!ok) mismatches.push(`${name}.letterSpacing: ${c.letterSpacing} not a token letter-spacing`)
     }
   }
+  // Button size contract (loop 1, per the design system's Button SIZES): padding and type step follow
+  // the size — lg: body-md 16 px + space-5 (20 px) padding; sm: body-sm 14 px + space-3 (12 px) padding;
+  // font-weight 600 on every size, heights from the size scale (size-lg 52 / size-sm 36).
+  const readButton = (el: Element | null | undefined): ButtonSpec | null => {
+    if (el === null || el === undefined) return null
+    const c = getComputedStyle(el)
+    const start = num(c.paddingInlineStart)
+    const end = num(c.paddingInlineEnd)
+    const fontSize = num(c.fontSize)
+    // The design system's Button paints the label at line-height 1. Chromium serializes a unitless
+    // line-height as the resolved pixel box, so the reading is turned back into a ratio here.
+    const lineHeight = c.lineHeight === 'normal' ? fontSize : num(c.lineHeight)
+    return {
+      fontSize,
+      fontWeight: c.fontWeight,
+      paddingInline: start === end ? `${start}px` : `${c.paddingInlineStart}/${c.paddingInlineEnd}`,
+      minHeight: num(c.minHeight),
+      fontFamily: c.fontFamily,
+      lineHeightRatio: fontSize > 0 ? Number((lineHeight / fontSize).toFixed(3)) : 0,
+    }
+  }
+  const buttons = { primaryLg: readButton(elements.heroPrimaryCta), headerSm: readButton(elements.cta) }
+
   wrapper.remove()
 
   const loaded = new Set<string>()
@@ -223,14 +306,22 @@ const auditInPage = ({ theme, thirdParty }: AuditParams): AuditResult & { thirdP
     theme,
     tokenCount: names.size,
     mismatches,
+    acceptedFluid: fluidAccepted,
     fontStacks: [...fontStacks],
     loadedFontFamilies: [...loaded],
+    buttons,
+    // The package publishes the two family names; the site rebinds the Tailwind utilities to the
+    // self-hosted next/font faces (app/globals.css), so the first name of each stack is what the
+    // Button and the headings have to agree with.
+    bodyTokenFamily: rootStyle.getPropertyValue('--softn-font-body'),
+    displayTokenFamily: rootStyle.getPropertyValue('--softn-font-display'),
+    heroH1FontFamily: elements.heroH1 ? getComputedStyle(elements.heroH1).fontFamily : '',
     thirdParty,
   }
 }
 
 for (const theme of ['dark', 'light'] as const) {
-  test(`computed styles match @softnio-labs/tokens values (${theme})`, async ({ browser }) => {
+  test(`computed styles match @softnio-labs/tokens values (${theme})`, async ({ browser }, testInfo) => {
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 800 },
       colorScheme: theme,
@@ -244,11 +335,55 @@ for (const theme of ['dark', 'light'] as const) {
     await page.goto('/')
     await expect(page.locator('header')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
-    const result = await page.evaluate(auditInPage, { theme, thirdParty: external })
+    const result = await page.evaluate(auditInPage, {
+      theme,
+      thirdParty: external,
+      heroCtaId: HERO_CTA_ID,
+      methodId: SECTION_IDS.method,
+    } satisfies AuditParams)
 
     // Sanity: the audit is meaningless if it collected no tokens.
     expect(result.tokenCount, 'design token custom properties found on the page').toBeGreaterThan(20)
     expect(result.mismatches, `token mismatches (${theme})`).toEqual([])
+
+    // Button size contract: large = body-md 16 px + space-5 padding + size-lg height, small = body-sm
+    // 14 px + space-3 padding + size-sm height, weight 600 on both (design-system Button SIZES).
+    const { primaryLg, headerSm } = result.buttons
+    expect(primaryLg, 'hero primary CTA (Button lg)').not.toBeNull()
+    expect(headerSm, 'header booking CTA (Button sm)').not.toBeNull()
+    if (primaryLg && headerSm) {
+      expect(primaryLg.fontSize, 'Button lg type step (body-md)').toBe(16)
+      expect(primaryLg.fontWeight, 'Button lg weight').toBe('600')
+      expect(primaryLg.paddingInline, 'Button lg inline padding (space-5)').toBe('20px')
+      expect(primaryLg.minHeight, 'Button lg height (size-lg)').toBe(52)
+      expect(headerSm.fontSize, 'Button sm type step (body-sm)').toBe(14)
+      expect(headerSm.fontWeight, 'Button sm weight').toBe('600')
+      expect(headerSm.paddingInline, 'Button sm inline padding (space-3)').toBe('12px')
+      expect(headerSm.minHeight, 'Button sm height (size-sm)').toBe(36)
+
+      // Button face and line-height (the loop-2 fix Mel approved): the design system's Button paints
+      // the label in the *body* face — `--softn-font-body`, Plus Jakarta Sans — at line-height 1, at
+      // every size. A revert to `font-display`, or a label that adds leading, fails here.
+      const bodyFace = firstFamily(result.bodyTokenFamily)
+      const displayFace = firstFamily(result.displayTokenFamily)
+      expect(bodyFace, '--softn-font-body is Plus Jakarta Sans').toMatch(/plus.?jakarta/i)
+      expect(displayFace, '--softn-font-display is the display face').toMatch(/zalando/i)
+      for (const [label, spec] of [
+        ['lg', primaryLg],
+        ['sm', headerSm],
+      ] as const) {
+        expect(firstFamily(spec.fontFamily), `Button ${label} label face`).toBe(bodyFace)
+        expect(spec.fontFamily.toLowerCase().includes(displayFace), `Button ${label} uses the display face`).toBe(false)
+        expect(spec.lineHeightRatio, `Button ${label} label line-height`).toBe(1)
+      }
+      // Control: the h1 really does render the display face, so the two pins above cannot both pass
+      // because the page collapsed the two families into one.
+      expect(firstFamily(result.heroH1FontFamily), 'the h1 keeps the display face').toBe(displayFace)
+    }
+
+    for (const accepted of result.acceptedFluid) {
+      testInfo.annotations.push({ type: 'accepted-deviation-#73', description: accepted })
+    }
 
     // The package declares both families; faces must exist for each and be used on the page.
     const families = result.loadedFontFamilies.join(' ')

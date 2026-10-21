@@ -14,7 +14,8 @@ import styles from './styles/Header.module.css'
  * Sticky site header: skip link, logo, in-page navigation, theme toggle and booking call to action.
  * Below `lg` the navigation moves into the burger drawer (`MobileMenu`).
  * The navigation highlights the section being read (`ActiveSectionProvider`).
- * The desktop call to action only appears once the hero call to action has scrolled out of view.
+ * The desktop call to action only appears once the hero call to action has scrolled out of view; the
+ * right-hand row is its positioning context, because the collapsed wrapper is out of the flow.
  */
 export const Header = () => {
   const links = getNavLinks()
@@ -42,7 +43,7 @@ export const Header = () => {
             ))}
           </ul>
         </nav>
-        <div className="flex items-center gap-3">
+        <div className="relative flex items-center gap-3">
           <ThemeToggle />
           <ScrollRevealCta className="hidden lg:block">
             <BookingCta>

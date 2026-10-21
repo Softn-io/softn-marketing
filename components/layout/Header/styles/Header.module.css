@@ -57,28 +57,92 @@
 }
 
 /*
- * Header CTA revealed on scroll. Hidden: faded and nudged down by one --softn-space-2 step, then
- * visibility:hidden after the fade so it leaves the tab order even without `inert` support.
- * Enter uses the screen-transition duration, exit the micro one (feels immediate).
+ * Header CTA revealed on scroll.
+ *
+ * Hidden, the wrapper leaves the flow (absolute, anchored to the right edge of the header's row):
+ * it takes no space, so the theme toggle sits against the header's own right padding edge, and the
+ * toggle moves left on its own when the CTA comes back. `visibility: hidden` keeps it out of the tab
+ * order, out of the accessibility tree and out of hit testing on its own, and the hide is
+ * instantaneous, so it is never a half-visible focusable box; `inert` comes on top of it, added by the
+ * component once the script has mounted (`ScrollRevealCta`). It is anchored where it lands
+ * when revealed — right-aligned, vertically centred like the toggle next to it, whose flex row
+ * centres its items — so the drop-in is the only thing that moves.
+ * The hide is instantaneous on purpose: the box that must disappear is the one the toggle needs, so
+ * a fade-out would overlap the toggle for the length of the transition. The appearance is the
+ * direction the reader watches: the CTA drops in — transparent, one --softn-space-2 step above its
+ * resting position and scaled down to `--softn-motion-scale-from` — and settles opaque, unoffset and
+ * unscaled over `--softn-duration-sheet-drawer` with `--softn-easing-out`.
+ * The drop-in rides on `translate` and `scale`, properties of their own, so the anchor offset above
+ * stays out of the transition — and both go through `--scroll-reveal-translate` /
+ * `--scroll-reveal-scale` so the no-JavaScript and reduced-motion overrides below can cancel them
+ * (see there).
+ * A transition between the two states rather than a `@keyframes` animation: `data-state` already is
+ * the state machine, so the appearance needs no extra hook, and the two overrides cancel the movement
+ * by resetting the same custom properties — an animation would need an `animation: none` reset in
+ * each of them, and its fill mode would replay on load.
  */
 .scroll-reveal {
+  position: static;
   visibility: visible;
   opacity: 1;
   transform: none;
+  translate: var(--scroll-reveal-translate, none);
+  scale: var(--scroll-reveal-scale, none);
   transition:
-    opacity var(--softn-duration-screen-transition) var(--softn-easing-out),
-    transform var(--softn-duration-screen-transition) var(--softn-easing-out),
+    opacity var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    translate var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    scale var(--softn-duration-sheet-drawer) var(--softn-easing-out),
     visibility 0s;
 }
 
+/*
+ * `inset-block-start: 50%` + a half-height translate rather than a stretched box: the wrapper keeps
+ * its own height (the CTA's), which is what the translate needs to land on the row's centre.
+ * The drop-in start values are declared as custom properties, not straight on `translate` / `scale`:
+ * Lightning CSS removes a declaration whose value is the property's initial value, and `none` is
+ * exactly what the no-JavaScript override needs — a `var()` is opaque to the minifier, so the
+ * declarations are always there to be overridden.
+ */
 .scroll-reveal[data-state='hidden'] {
+  /* One --softn-space-2 step (8px) up: it ties with --softn-space-3 (12px) for the design's 10px
+     offset, and 8px is the design system's own motion translate step. */
+  --scroll-reveal-translate: 0 calc(-1 * var(--softn-space-2));
+  /* Start of the drop-in, from the motion scale: the only step the design system publishes. */
+  --scroll-reveal-scale: var(--softn-motion-scale-from);
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  transform: translateY(-50%);
+  translate: var(--scroll-reveal-translate);
+  scale: var(--scroll-reveal-scale);
   visibility: hidden;
   opacity: 0;
-  transform: translateY(var(--softn-space-2));
   transition:
-    opacity var(--softn-duration-micro) var(--softn-easing-out),
-    transform var(--softn-duration-micro) var(--softn-easing-out),
-    visibility 0s linear var(--softn-duration-micro);
+    opacity 0s,
+    visibility 0s;
+}
+
+/*
+ * Without JavaScript nothing ever flips `data-state`, so the CTA would stay out of the header for
+ * the whole session. `scripting` is the media feature that reports the browser's own support, so the
+ * CSS alone shows the CTA — no inline script and no `<noscript>` stylesheet. Nothing here touches
+ * `display`: the wrapper's own `hidden lg:block` utilities keep deciding whether the header has room
+ * for a CTA at that width, and the drawer keeps it out of the way below `lg`.
+ */
+@media (scripting: none) {
+  .scroll-reveal[data-state='hidden'] {
+    /* No drop-in: the CTA sits exactly where the revealed state puts it. Resetting the two custom
+       properties to `none` (the identity value of both) also keeps the computed `translate` and
+       `scale` at their initial value, so nothing offsets or shrinks the painted button — and it goes
+       through the `var()` the minifier cannot fold, where a literal `translate: none` / `scale: none`
+       would be dropped as the properties' initial value and leak the hidden offset. */
+    --scroll-reveal-translate: none;
+    --scroll-reveal-scale: none;
+    position: static;
+    transform: none;
+    visibility: visible;
+    opacity: 1;
+  }
 }
 
 .logo:focus-visible,
@@ -308,10 +372,18 @@
     transition: none;
   }
 
-  .scroll-reveal,
-  .scroll-reveal[data-state='hidden'] {
-    transform: none;
+  /* The header CTA only fades in: the reveal transitions neither the drop-in offset (`translate`) nor
+     the scale. */
+  .scroll-reveal {
     transition-property: opacity, visibility;
+    transition-duration: var(--softn-duration-reduced-motion);
+  }
+
+  /* The hidden state's own offset and scale are reset here as well, so the reveal never applies them,
+     not even on the frame it starts: the fade is the whole appearance. */
+  .scroll-reveal[data-state='hidden'] {
+    --scroll-reveal-translate: none;
+    --scroll-reveal-scale: none;
   }
 
   .backdrop,
