@@ -349,6 +349,9 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
   }) => {
     const problems: string[] = []
     page.on('console', (message) => {
+      // Chromium on Linux logs a parse warning for Permissions-Policy features it does not
+      // recognize; browser noise, not page noise.
+      if (/^Error with Permissions-Policy header:/.test(message.text())) return
       if (message.type() === 'error' || message.type() === 'warning')
         problems.push(`${message.type()}: ${message.text()}`)
     })
