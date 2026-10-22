@@ -1,7 +1,7 @@
 ---
 description: Next.js (App Router) and Tailwind v4 developer for the softn.io site. Implements pages, sections, components, routes and configuration.
 mode: primary
-model: openrouter/deepseek/deepseek-v4.1-flash
+model: opencode/deepseek-v4.1-flash-free#max
 permissions:
   - action: edit
     resource: "*"
