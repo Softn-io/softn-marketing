@@ -16,7 +16,7 @@ Find them with `gh project field-list <N> --owner <OWNER> --format json` (one-ti
 
 - If the argument is a GitHub issue reference (`#12`, `12`, or an issue URL), run `gh issue view <number> --json title,body,labels` and use it as the scope. Keep the issue number.
 - Read `CLAUDE.md` and the task context: handoff bundle, `docs/design/`, `docs/brand-voice.md`, `docs/seo-brief.md` when useful.
-- The worktree already has its branch: do not create another. Check that its name follows `feat/`, `fix/` or `chore/` (issue number first when known) and that it was cut from `develop`; if not, modify the branch name and tell the user.
+- The worktree already has its branch: do not create another. Check that its name follows `feat/`, `fix/` or `chore/` (issue number first when known) and that it was cut from `develop`; if not, modify the branch name (always in english) and tell the user.
 - Move the issue's Project item from `To Do` to `In Progress` with `gh project item-edit` (ids above).
 
 ## Pipeline
