@@ -1,20 +1,31 @@
-import { Header } from '@components/layout/Header'
-import { Hero } from '@components/sections/Hero'
-import { Offers } from '@components/sections/Offers'
+import type { Metadata } from 'next'
+import { ComingSoon } from '@components/sections/ComingSoon'
 import { SECTION_IDS } from '@/lib/anchors'
+import { metadataContent } from '@/locales/fr/metadata'
 
-/**
- * Foundation shell: the page sections land in their own issues and mount inside `<main>`.
- */
+const { comingSoon } = metadataContent
+
+/** Coming-soon metadata: the only page indexed until the full site launches. */
+export const metadata: Metadata = {
+  title: comingSoon.title,
+  description: comingSoon.description,
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: comingSoon.openGraph.title,
+    description: comingSoon.openGraph.description,
+    locale: comingSoon.openGraph.locale,
+  },
+}
+
+/** Home page: a single-screen coming-soon message, centred in the viewport with no scroll. */
 const Home = () => {
   return (
-    <>
-      <Header />
-      <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground">
-        <Hero />
-        <Offers />
-      </main>
-    </>
+    <main id={SECTION_IDS.main} className="h-dvh overflow-hidden bg-base text-foreground">
+      <ComingSoon />
+    </main>
   )
 }
 
