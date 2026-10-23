@@ -134,12 +134,13 @@ jobs:
           name: next-build
           path: .next
       - run: pnpm lighthouse
-        continue-on-error: true
+        #continue-on-error: true
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: lighthouse-report
           path: .lighthouseci
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 
