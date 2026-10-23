@@ -10,7 +10,7 @@ Read by the `ship` skill. Copy to `docs/orchestration/dispatch.md` in the repo. 
 - Orca CLI absolute path: `/Applications/Orca.app/Contents/Resources/bin/orca`. Workers must call Orca with this path and never search the filesystem for it.
 - GitHub Project: owner `Softn-io`, number `2`. Status field id `PVTSSF_lAHOEQ4RlM4BlAezzhju8p4`. Status option ids: To Do `<ID>`, In Progress `<ID>`, In Review `<ID>`, Done `<ID>`.
 Find them with `gh project field-list <N> --owner <OWNER> --format json` (one-time `gh auth refresh -s project` if the scope is missing).
-- Expected paths that are not scope violations in the audit: `node_modules/`, `.next/`, `.orchestration/`, `.opencode/opencode.json`, `test-results/`, `playwright-report/`, `tsconfig.tsbuildinfo`.
+- Expected paths that are not scope violations in the audit: `node_modules/`, `.next/`, `.orchestration/`, `.opencode/opencode.json`, `test-results/`, `playwright-report/`, `.lighthouseci/`, `tsconfig.tsbuildinfo`.
 
 ## Scoping
 
