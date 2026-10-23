@@ -10,6 +10,9 @@ export type ContentSecurityPolicyOptions = {
   isDev: boolean
 }
 
+/** Keeps the gated preview out of search indexes, independently of its document metadata. */
+const PREVIEW_NOINDEX_HEADER: HttpHeader = { key: 'X-Robots-Tag', value: 'noindex' }
+
 /** Browser features the site never uses; an empty allowlist denies them for every origin. */
 const DENIED_PERMISSIONS = [
   'accelerometer',
@@ -58,10 +61,12 @@ export const buildContentSecurityPolicy = ({ isDev }: ContentSecurityPolicyOptio
 }
 
 /**
- * Builds the security header rules applied to every path, static assets included.
+ * Builds the security header rules: one applied to every path, static assets included, and a
+ * preview-only rule that marks the gated page `noindex`.
  *
  * `Strict-Transport-Security` omits `preload` on purpose: preloading is a
- * hard-to-reverse commitment for the whole domain.
+ * hard-to-reverse commitment for the whole domain. `X-Robots-Tag` stays out of
+ * the global rule so no public page carries it.
  */
 export const buildSecurityHeaders = ({ isDev }: ContentSecurityPolicyOptions): HeaderRule[] => {
   return [
@@ -83,6 +88,10 @@ export const buildSecurityHeaders = ({ isDev }: ContentSecurityPolicyOptions): H
         },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
       ],
+    },
+    {
+      source: '/preview',
+      headers: [PREVIEW_NOINDEX_HEADER],
     },
   ]
 }

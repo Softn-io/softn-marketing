@@ -27,12 +27,22 @@ describe('buildContentSecurityPolicy', () => {
 })
 
 describe('buildSecurityHeaders', () => {
-  const [rule] = buildSecurityHeaders({ isDev: false })
-  const valueOf = (key: string) => rule?.headers.find((header) => header.key === key)?.value
+  const rules = buildSecurityHeaders({ isDev: false })
+  const [globalRule] = rules
+  const valueOf = (key: string) => globalRule?.headers.find((header) => header.key === key)?.value
 
-  it('applies a single rule to every path', () => {
-    expect(buildSecurityHeaders({ isDev: false })).toHaveLength(1)
-    expect(rule?.source).toBe('/:path*')
+  it('applies the global rule to every path', () => {
+    expect(rules).toHaveLength(2)
+    expect(buildSecurityHeaders({ isDev: true })).toHaveLength(2)
+    expect(globalRule?.source).toBe('/:path*')
+  })
+
+  it('marks the preview route as noindex, and only the preview route', () => {
+    const noindexRules = rules.filter(({ headers }) => headers.some(({ key }) => key === 'X-Robots-Tag'))
+
+    expect(noindexRules.map(({ source }) => source)).toEqual(['/preview'])
+    expect(noindexRules[0]?.headers).toEqual([{ key: 'X-Robots-Tag', value: 'noindex' }])
+    expect(valueOf('X-Robots-Tag')).toBeUndefined()
   })
 
   it('sets HSTS for two years without preload', () => {

@@ -28,5 +28,6 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 240_000,
+    env: { ENABLE_PREVIEW_ROUTE: 'true' },
   },
 })

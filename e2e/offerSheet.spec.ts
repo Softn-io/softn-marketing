@@ -143,7 +143,7 @@ const waitSheetSettled = (dialog: Locator): Promise<void> =>
 test.describe('offer sheet: opening and content', () => {
   for (const [index, offer] of CARDS.entries()) {
     test(`a mouse click on the ${offer.kicker} card opens its sheet with every section`, async ({ page }) => {
-      await page.goto('/')
+      await page.goto('/preview')
       await openSheet(page, index)
       const dialog = sheet(page)
       const scope = dialog
@@ -200,7 +200,7 @@ test.describe('offer sheet: opening and content', () => {
   }
 
   test('Enter and Space on a focused card each open the sheet', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const before = page.url()
 
     await tabTo(page, cardButton(page, 0))
@@ -220,7 +220,7 @@ test.describe('offer sheet: opening and content', () => {
 
 test.describe('offer sheet: closing and focus', () => {
   test('Escape closes the sheet and returns focus to the opening card', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const opening = cardButton(page, 0)
     await opening.click()
     await expect(sheet(page)).toBeVisible()
@@ -232,7 +232,7 @@ test.describe('offer sheet: closing and focus', () => {
   })
 
   test('the close control closes the sheet and returns focus to the opening card', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const opening = cardButton(page, 1)
     await opening.click()
     await expect(sheet(page)).toBeVisible()
@@ -243,7 +243,7 @@ test.describe('offer sheet: closing and focus', () => {
   })
 
   test('Tab and Shift+Tab loop through the sheet controls and never escape them', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await openSheet(page, 0)
     const dialog = sheet(page)
     const close = closeButton(page)
@@ -276,7 +276,7 @@ test.describe('offer sheet: closing and focus', () => {
 
 test.describe('offer sheet: calls to action', () => {
   test('the primary call to action closes the sheet, scrolls to the assistant and books', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     // The recorder runs in the live document: the intent fires on click, after this line.
     await recordAssistantIntents(page)
     await openSheet(page, 0)
@@ -291,7 +291,7 @@ test.describe('offer sheet: calls to action', () => {
   })
 
   test('the secondary call to action navigates without booking', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await recordAssistantIntents(page)
     await openSheet(page, 1)
 
@@ -324,7 +324,7 @@ test.describe('offer sheet: CTA area spacing', () => {
 
     for (const { width, token, px } of CASES) {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await openSheet(page, 0)
       const dialog = sheet(page)
       await waitSheetSettled(dialog)
@@ -389,7 +389,7 @@ test.describe('offer sheet: title scale', () => {
 
     for (const { width, token, px } of CASES) {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await openSheet(page, 0)
       const title = sheet(page).getByRole('heading', { level: 2, name: offers.create.sheet.title })
 
@@ -415,7 +415,7 @@ test.describe('offer sheet: themes, viewports and motion', () => {
   for (const scheme of ['dark', 'light'] as const) {
     test(`the sheet paints in the ${scheme} theme's tokens`, async ({ page }) => {
       await forceTheme(page, scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await openSheet(page, 0)
 
@@ -431,7 +431,7 @@ test.describe('offer sheet: themes, viewports and motion', () => {
 
   test('a mobile viewport opens the sheet without horizontal overflow', async ({ page }) => {
     await page.setViewportSize(MOBILE_VIEWPORT)
-    await page.goto('/')
+    await page.goto('/preview')
     await openSheet(page, 1)
 
     const overflow = await sheet(page).evaluate((el) => {
@@ -468,7 +468,7 @@ test.describe('offer sheet: themes, viewports and motion', () => {
 
   test('prefers-reduced-motion removes the entrance animation and the control transitions', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     await openSheet(page, 0)
     const dialog = sheet(page)
 
@@ -489,7 +489,7 @@ test.describe('offer sheet: accessibility', () => {
   for (const scheme of ['dark', 'light'] as const) {
     test(`axe (WCAG 2.1 A/AA) finds no violation with the ${scheme} sheet open`, async ({ page }) => {
       await forceTheme(page, scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await openSheet(page, 0)
       await waitSheetSettled(sheet(page))
 
@@ -513,7 +513,7 @@ test.describe('offer sheet: accessibility', () => {
 
   test('using the sheet loads nothing external', async ({ page }) => {
     const readExternal = externalRequests(page)
-    await page.goto('/')
+    await page.goto('/preview')
     // Both sheets, every control, both calls to action: nothing leaves the origin.
     for (const index of [0, 1] as const) {
       await openSheet(page, index)
@@ -789,7 +789,7 @@ test.describe('offer sheet: token fidelity (role contract 4a-1)', () => {
   for (const scheme of ['dark', 'light'] as const) {
     test(`every computed sheet value is a package token (${scheme} theme, desktop)`, async ({ page }) => {
       await forceTheme(page, scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await openSheet(page, 0)
       await waitSheetSettled(sheet(page))
 
@@ -808,7 +808,7 @@ test.describe('offer sheet: token fidelity (role contract 4a-1)', () => {
   test('every computed sheet value is a package token (dark theme, mobile)', async ({ page }) => {
     await forceTheme(page, 'dark')
     await page.setViewportSize(MOBILE_VIEWPORT)
-    await page.goto('/')
+    await page.goto('/preview')
     await openSheet(page, 1)
     await waitSheetSettled(sheet(page))
 

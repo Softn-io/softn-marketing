@@ -12,9 +12,9 @@
  *
  * ## Page states covered
  *
- * - Home page `/`, analysed as a whole, in dark and in light theme (default desktop viewport), once
- *   the finite entrance animations (the hero reveal) have settled, and again under
- *   `prefers-reduced-motion: reduce` where no animation runs at all.
+ * - The full one-page site on `/preview` (header + hero + offers), analysed as a whole, in dark and in
+ *   light theme (default desktop viewport), once the finite entrance animations (the hero reveal)
+ *   have settled, and again under `prefers-reduced-motion: reduce` where no animation runs at all.
  * - Header, scoped with `AxeBuilder#include`, in dark and in light theme, at a mobile viewport:
  *   - drawer closed: the `header` landmark itself;
  *   - drawer open: the drawer dialog. While the drawer is open the `header` element is `aria-hidden`
@@ -23,8 +23,8 @@
  * - Header again, at a desktop viewport, in dark and in light theme, **with the scroll-revealed
  *   booking call to action showing** (`ScrollRevealCta`): at the top of the page that CTA is hidden
  *   and out of the accessibility tree, so the analyses above never measure its contrast. Tall filler
- *   sections are injected before hydration (the home page holds only the hero until their own issues
- *   land, which is not enough scroll distance to push `#hero-cta` out of the viewport), the hero CTA
+ *   sections are injected before hydration (the preview page holds only the hero, which is not
+ *   enough scroll distance to push `#hero-cta` out of the viewport), the hero CTA
  *   is scrolled above the viewport, and the settled `header` landmark is analysed.
  *
  * The no-JavaScript rendering of the header CTA is *not* analysed here: axe-core is injected by
@@ -123,10 +123,10 @@ const forceTheme = async (page: Page, scheme: Scheme): Promise<void> => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [THEME_STORAGE_KEY, scheme] as const)
 }
 
-/** Loads `/` and waits until the theme has actually been applied (settled attribute). */
+/** Loads the one-page preview and waits until the theme has actually been applied (settled attribute). */
 const gotoHomeWithTheme = async (page: Page, scheme: Scheme): Promise<void> => {
   await forceTheme(page, scheme)
-  await page.goto('/')
+  await page.goto('/preview')
   await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
 }
 
@@ -151,7 +151,7 @@ const awaitRevealSettled = async (page: Page): Promise<void> => {
   })
 }
 
-test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
+test.describe('accessibility: one-page preview (WCAG 2.1 AA)', () => {
   for (const scheme of SCHEMES) {
     test(`whole page in ${scheme} theme, after the entrance has settled`, async ({ page }) => {
       await gotoHomeWithTheme(page, scheme)
@@ -229,7 +229,7 @@ test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
     test(`whole page in ${scheme} theme, reduced motion`, async ({ page }) => {
       await forceTheme(page, scheme)
       await page.emulateMedia({ reducedMotion: 'reduce' })
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await expect(page.getByRole('main')).toBeVisible()
       await awaitFonts(page)
