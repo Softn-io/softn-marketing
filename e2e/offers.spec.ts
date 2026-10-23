@@ -59,7 +59,7 @@ test.describe('offers: structure and copy', () => {
   for (const scheme of ['dark', 'light'] as const) {
     test(`section, hidden h2 and both cards render in the ${scheme} theme`, async ({ page }) => {
       await forceTheme(page, scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
 
       const heading = page.getByRole('heading', { level: 2, name: offers.srTitle })
@@ -89,7 +89,7 @@ test.describe('offers: structure and copy', () => {
   }
 
   test('the section is one landmark, not two sections deep', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.locator(`main > section#${SECTION_IDS.offers}`)).toHaveCount(1)
   })
 })
@@ -97,7 +97,7 @@ test.describe('offers: structure and copy', () => {
 test.describe('offers: responsive grid', () => {
   test('two cards share one row on a wide screen', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     const boxes = await page.evaluate((id) => {
       const cards = Array.from(document.querySelectorAll(`#${id} article`))
       return cards.map((el) => {
@@ -114,7 +114,7 @@ test.describe('offers: responsive grid', () => {
 
   test('one column on a narrow screen, without horizontal overflow', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     const boxes = await page.evaluate((id) => {
       const cards = Array.from(document.querySelectorAll(`#${id} article`))
       return cards.map((el) => {
@@ -148,7 +148,7 @@ test.describe('offers: the whole card is a keyboard-operable button', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('Tab reaches both cards and paints a visible focus ring in the accent tone', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const url = page.url()
     for (const index of [0, 1] as const) {
       const button = cardButton(page, index)
@@ -183,7 +183,7 @@ test.describe('offers: the whole card is a keyboard-operable button', () => {
       const { hostname } = new URL(request.url())
       if (hostname !== 'localhost' && !hostname.startsWith('127.')) external.push(request.url())
     })
-    await page.goto('/')
+    await page.goto('/preview')
     const url = page.url()
     // The overlay sits between the pointer and every pixel of the card: Playwright refuses to
     // click the heading underneath it, because the hit target is not a heading descendant.
@@ -216,7 +216,7 @@ test.describe('offers: pointer tilt', () => {
     })
 
   test('a hovering fine pointer tilts, lifts and highlights the card, and leaves reset it', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     // The cards sit below the fold: the mouse can only hover what the viewport shows.
     await card(page, 0).scrollIntoViewIfNeeded()
     const flat = await readTilt(page, 0)
@@ -256,7 +256,7 @@ test.describe('offers: pointer tilt', () => {
 
   test('reduced motion keeps the card flat while hovered', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     await card(page, 1).scrollIntoViewIfNeeded()
     const box = await card(page, 1).boundingBox()
     expect(box).not.toBeNull()
@@ -281,7 +281,7 @@ test.describe('offers: pointer tilt', () => {
   test('non-hover, coarse pointers never tilt the card', async ({ browser }) => {
     const context = await browser.newContext({ ...devices['Pixel 5'] })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     await card(page, 0).scrollIntoViewIfNeeded()
     const media = await page.evaluate(() => ({
       hoverHover: matchMedia('(hover: hover)').matches,

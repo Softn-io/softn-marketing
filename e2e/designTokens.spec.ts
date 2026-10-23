@@ -360,7 +360,7 @@ for (const theme of ['dark', 'light'] as const) {
       const url = new URL(req.url())
       if (url.hostname !== 'localhost' && !url.hostname.startsWith('127.')) external.push(req.url())
     })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.locator('header')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     const result = await page.evaluate(auditInPage, {

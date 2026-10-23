@@ -103,6 +103,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          ENABLE_PREVIEW_ROUTE: 'true'
       - uses: actions/upload-artifact@v4
         with:
           name: next-build
