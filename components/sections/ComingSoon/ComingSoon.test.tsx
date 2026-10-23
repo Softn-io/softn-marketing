@@ -25,11 +25,12 @@ describe('ComingSoon', () => {
     expect(headings[0]?.textContent).toBe(comingSoon.title)
   })
 
-  it('renders the eyebrow and the body copy from the locale', () => {
+  it('renders the eyebrow, the body copy and the caption from the locale', () => {
     render(<ComingSoon />)
 
     expect(screen.getByText(comingSoon.eyebrow)).toBeTruthy()
     expect(screen.getByText(comingSoon.body)).toBeTruthy()
+    expect(screen.getByText(comingSoon.caption)).toBeTruthy()
   })
 
   it('has no call to action, form or interactive control', () => {

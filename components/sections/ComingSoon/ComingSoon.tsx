@@ -15,7 +15,7 @@ export const ComingSoon = () => {
     <section className={styles.section}>
       <div className={styles.backdrop} aria-hidden="true" />
       <div className={styles.card}>
-        <p className="font-display text-title-md text-foreground">
+        <p className="font-display text-title-lg text-foreground">
           {nav.logo.name}
           <span className="text-brand-vivid">{nav.logo.suffix}</span>
         </p>
@@ -23,8 +23,13 @@ export const ComingSoon = () => {
         <h1 className="mt-4 font-display text-display-sm text-balance text-foreground sm:text-display-md lg:text-display-lg">
           {comingSoon.title}
         </h1>
-        <p className={`${styles.body} mt-4 text-body-sm text-foreground-secondary sm:text-body-md`}>
+        <p className={`${styles.body} mt-4 text-body-sm text-foreground-secondary sm:text-body-lg`}>
           {comingSoon.body}
+        </p>
+      </div>
+      <div className="relative">
+        <p className={`${styles.body} mt-5 text-body-sm text-foreground-secondary sm:text-body-md`}>
+          {comingSoon.caption}
         </p>
       </div>
     </section>
