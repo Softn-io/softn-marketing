@@ -1,0 +1,121 @@
+/*
+ * Offers section. Colors, typography, spacing and radii come from --softn-* tokens: utilities in the
+ * markup, and this file for what has no utility — the fluid section rhythm, the grid, the card
+ * border, the pills, the focus ring and the pointer tilt.
+ *
+ * The tilt angles, perspective and lift are motion constants of the effect, not design tokens, and
+ * they live in local --offer-* custom properties (like the hero's --hero-* stagger): no --softn-*
+ * variable is defined or overridden here.
+ */
+
+.content {
+  padding-block: clamp(var(--softn-space-12), 8vw, var(--softn-space-24));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+/*
+ * Two columns as soon as the content box fits two cards, one column below: `auto-fit` drops the empty
+ * tracks, so the two cards stretch over the full row. The 340px minimum of the design is rounded to
+ * the nearest container token (20rem, 320px); the grid keeps the perspective of the mockup so the
+ * tilted cards share one vanishing point.
+ */
+.grid {
+  --offer-grid-perspective: 1200px;
+
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--softn-container-xs)), 1fr));
+  gap: clamp(var(--softn-space-4), 2.6vw, var(--softn-space-6));
+  margin-block-start: clamp(var(--softn-space-6), 4vw, var(--softn-space-10));
+  perspective: var(--offer-grid-perspective);
+}
+
+.card {
+  --offer-perspective: 1100px;
+  --offer-rotate-y: 8deg;
+  --offer-rotate-x: 6deg;
+  --offer-lift: -5px;
+  --offer-pointer-x: 0.5;
+  --offer-pointer-y: 0.5;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  min-width: 0;
+  padding: clamp(var(--softn-space-6), 3.4vw, var(--softn-space-10));
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-xl);
+  transform-style: preserve-3d;
+  transition:
+    transform var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+/* Accent per card, from the design: brand violet on the first, warning amber on the second. */
+.tone-brand {
+  --offer-highlight: var(--softn-brand-vivid);
+}
+
+.tone-warning {
+  --offer-highlight: var(--softn-warning);
+}
+
+.title {
+  max-inline-size: 22ch;
+}
+
+.text {
+  max-inline-size: 38ch;
+}
+
+.arrow {
+  width: var(--softn-icon-size-xs);
+  height: var(--softn-icon-size-xs);
+}
+
+.pill {
+  padding: var(--softn-space-1) var(--softn-space-3);
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-pill);
+}
+
+/* The card's only control: an invisible overlay covering the whole surface, named by the title. */
+.action {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background-color: transparent;
+  cursor: pointer;
+}
+
+.card:has(.action:focus-visible) {
+  border-color: var(--offer-highlight);
+}
+
+.action:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+/* Hovering fine pointers only: touch and stylus users keep the flat card. */
+@media (hover: hover) and (pointer: fine) {
+  .card[data-tilted] {
+    border-color: var(--offer-highlight);
+    transform: perspective(var(--offer-perspective))
+      rotateY(calc((var(--offer-pointer-x) - 0.5) * var(--offer-rotate-y)))
+      rotateX(calc((0.5 - var(--offer-pointer-y)) * var(--offer-rotate-x))) translateY(var(--offer-lift));
+  }
+}
+
+/* Reduced motion keeps the border feedback but drops the tilt and its transition. */
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+
+  .card[data-tilted] {
+    transform: none;
+  }
+}
