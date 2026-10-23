@@ -7,8 +7,8 @@ import { offers } from '../locales/fr/offers'
  * responsive grid, the whole-card button with its keyboard focus ring, and the pointer tilt with
  * its motion and pointer-type gates.
  *
- * The detail sheet is issue #12 (Mel's "option A"): activating a card must do nothing visible
- * here, and that absence is asserted, not assumed.
+ * The detail sheet (issue #12) has its own coverage in `e2e/offerSheet.spec.ts`: opening each
+ * sheet from its card, its content, closing, focus and the calls to action.
  */
 
 /** localStorage key the inline theme script reads (same contract as `lib/theme`, `e2e/theme.spec.ts`). */
@@ -149,7 +149,6 @@ test.describe('offers: the whole card is a keyboard-operable button', () => {
 
   test('Tab reaches both cards and paints a visible focus ring in the accent tone', async ({ page }) => {
     await page.goto('/')
-    const url = page.url()
     for (const index of [0, 1] as const) {
       const button = cardButton(page, index)
       const tone = await tokenColor(page, TONE_TOKENS[OFFER_IDS[index]])
@@ -170,28 +169,25 @@ test.describe('offers: the whole card is a keyboard-operable button', () => {
       expect(Number.parseFloat(ring.outlineWidth)).toBeGreaterThanOrEqual(2)
       expect(ring.outlineColor).not.toBe('rgba(0, 0, 0, 0)')
     }
-    // Activating the card from the keyboard changes nothing: the sheet is issue #12 ("option A").
-    await page.keyboard.press('Enter')
-    await page.keyboard.press(' ')
-    expect(page.url()).toBe(url)
-    await expect(page.getByRole('dialog')).toHaveCount(0)
   })
 
-  test('a mouse click on the card does nothing visible and loads nothing external', async ({ page }) => {
+  test('a mouse click on the card opens its sheet and loads nothing external', async ({ page }) => {
     const external: string[] = []
     page.on('request', (request) => {
       const { hostname } = new URL(request.url())
       if (hostname !== 'localhost' && !hostname.startsWith('127.')) external.push(request.url())
     })
     await page.goto('/')
-    const url = page.url()
     // The overlay sits between the pointer and every pixel of the card: Playwright refuses to
     // click the heading underneath it, because the hit target is not a heading descendant.
     // Clicking the overlay button directly is the honest version of that same interaction.
     await cardButton(page, 0).click()
-    await card(page, 1).click()
-    expect(page.url()).toBe(url)
-    await expect(page.getByRole('dialog')).toHaveCount(0)
+    // The sheet itself is covered by `offerSheet.spec.ts`; this asserts the handoff only.
+    await expect(page.getByRole('dialog', { name: offers.create.sheet.title })).toBeVisible()
+    await expect(page.getByRole('dialog', { name: offers.create.sheet.title })).toHaveAttribute(
+      'aria-modal',
+      'true',
+    )
     expect(external, 'no third-party request from the offers section').toEqual([])
   })
 })
