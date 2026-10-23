@@ -178,7 +178,7 @@ test.describe('accessibility: one-page preview (WCAG 2.1 AA)', () => {
         passNodes.some((html) => html.includes(hero.cta.primary)),
         'axe did not measure the hero primary CTA',
       ).toBe(true)
-      const incompleteNodes = (results.incomplete.find((item) => item.id === 'color-contrast')?.nodes ?? [])
+      const incompleteNodes = results.incomplete.find((item) => item.id === 'color-contrast')?.nodes ?? []
       /*
        * Membership of the set is proven on the real elements, never on axe's `html` snippet: axe
        * truncates that snippet far before a long paragraph's own text (the subtitle's opening tag
