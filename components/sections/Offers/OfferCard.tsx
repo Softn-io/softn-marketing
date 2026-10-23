@@ -16,6 +16,12 @@ export type OfferId = {
 /** Accent of an offer card, as the design assigns it: brand on the first card, warning on the second. */
 export type OfferTone = 'brand' | 'warning'
 
+/** Accent shared by each offer card and its detail sheet, from the design. */
+export const OFFER_TONES = { create: 'brand', automate: 'warning' } as const satisfies Record<OfferId, OfferTone>
+
+/** DOM id of a card's invisible action button, used to restore focus after its sheet closes. */
+export const offerActionId = (offerId: OfferId): string => `offer-${offerId}-action`
+
 /** Handlers shared by both cards: the accent does not change the interaction. */
 const TONE_STYLES: Record<OfferTone, { readonly kicker: string; readonly card: string }> = {
   brand: { kicker: 'text-brand-foreground', card: styles['tone-brand'] ?? '' },
@@ -108,6 +114,7 @@ export const OfferCard = ({ offerId, tone, kicker, title, text, audiences, detai
         ))}
       </ul>
       <button
+        id={offerActionId(offerId)}
         type="button"
         aria-haspopup="dialog"
         aria-labelledby={titleId}
