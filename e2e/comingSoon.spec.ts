@@ -7,10 +7,16 @@
  *
  * Checks, end to end:
  * - the copy structure: the logo wordmark (plain text, not a link), the eyebrow, the page's single
- *   h1 and the body, all imported from `locales/fr/` — never hardcoded here (QA rule);
- * - no vertical or horizontal scroll at 320x568, 390x844, 768x1024 and 1440x900;
+ *   h1, the body and the caption, all imported from `locales/fr/` — never hardcoded here (QA
+ *   rule);
+ * - no vertical or horizontal scroll at 320x568, 375x667, 390x844, 768x1024, 1280x800 and
+ *   1440x900;
  * - the indexed metadata: title, description, `index,follow` robots and the canonical URL;
  * - axe WCAG 2.1 A/AA clean in both themes (the section is static: nothing to settle but fonts);
+ * - the caption under the card: horizontally centred line by line, and at least 4.5:1 against
+ *   both the nearest solid surface and the actually painted glow composite, in both themes —
+ *   with the glyph cores painted at the caption token color, since the positioned wrapper paints
+ *   them over the decorative glow (Re-verification 5);
  * - no request to a third-party origin;
  * - the QA 4a-1 token audit, scoped to the coming-soon elements: every computed color, font family,
  *   size, weight, line height, letter spacing, padding, radius and shadow must exist as a value of
@@ -57,8 +63,18 @@ const awaitFonts = async (page: Page): Promise<void> => {
 /** The coming-soon section: the one `main` section of the home page. */
 const section = (page: Page) => page.locator('main section')
 
+/**
+ * The caption line under the card: the section's last child holds one paragraph of secondary copy
+ * (Mel 2026-10-23). It sits outside the card, in the area the decorative glow paints, so its
+ * contrast is measured against both the page surface and a worst-case glow composite (see the
+ * caption describe below), not just inherited from the card.
+ */
+const caption = (page: Page) => page.locator('main section > div:last-child > p')
+
 test.describe('coming-soon: structure and copy', () => {
-  test('wordmark, eyebrow, single h1 and body render from the locales, with nothing interactive', async ({ page }) => {
+  test('wordmark, eyebrow, single h1, body and caption render from the locales, with nothing interactive', async ({
+    page,
+  }) => {
     await page.goto('/')
     await expect(section(page)).toBeVisible()
 
@@ -75,7 +91,11 @@ test.describe('coming-soon: structure and copy', () => {
     await expect(headings).toHaveCount(1)
     await expect(headings).toHaveText(comingSoon.title)
 
+    // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level.
+    await expect(page.getByRole('heading')).toHaveCount(1)
+
     await expect(section(page).getByText(comingSoon.body)).toBeVisible()
+    await expect(caption(page)).toHaveText(comingSoon.caption)
 
     // Single-screen launch page: no header, no navigation, no call to action — nothing to operate.
     await expect(page.getByRole('banner')).toHaveCount(0)
@@ -90,13 +110,17 @@ test.describe('coming-soon: no scroll at any viewport', () => {
   /*
    * The page is a single screen: `main` is `h-dvh overflow-hidden`, so the document must never
    * scroll — vertically or horizontally — at any of the reference viewports, from the smallest
-   * phone (320x568) to desktop (1440x900). The document box is read, not just `main`: a child that
-   * escapes its box would still grow `documentElement.scrollHeight` under `overflow: hidden`.
+   * phone (320x568) to desktop (1440x900). The caption added under the card (2026-10-23) makes
+   * the column taller, so 375x667 and 1280x800 are asserted too. The document box is read, not
+   * just `main`: a child that escapes its box would still grow `documentElement.scrollHeight`
+   * under `overflow: hidden`.
    */
   const VIEWPORTS = [
     { width: 320, height: 568 },
+    { width: 375, height: 667 },
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
+    { width: 1280, height: 800 },
     { width: 1440, height: 900 },
   ] as const
 
@@ -200,6 +224,14 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
       expect(texts.filter((text) => text !== '').length, 'measured nodes resolve to real elements').toBe(
         (contrast?.nodes ?? []).length,
       )
+      // Non-vacuity for the copy axe can resolve: the caption sits in the decorative glow's
+      // area, so axe marks its color-contrast `incomplete` — "Element's background color could
+      // not be determined due to a background gradient". Re-verified after the caption's wrapper
+      // became `position: relative` (Re-verification 5): axe analyses DOM geometry, not paint
+      // order, so the absolutely-positioned backdrop still geometrically overlaps the caption and
+      // the check stays `incomplete` (zero violations — the caption is simply not measurable).
+      // Its contrast is measured against the actually painted pixels by the dedicated caption
+      // describe below, so it is not required here.
       for (const needle of [comingSoon.eyebrow, comingSoon.title.slice(0, 24), comingSoon.body.slice(0, 24)]) {
         expect(
           texts.some((text) => text.includes(needle)),
@@ -247,6 +279,7 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
     wordmarkFamily: string
     h1Family: string
     bodyCopyFamily: string
+    captionFamily: string
   }
 
   const auditInPage = ({ theme }: AuditParams): AuditResult => {
@@ -370,8 +403,8 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
     const colorOk = (v: string): boolean => colors.has(norm(v))
     const shadowOk = (v: string): boolean => shadows.has(norm(v))
 
-    // 3. Audit the coming-soon elements: the page shell, the section, the card, its text blocks
-    // and the decorative backdrop.
+    // 3. Audit the coming-soon elements: the page shell, the section, the card, its text blocks,
+    // the caption under the card and the decorative backdrop.
     const card = document.querySelector('main section > div:not([aria-hidden="true"])')
     const paragraphs = card === null ? [] : Array.from(card.querySelectorAll(':scope > p'))
     const elements: Record<string, Element | null> = {
@@ -384,6 +417,7 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       eyebrow: paragraphs[1] ?? null,
       h1: document.querySelector('main h1'),
       bodyCopy: paragraphs[2] ?? null,
+      caption: document.querySelector('main section > div:last-child > p'),
     }
 
     const mismatches: string[] = []
@@ -419,6 +453,12 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       for (const v of c.padding.split(/\s+/)) {
         const p = num(v)
         if (Number.isFinite(p) && !lengthOk(p)) mismatches.push(`${name}.padding: ${v} not in token scale`)
+      }
+      // Spacing utilities land on margins too (`mt-4` on the h1 and the body, `mt-5` on the
+      // caption, `mt-6` on the eyebrow): every margin longhand must resolve to a token step.
+      for (const v of c.margin.split(/\s+/)) {
+        const m = num(v)
+        if (Number.isFinite(m) && !lengthOk(m)) mismatches.push(`${name}.margin: ${v} not in token scale`)
       }
       if (!weights.has(c.fontWeight)) mismatches.push(`${name}.fontWeight: ${c.fontWeight} not a token weight`)
       if (c.lineHeight !== 'normal') {
@@ -468,6 +508,7 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       wordmarkFamily: elements.wordmark == null ? '' : firstFamily(getComputedStyle(elements.wordmark).fontFamily),
       h1Family: elements.h1 == null ? '' : firstFamily(getComputedStyle(elements.h1).fontFamily),
       bodyCopyFamily: elements.bodyCopy == null ? '' : firstFamily(getComputedStyle(elements.bodyCopy).fontFamily),
+      captionFamily: elements.caption == null ? '' : firstFamily(getComputedStyle(elements.caption).fontFamily),
     }
   }
 
@@ -512,7 +553,250 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
         expect(result.wordmarkFamily, 'the wordmark renders the display face').toBe(displayFace)
         expect(result.h1Family, 'the h1 renders the display face').toBe(displayFace)
         expect(result.bodyCopyFamily, 'the body copy renders the body face').toBe(bodyFace)
+        expect(result.captionFamily, 'the caption renders the body face').toBe(bodyFace)
       })
     }
   }
+})
+
+test.describe('coming-soon: caption under the card (2026-10-23 edit)', () => {
+  /*
+   * The caption is the one block painted outside the card, in the decorative glow's area. Its
+   * wrapper is `position: relative` (Re-verification 5): like the card, it paints after the
+   * absolutely-positioned backdrop, so the glow sits BEHIND the caption's glyphs — they render at
+   * the caption token color instead of being dimmed by the translucent overlay. The pixels around
+   * the glyphs are still the glow composite (page surface + blurred gradients), and axe still
+   * cannot resolve that background (see the axe describe). Three guards:
+   * - contrast: WCAG AA (4.5:1) in both themes, measured twice — the caption token color against
+   *   the nearest solid ancestor (what a static resolver such as axe would use), and the actually
+   *   rendered pixels against each other: the caption's own screenshot is histogrammed, the
+   *   glyph-core cluster gives the painted text color, the dominant clusters the painted
+   *   background (worst shade kept). Both measurements must clear 4.5:1.
+   * - fidelity: the painted glyph cores must match the caption token color (within 3 per channel)
+   *   — the glow dimming the glyphs back over the caption would fail here.
+   * - geometry: the caption must stay horizontally centred like the rest of the section, line by
+   *   line — a wrapped, left-aligned line under a centred card would be a visible regression.
+   */
+  type ContrastResult = {
+    theme: string
+    captionColor: string
+    solidBackground: string
+    modeBackground: string
+    worstBackground: string
+    paintedText: string
+    tokenText: string
+    tokenDelta: number
+    glowColor: string
+    glowOpacity: number
+    ratioSolid: number
+    ratioPainted: number
+  }
+
+  /** Runs in the page; computed colors come back as `lab()`, so colors are read as sRGB pixels. */
+  const measureContrast = async (b64: string): Promise<ContrastResult> => {
+    const captionEl = document.querySelector('main section > div:last-child > p')
+    const backdropEl = document.querySelector('main section > div[aria-hidden="true"]')
+    if (captionEl === null) throw new Error('caption paragraph not found')
+
+    const ctx = document.createElement('canvas').getContext('2d')
+    if (ctx === null) throw new Error('no 2d context')
+    /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation (`lab()`, oklch, hex); `null` when fully transparent. */
+    const toRgb = (value: string): [number, number, number] | null => {
+      ctx.fillStyle = '#010203'
+      ctx.fillStyle = value
+      if (String(ctx.fillStyle) === '#010203' && value !== '#010203') throw new Error(`unparsable color: ${value}`)
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillRect(0, 0, 1, 1)
+      const pixel = ctx.getImageData(0, 0, 1, 1).data
+      if ((pixel[3] ?? 0) === 0) return null
+      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+    }
+
+    const luminance = (rgb: [number, number, number]): number => {
+      const lin = rgb.map((c) => {
+        const s = c / 255
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+    }
+    const contrastRatio = (a: [number, number, number], b: [number, number, number]): number => {
+      const la = luminance(a)
+      const lb = luminance(b)
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+    }
+
+    const captionCss = getComputedStyle(captionEl).color
+    const caption = toRgb(captionCss)
+    if (caption === null) throw new Error('caption has no resolved color')
+
+    // Nearest solid ancestor: walk up until a non-transparent background-color (`main` holds
+    // `bg-base`); this is the background a static resolver such as axe resolves.
+    let solid: [number, number, number] | null = null
+    let solidCss = ''
+    let el: Element | null = captionEl
+    while (el !== null && solid === null) {
+      const bgc = getComputedStyle(el).backgroundColor
+      const rgb = bgc === '' ? null : toRgb(bgc)
+      if (rgb !== null) {
+        solid = rgb
+        solidCss = bgc
+      } else {
+        el = el.parentElement
+      }
+    }
+    if (solid === null) throw new Error('no solid ancestor background behind the caption')
+
+    // Painted pixels: histogram the caption's own screenshot. The background (surface + glow)
+    // dominates and clusters near the mode; the glyph cores are the farthest cluster from it
+    // (antialiasing shades always sit between the two, never beyond the text core).
+    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
+    const bitmap = await createImageBitmap(new Blob([bytes.buffer as ArrayBuffer], { type: 'image/png' }))
+    const canvas = document.createElement('canvas')
+    canvas.width = bitmap.width
+    canvas.height = bitmap.height
+    const shot = canvas.getContext('2d')
+    if (shot === null) throw new Error('no 2d context for the screenshot')
+    shot.drawImage(bitmap, 0, 0)
+    const data = shot.getImageData(0, 0, canvas.width, canvas.height).data
+    type Bucket = { count: number; r: number; g: number; b: number }
+    const buckets = new Map<string, Bucket>()
+    let total = 0
+    for (let i = 0; i < data.length; i += 4) {
+      if ((data[i + 3] ?? 0) === 0) continue
+      total += 1
+      const key = `${Math.round((data[i] ?? 0) / 8)},${Math.round((data[i + 1] ?? 0) / 8)},${Math.round((data[i + 2] ?? 0) / 8)}`
+      const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 }
+      bucket.count += 1
+      bucket.r += data[i] ?? 0
+      bucket.g += data[i + 1] ?? 0
+      bucket.b += data[i + 2] ?? 0
+      buckets.set(key, bucket)
+    }
+    if (total === 0) throw new Error('empty caption screenshot')
+    const asRgb = (bucket: Bucket): [number, number, number] => [
+      bucket.r / bucket.count,
+      bucket.g / bucket.count,
+      bucket.b / bucket.count,
+    ]
+    const channelDistance = (a: [number, number, number], b: [number, number, number]): number =>
+      Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
+    const mode = [...buckets.values()].reduce((a, b) => (b.count > a.count ? b : a))
+    const modeRgb = asRgb(mode)
+    const families = [...buckets.values()].filter((bucket) => bucket.count >= total * 0.005)
+    const backgroundShades = families.filter((bucket) => channelDistance(asRgb(bucket), modeRgb) < 100)
+    if (backgroundShades.length === 0) throw new Error('no painted background cluster found')
+    let text: Bucket | null = null
+    for (const bucket of families) {
+      const distance = channelDistance(asRgb(bucket), modeRgb)
+      if (distance >= 100 && (text === null || distance > channelDistance(asRgb(text), modeRgb))) text = bucket
+    }
+    if (text === null) throw new Error('no painted text cluster distinct from the background')
+    const paintedText = asRgb(text)
+    const worst = backgroundShades.reduce((a, b) =>
+      contrastRatio(paintedText, asRgb(b)) < contrastRatio(paintedText, asRgb(a)) ? b : a,
+    )
+
+    // The glow token and the backdrop opacity, recorded with the measurement.
+    const probe = document.createElement('span')
+    probe.style.color = 'var(--softn-brand-glow)'
+    document.body.appendChild(probe)
+    const glowColor = getComputedStyle(probe).color
+    probe.remove()
+    const glowOpacity = backdropEl === null ? 0 : Number.parseFloat(getComputedStyle(backdropEl).opacity)
+
+    const rgbString = (rgb: [number, number, number]): string => `rgb(${rgb.map((c) => Math.round(c)).join(', ')})`
+
+    // Fidelity of the paint order: the positioned wrapper makes the glow paint under the glyphs,
+    // so their cores must land on the caption token color (the overlay dimming them back over the
+    // caption — the pre-Re-verification-5 state, dark glyph cores at rgb(173, 165, 196) — moved
+    // them by up to 9 per channel in dark and 22 in light).
+    const tokenDelta = Math.max(
+      Math.abs(paintedText[0] - caption[0]),
+      Math.abs(paintedText[1] - caption[1]),
+      Math.abs(paintedText[2] - caption[2]),
+    )
+
+    return {
+      theme: document.documentElement.getAttribute('data-theme') ?? '',
+      captionColor: captionCss,
+      solidBackground: solidCss,
+      modeBackground: rgbString(asRgb(mode)),
+      worstBackground: rgbString(asRgb(worst)),
+      paintedText: rgbString(paintedText),
+      tokenText: rgbString(caption),
+      tokenDelta,
+      glowColor,
+      glowOpacity,
+      ratioSolid: contrastRatio(caption, solid),
+      ratioPainted: contrastRatio(paintedText, asRgb(worst)),
+    }
+  }
+
+  for (const scheme of SCHEMES) {
+    test(`the caption keeps at least 4.5:1 in the ${scheme} theme, painted glow included`, async ({ page }) => {
+      await gotoWithTheme(page, scheme)
+      await expect(section(page)).toBeVisible()
+      await awaitFonts(page)
+
+      const shot = await caption(page).screenshot({ type: 'png' })
+      const result = await page.evaluate(measureContrast, shot.toString('base64'))
+
+      expect(result.theme).toBe(scheme)
+      expect(result.ratioSolid, `${scheme}: caption vs solid ${result.solidBackground}`).toBeGreaterThanOrEqual(4.5)
+      expect(
+        result.ratioPainted,
+        `${scheme}: caption vs painted ${result.worstBackground} (glow ${result.glowColor} @ ${result.glowOpacity})`,
+      ).toBeGreaterThanOrEqual(4.5)
+      expect(
+        result.tokenDelta,
+        `${scheme}: painted glyphs ${result.paintedText} must render at the caption token color ${result.tokenText} (the glow must not dim them)`,
+      ).toBeLessThanOrEqual(3)
+      test.info().annotations.push({
+        type: 'measure',
+        description: `${scheme}: token ${result.captionColor} on solid ${result.solidBackground} = ${result.ratioSolid.toFixed(2)}:1; painted text ${result.paintedText} on ${result.worstBackground} (mode ${result.modeBackground}, glow ${result.glowColor} @ ${result.glowOpacity}) = ${result.ratioPainted.toFixed(2)}:1; painted vs token ${result.tokenText} Δ ${result.tokenDelta.toFixed(1)}`,
+      })
+    })
+  }
+
+  test('the caption stays horizontally centred, line by line, at every audited viewport', async ({ page }) => {
+    type Geometry = { sectionCenter: number; textAlign: string; lines: { center: number; width: number }[] }
+    for (const { width, height } of [
+      { width: 320, height: 568 },
+      { width: 375, height: 667 },
+      { width: 1280, height: 800 },
+    ] as const) {
+      await page.setViewportSize({ width, height })
+      await page.goto('/')
+      await expect(section(page)).toBeVisible()
+      await awaitFonts(page)
+      const geometry = await page.evaluate((): Geometry | null => {
+        const sectionEl = document.querySelector('main section')
+        const captionEl = document.querySelector('main section > div:last-child > p')
+        if (sectionEl === null || captionEl === null) return null
+        const box = sectionEl.getBoundingClientRect()
+        const range = document.createRange()
+        range.selectNodeContents(captionEl)
+        const lines = Array.from(range.getClientRects())
+          .filter((rect) => rect.width > 0 && rect.height > 0)
+          .map((rect) => ({ center: rect.left + rect.width / 2, width: rect.width }))
+        return {
+          sectionCenter: box.left + box.width / 2,
+          textAlign: getComputedStyle(captionEl).textAlign,
+          lines,
+        }
+      })
+      const g = geometry ?? { sectionCenter: 0, textAlign: 'missing', lines: [] }
+      expect(g.lines.length, `${width}x${height}: the caption renders at least one line`).toBeGreaterThan(0)
+      for (const [index, line] of g.lines.entries()) {
+        expect(
+          Math.abs(line.center - g.sectionCenter),
+          `${width}x${height}: caption line ${index} (${line.width.toFixed(1)}px) off-centre`,
+        ).toBeLessThanOrEqual(0.5)
+      }
+      test.info().annotations.push({
+        type: 'measure',
+        description: `${width}x${height}: ${g.lines.length} line(s), textAlign ${g.textAlign}, widths ${g.lines.map((line) => `${line.width.toFixed(1)}px`).join('/')}`,
+      })
+    }
+  })
 })
