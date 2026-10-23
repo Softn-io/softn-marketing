@@ -26,7 +26,9 @@ const SECONDARY = hero.cta.secondary
 const INDICATOR = interpolate(hero.agentPrompt, { assistantName: ASSISTANT_NAME })
 const TITLE = `${hero.title.line1} ${hero.title.line2} ${hero.title.line3}`
 
-const heroSection = (page: Page): Locator => page.locator('main section')
+/** The hero: the one `main` section that holds the page's single h1. Later sections never match. */
+const heroSection = (page: Page): Locator =>
+  page.locator('main section').filter({ has: page.getByRole('heading', { level: 1 }) })
 const primaryCta = (page: Page): Locator => page.locator(`#${HERO_CTA_ID}`)
 const secondaryCta = (page: Page): Locator => page.getByRole('link', { name: SECONDARY })
 const indicator = (page: Page): Locator => page.getByRole('link', { name: INDICATOR })
@@ -259,7 +261,7 @@ test.describe('hero: sequenced reveal', () => {
   test('the hero blocks reveal in sequence, fading up from a non-zero floor opacity', async ({ page }) => {
     await page.goto('/')
     const data = await page.evaluate(() => {
-      const section = document.querySelector('main section')
+      const section = document.querySelector('main h1')?.closest('section') ?? null
       if (section === null) throw new Error('hero section missing')
       const step = (el: Element) => {
         const c = getComputedStyle(el)
@@ -374,8 +376,8 @@ test.describe('hero: sequenced reveal', () => {
 
     // The decorative drift badge: the drift-token duration, an infinite loop, so the settle below
     // (finite animations only) is not disturbed by it.
-    const badge = await page
-      .locator('main section a span[aria-hidden="true"]')
+    const badge = await heroSection(page)
+      .locator('a span[aria-hidden="true"]')
       .first()
       .evaluate((el) => {
         const style = getComputedStyle(el)
@@ -392,9 +394,11 @@ test.describe('hero: sequenced reveal', () => {
     // Once every finite entrance animation has finished, each block sits at full opacity: the floor
     // only exists inside the keyframes, no base rule holds the text back (no-JS, reduced motion).
     await awaitFiniteAnimations(page)
-    const settled = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('main section [class*="reveal"]')).map((el) => getComputedStyle(el).opacity),
-    )
+    const settled = await page.evaluate(() => {
+      const hero = document.querySelector('main h1')?.closest('section') ?? null
+      if (hero === null || hero === undefined) throw new Error('hero section missing')
+      return Array.from(hero.querySelectorAll('[class*="reveal"]')).map((el) => getComputedStyle(el).opacity)
+    })
     expect(settled.length, 'elements carrying the reveal class').toBeGreaterThanOrEqual(8)
     for (const [index, value] of settled.entries()) {
       expect(value, `opacity of reveal step ${index} after the reveal`).toBe('1')
@@ -410,14 +414,14 @@ test.describe('hero: reduced motion', () => {
     await page.goto('/')
     // No running animation anywhere in the hero subtree: reveal and drift are disabled.
     const running = await page.evaluate(() => {
-      const section = document.querySelector('main section')
+      const section = document.querySelector('main h1')?.closest('section') ?? null
       if (section === null) throw new Error('hero section missing')
       return section.getAnimations({ subtree: true }).length
     })
     expect(running, 'running animations inside the hero').toBe(0)
     // Belt and braces: no descendant carries an animation other than none/zero duration.
     const offenders = await page.evaluate(() => {
-      const section = document.querySelector('main section')
+      const section = document.querySelector('main h1')?.closest('section') ?? null
       if (section === null) throw new Error('hero section missing')
       const bad: string[] = []
       for (const el of [section, ...Array.from(section.querySelectorAll('*'))]) {
@@ -455,7 +459,7 @@ test.describe('hero: reduced motion', () => {
     // Content visible, at full opacity from the first paint: under the preference no animation runs,
     // so the reveal's 0.2 floor must not leak into any element — nothing waits behind a base rule.
     const opacities = await page.evaluate(() => {
-      const section = document.querySelector('main section')
+      const section = document.querySelector('main h1')?.closest('section') ?? null
       if (section === null) throw new Error('hero section missing')
       return Array.from(section.querySelectorAll('[class*="reveal"]')).map((el) => getComputedStyle(el).opacity)
     })
@@ -512,11 +516,13 @@ test.describe('hero: viewports without horizontal overflow', () => {
       await expect(h1).toHaveCSS('font-size', `${String(H1_STEP[width])}px`)
       const metrics = await page.evaluate(() => {
         const isClipping = (el: Element): boolean => el.scrollWidth - el.clientWidth > 1
+        const hero = document.querySelector('main h1')?.closest('section') ?? null
+        if (hero === null || hero === undefined) throw new Error('hero section missing')
         const h1el = document.querySelector('main h1') as HTMLElement
         return {
           docScroll: document.documentElement.scrollWidth,
           docClient: document.documentElement.clientWidth,
-          overflowing: Array.from(document.querySelectorAll('main section *'))
+          overflowing: Array.from(hero.querySelectorAll('*'))
             .filter((el) => isClipping(el) && getComputedStyle(el).overflowX !== 'hidden')
             .map((el) => `${el.tagName}.${(el.getAttribute('class') ?? '').slice(0, 40)}`),
           // No word break: `break-words` was removed with the shorter title, and no word may be
