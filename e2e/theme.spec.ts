@@ -12,7 +12,7 @@ test.describe('theme', () => {
   // so the dark default is asserted with a dark system and no stored choice.
   test('dark when the system prefers dark and nothing is stored', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(html(page)).not.toHaveAttribute('data-theme', /.*/)
     await expect(toggle(page, TO_LIGHT)).toBeVisible()
     const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)
@@ -21,7 +21,7 @@ test.describe('theme', () => {
 
   test('light when the system prefers light', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(toggle(page, TO_DARK)).toBeVisible()
     const scheme = await page.evaluate(() => getComputedStyle(document.documentElement).colorScheme)
     expect(scheme).toBe('light')
@@ -38,7 +38,7 @@ test.describe('theme', () => {
         }
       }).observe(document, { childList: true, subtree: true })
     })
-    await page.goto('/')
+    await page.goto('/preview')
     // data-theme is set by the head inline script, before <body> exists.
     const first = await page.evaluate(() => (window as unknown as { __firstTheme?: string | null }).__firstTheme)
     expect(first).toBe('light')
@@ -47,7 +47,7 @@ test.describe('theme', () => {
 
   test('toggle switches theme and persists across reload', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
-    await page.goto('/')
+    await page.goto('/preview')
     await toggle(page, TO_LIGHT).click()
     await expect(html(page)).toHaveAttribute('data-theme', 'light')
     await expect(toggle(page, TO_DARK)).toBeVisible()
@@ -61,7 +61,7 @@ test.describe('theme', () => {
 
   test('system preference change updates the icon label when no data-theme', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(toggle(page, TO_LIGHT)).toBeVisible()
     await page.emulateMedia({ colorScheme: 'light' })
     await expect(toggle(page, TO_DARK)).toBeVisible()
@@ -69,7 +69,7 @@ test.describe('theme', () => {
 
   test('keyboard operable with visible focus ring', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'dark' })
-    await page.goto('/')
+    await page.goto('/preview')
     // Tab order up to the toggle (skip link, logo, nav links) is asserted in header.spec.ts.
     const button = toggle(page, TO_LIGHT)
     await button.focus()

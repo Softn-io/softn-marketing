@@ -78,7 +78,7 @@ test.describe('hero: cursor-following glow', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('moving the pointer over the hero repositions the glow layer', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const glow = heroSection(page).locator('div[aria-hidden="true"]').first()
     const before = await glow.evaluate((el) => getComputedStyle(el).getPropertyValue('--hero-pointer-x').trim())
     // Move the real mouse inside the hero box (a hovering pointer, not touch).
@@ -103,7 +103,7 @@ test.describe('hero: privacy', () => {
       const host = new URL(request.url()).hostname
       if (host !== 'localhost' && !host.startsWith('127.')) external.push(request.url())
     })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(heroSection(page)).toBeVisible()
     expect(external, 'third-party requests before consent').toEqual([])
   })
@@ -113,14 +113,14 @@ test.describe('hero: structure', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('the page holds a single h1 gathering the three title lines', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const headings = page.getByRole('heading', { level: 1 })
     await expect(headings).toHaveCount(1)
     await expect(headings).toHaveText(TITLE)
   })
 
   test('eyebrow, subtitle and reassurance line render from the locale', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(heroSection(page).getByText(hero.eyebrow)).toBeVisible()
     await expect(heroSection(page).getByText(hero.subtitle)).toBeVisible()
     await expect(heroSection(page).getByText(hero.reassurance)).toBeVisible()
@@ -141,7 +141,7 @@ test.describe('hero: calls to action', () => {
         received.push((event as CustomEvent).detail)
       })
     }, ASSISTANT_INTENT_EVENT)
-    await page.goto('/')
+    await page.goto('/preview')
     const cta = primaryCta(page)
     await expect(cta).toHaveAttribute('href', `#${SECTION_IDS.agent}`)
     await cta.click()
@@ -153,7 +153,7 @@ test.describe('hero: calls to action', () => {
   })
 
   test('secondary CTA navigates to #methode', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(secondaryCta(page)).toHaveAttribute('href', `#${SECTION_IDS.method}`)
     await secondaryCta(page).click()
     await expect(page).toHaveURL(new RegExp(`#${SECTION_IDS.method}$`))
@@ -171,7 +171,7 @@ test.describe('hero: calls to action', () => {
         received.push((event as CustomEvent).detail)
       })
     }, ASSISTANT_INTENT_EVENT)
-    await page.goto('/')
+    await page.goto('/preview')
 
     await secondaryCta(page).click()
     await expect(page).toHaveURL(new RegExp(`#${SECTION_IDS.method}$`))
@@ -189,7 +189,7 @@ test.describe('hero: calls to action', () => {
   test('primary CTA carries the large Button contract: body-md 16 px at weight 600, body face at line-height 1', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const cta = primaryCta(page)
     // Size scale of the design system's Button (lg): text step body-md (16 px), weight 600 on all sizes.
     await expect(cta).toHaveCSS('font-size', '16px')
@@ -206,7 +206,7 @@ test.describe('hero: calls to action', () => {
   })
 
   test('scroll indicator is a link to #assistant named by the assistant prompt, badge decorative', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const link = indicator(page)
     await expect(link).toHaveAttribute('href', `#${SECTION_IDS.agent}`)
     // The accessible name starts with the visible label (WCAG 2.5.3): the link has no aria-label,
@@ -224,7 +224,7 @@ test.describe('hero: keyboard', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
   test('Tab reaches the three hero links, each with a visible focus ring', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     // The header CTA ships `data-state="hidden"` in the server render (ScrollRevealCta), so the hero
     // links are tab stops 9, 10 and 11 at the top of the page: the wait below pins that state, it is
     // not something the page has to settle into.
@@ -259,7 +259,7 @@ test.describe('hero: sequenced reveal', () => {
    * design decision, so it has to fail here first.
    */
   test('the hero blocks reveal in sequence, fading up from a non-zero floor opacity', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const data = await page.evaluate(() => {
       const section = document.querySelector('main h1')?.closest('section') ?? null
       if (section === null) throw new Error('hero section missing')
@@ -411,7 +411,7 @@ test.describe('hero: reduced motion', () => {
 
   test('no hero animation runs and all content stays visible', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     // No running animation anywhere in the hero subtree: reveal and drift are disabled.
     const running = await page.evaluate(() => {
       const section = document.querySelector('main h1')?.closest('section') ?? null
@@ -481,7 +481,7 @@ test.describe('hero: without JavaScript', () => {
   test('content is readable and CTAs stay plain anchors', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     // The entrance animations are pure CSS with no base `opacity: 0`: the markup is complete server-side.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(TITLE)
     await expect(page.getByText(hero.subtitle)).toBeVisible()
@@ -509,7 +509,7 @@ test.describe('hero: viewports without horizontal overflow', () => {
   for (const width of [320, 375, 390, 768, 1024, 1280]) {
     test(`no horizontal overflow at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(heroSection(page)).toBeVisible()
       const h1 = page.getByRole('heading', { level: 1 })
       await expect(h1).toBeVisible()
@@ -548,7 +548,7 @@ test.describe('hero: typography scale and rhythm (tokens 0.3.0 / 0.3.1)', () => 
    */
   test('the h1 holds exactly the three validated title lines', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     const lines = page.getByRole('heading', { level: 1 }).locator('> span')
     await expect(lines).toHaveCount(3)
     await expect(lines.nth(0)).toHaveText(hero.title.line1)
@@ -564,7 +564,7 @@ test.describe('hero: typography scale and rhythm (tokens 0.3.0 / 0.3.1)', () => 
    */
   test('the h1 keeps the design measure of 15ch', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     const measure = await page.getByRole('heading', { level: 1 }).evaluate((el) => {
       const probe = document.createElement('span')
       probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;width:100ch'
@@ -602,7 +602,7 @@ test.describe('hero: typography scale and rhythm (tokens 0.3.0 / 0.3.1)', () => 
   for (const [width, expected] of Object.entries(SUBTITLE)) {
     test(`the subtitle is body-md below md and body-lg from md at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width: Number(width), height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       const subtitle = heroSection(page).getByText(hero.subtitle)
       await expect(subtitle).toBeVisible()
       await expect(subtitle).toHaveCSS('font-size', expected.size)
@@ -630,7 +630,7 @@ test.describe('hero: typography scale and rhythm (tokens 0.3.0 / 0.3.1)', () => 
    */
   test('the hero container is capped at 1152 px and centred', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
-    await page.goto('/')
+    await page.goto('/preview')
     const content = await heroContent(page).evaluate((el) => {
       const style = getComputedStyle(el)
       const box = el.getBoundingClientRect()
@@ -662,7 +662,7 @@ test.describe('hero: typography scale and rhythm (tokens 0.3.0 / 0.3.1)', () => 
   for (const [width, expected] of Object.entries(RHYTHM)) {
     test(`the hero padding-block follows the token rhythm at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width: Number(width), height: expected.viewportHeight })
-      await page.goto('/')
+      await page.goto('/preview')
       const content = await heroContent(page).evaluate((el) => {
         const style = getComputedStyle(el)
         // Custom properties serialize as authored (`2.5rem`), so read them through a probe element:
@@ -725,7 +725,7 @@ test.describe('hero: cursor glow paints the brand aura token', () => {
    * `var(--softn-brand-aura)` resolves to in this theme.
    */
   test('the pointer radial uses --softn-brand-aura, resolved through the token', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const read = await heroSection(page)
       .locator('div[aria-hidden="true"]')
       .first()
@@ -825,7 +825,7 @@ test.describe('hero: contrast over the painted glow (WCAG 1.4.3)', () => {
       await page.setViewportSize({ width: 1280, height: 800 })
       await page.emulateMedia({ colorScheme: scheme })
       await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await awaitFiniteAnimations(page)
 

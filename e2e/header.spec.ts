@@ -139,7 +139,7 @@ test.describe('header: desktop', () => {
   test.use({ viewport: DESKTOP })
 
   test('landmarks: one banner, labelled nav, main target of the skip link', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.getByRole('banner')).toHaveCount(1)
     await expect(page.getByRole('navigation', { name: MAIN_NAV })).toBeVisible()
     await expect(page.locator('main#main')).toHaveCount(1)
@@ -147,7 +147,7 @@ test.describe('header: desktop', () => {
   })
 
   test('skip link is the first Tab stop, becomes visible and targets #main', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const skip = page.getByRole('link', { name: SKIP_LINK })
     await expect(skip).toHaveAttribute('href', '#main')
     // The skip link sits fully above the viewport until it receives focus.
@@ -164,7 +164,7 @@ test.describe('header: desktop', () => {
   test('Tab order: skip link, logo, five nav links, theme toggle, then the hero links while the header CTA is hidden', async ({
     page,
   }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     // The wrapper ships `data-state="hidden"` in the server HTML (ScrollRevealCta, PR #75 review) and
     // the client adds `inert` right after hydration: the header CTA is out of the tab order and out
     // of the accessibility tree from the first frame (`visibility: hidden` does that on its own) —
@@ -191,7 +191,7 @@ test.describe('header: desktop', () => {
   })
 
   test('nav accessible names start with the visible text (WCAG 2.5.3)', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     const links = page.getByRole('navigation', { name: MAIN_NAV }).getByRole('link')
     await expect(links).toHaveCount(5)
     for (let i = 0; i < 5; i += 1) {
@@ -204,7 +204,7 @@ test.describe('header: desktop', () => {
   })
 
   test('focus is visibly ringed on logo, nav link and the CTAs', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     // Tab stops at the top of the page: skip link, logo, 5 nav links, theme toggle, then the hero's
     // primary CTA — the header CTA ships hidden in the server render and the client adds `inert`
     // after hydration (ScrollRevealCta), so it is not the ninth stop until the hero CTA has scrolled
@@ -235,7 +235,7 @@ test.describe('header: desktop', () => {
 
   test('header stays stuck to the top while scrolling', async ({ page }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     await page.evaluate(() => window.scrollTo(0, 1500))
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000)
     const top = await header(page).evaluate((el) => el.getBoundingClientRect().top)
@@ -247,7 +247,7 @@ test.describe('header: desktop', () => {
     page,
   }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     const wrapper = page.locator('header [data-state]')
     const heroCta = page.locator(`#${HERO_CTA_ID}`)
     // The hero CTA is on screen: ScrollRevealCta hides its wrapper, so the page never shows two CTAs at once.
@@ -270,7 +270,7 @@ test.describe('header: desktop', () => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     // The header CTA is only clickable once the hero CTA has scrolled out of view (ScrollRevealCta).
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     await page.evaluate((id) => {
@@ -286,7 +286,7 @@ test.describe('header: desktop', () => {
 
   test('in-page links update the URL hash and mark the target section active', async ({ page }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
     await expect(nav.locator('[aria-current]')).toHaveCount(0)
     await nav.getByRole('link', { name: METHOD_NAME }).click()
@@ -297,7 +297,7 @@ test.describe('header: desktop', () => {
 
   test('scrolling moves the active link with the reading position', async ({ page }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
     await page.evaluate(() => document.getElementById('coulisses')?.scrollIntoView())
     await expect(nav.getByRole('link', { name: BACKSTAGE_NAME })).toHaveAttribute('aria-current', 'location')
@@ -316,7 +316,7 @@ test.describe('header: single CTA label per breakpoint', () => {
   test('1279 shows the short label only, 1280 the long one only', async ({ page }) => {
     await injectSections(page)
     await page.setViewportSize({ width: 1279, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     // Hidden start: the CTA is neither visible nor in the accessibility tree at the top of the page.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
@@ -373,7 +373,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     })
     // `commit`: goto resolves as soon as the navigation is committed, before scripts and paint, so
     // the recorder covers the whole hydration window.
-    const response = await page.goto('/', { waitUntil: 'commit' })
+    const response = await page.goto('/preview', { waitUntil: 'commit' })
     if (response === null) throw new Error('navigation returned no response')
     const html = await response.text()
     // The hidden state is in the markup itself, not written by a script after the fact. CSS-module
@@ -431,7 +431,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
       page,
     }) => {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
       const boxes = await headerBoxes(page)
       expect(
@@ -491,7 +491,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     page,
   }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     await revealHeaderCta(page)
     const ctaLink = page.getByRole('link', { name: CTA_LONG })
     await expect(ctaLink).toBeVisible()
@@ -523,7 +523,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
 
   test('scrolling back to the top hides the CTA again and puts the toggle back on the edge', async ({ page }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     await revealHeaderCta(page)
     await page.evaluate(() => window.scrollTo(0, 0))
     const wrapper = page.locator('header [data-state]')
@@ -544,7 +544,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
   }) => {
     await injectSections(page)
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     // The preference changes timings, never the semantics: hidden out of flow at the top.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     await expect(page.locator('header [data-state]')).toHaveCSS('position', 'absolute')
@@ -612,7 +612,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     type Frame = { state: string; opacity: number; translate: string; scale: number; top: number }
     await injectSections(page)
     await page.setViewportSize({ width: 1280, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     const wrapper = page.locator('header [data-state]')
     await expect(wrapper).toHaveAttribute('data-state', 'hidden')
     // Per-frame recorder: samples the wrapper's painted state every frame from here on.
@@ -721,7 +721,7 @@ test.describe('header: CTA without JavaScript', () => {
   const atDesktopWidth = async (browser: Browser, width: number, label: string, exact: boolean) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width, height: 800 } })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     // The wrapper itself: nothing runs to flip `data-state`, so the CSS override carries the whole
     // reveal. The `translate` / `scale` checks are the D-2 regression guard, extended to the sn-pop
     // scale: the drop-in start values live in `--scroll-reveal-translate` and `--scroll-reveal-scale`,
@@ -803,7 +803,7 @@ test.describe('header: CTA without JavaScript', () => {
   test('the shown CTA is operable: not inert, focusable, and the plain anchor navigates', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     const cta = page.locator("header a[href='#reservation']")
     await expect(cta).toBeVisible()
     // A painted call to action whose wrapper stays `inert` (server-rendered attribute, liftable by
@@ -833,7 +833,7 @@ test.describe('header: CTA without JavaScript', () => {
   }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     const session = await context.newCDPSession(page)
     await session.send('Accessibility.enable')
     const { nodes } = (await session.send('Accessibility.getFullAXTree')) as {
@@ -861,7 +861,7 @@ test.describe('header: CTA without JavaScript', () => {
       viewport: { width: 1280, height: 800 },
     })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     const wrapper = page.locator('header [data-state]')
     await expect(wrapper).toHaveCSS('position', 'static')
     await expect(wrapper).toHaveCSS('visibility', 'visible')
@@ -883,7 +883,7 @@ test.describe('header: CTA without JavaScript', () => {
   test('is out of the mobile header below lg, with no horizontal overflow', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 375, height: 800 } })
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     // The breakpoint utilities keep deciding: no CTA box in the mobile header at all.
     await expect(page.locator('header [data-state]')).toHaveCSS('display', 'none')
     const metrics = await page.evaluate(() => ({
@@ -900,7 +900,7 @@ test.describe('header: no horizontal overflow with the CTA revealed', () => {
     test(`fits at ${width}px with the CTA visible`, async ({ page }) => {
       await injectSections(page)
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await revealHeaderCta(page)
       const m = await page.evaluate(() => {
         const h = document.querySelector('header')
@@ -953,7 +953,7 @@ test.describe('header: booking CTA typography', () => {
   for (const width of [1024, 1280]) {
     test(`the header CTA renders the small Button typography at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       // CSS locator on purpose: while the hero CTA is on screen the ScrollRevealCta keeps this wrapper
       // hidden and inert, and computed typography resolves identically in that state — the contract is
       // about the Button, not about the reveal, which has its own test above.
@@ -973,7 +973,7 @@ test.describe('header: no horizontal overflow', () => {
   for (const width of [1024, 1050, 1100, 1279, 1280]) {
     test(`fits at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 800 })
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(header(page)).toBeVisible()
       const m = await page.evaluate(() => {
         const rect = (el: Element | null) => {
@@ -1021,7 +1021,7 @@ test.describe('header: mobile drawer', () => {
   test.use({ viewport: BELOW_LG })
 
   test('burger replaces the nav below lg and toggles aria-expanded', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.getByRole('navigation', { name: MAIN_NAV })).toBeHidden()
     await expect(page.locator("header a[href='#reservation']")).toBeHidden()
     const trigger = burger(page)
@@ -1036,7 +1036,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('Escape closes the drawer and focus returns to the burger', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).focus()
     await page.keyboard.press('Enter')
     await expect(drawer(page)).toBeVisible()
@@ -1046,7 +1046,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('first Tab from the close control lands on the first nav link', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await page.keyboard.press('Tab')
@@ -1054,7 +1054,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('closing control is exposed inside the dialog and header theme toggle is not duplicated', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toHaveCount(1)
@@ -1071,7 +1071,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('initial focus lands on the close control', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
@@ -1106,7 +1106,7 @@ test.describe('header: mobile drawer', () => {
   }
 
   test('Tab cycles logo, toggle, close, five links, CTA and wraps without leaving the dialog', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
@@ -1122,7 +1122,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('Shift+Tab cycles in reverse without leaving the dialog', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
@@ -1138,7 +1138,7 @@ test.describe('header: mobile drawer', () => {
 
   test('theme toggle inside the popup switches the theme', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('softn-theme', 'dark'))
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
@@ -1159,7 +1159,7 @@ test.describe('header: mobile drawer', () => {
         console.error(`CSP violation: ${event.violatedDirective} ${event.blockedURI}`)
       })
     })
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await page.keyboard.press('Escape')
@@ -1168,7 +1168,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('drawer lists the five links and a booking CTA', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     const dialog = drawer(page)
     // Logo, five section links, CTA.
@@ -1179,7 +1179,7 @@ test.describe('header: mobile drawer', () => {
 
   test('clicking a link closes the drawer then scrolls to the section', async ({ page }) => {
     await injectSections(page)
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await drawer(page).getByRole('link', { name: FAQ_NAME }).click()
     await expect(drawer(page)).toBeHidden()
@@ -1188,7 +1188,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('clicking the CTA closes the drawer and goes to #reservation', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await drawer(page).getByRole('link', { name: CTA_LONG }).click()
     await expect(drawer(page)).toBeHidden()
@@ -1196,7 +1196,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test("close control in the burger's spot closes the drawer", async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await drawer(page).getByRole('button', { name: CLOSE }).click()
@@ -1205,7 +1205,7 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('resizing to desktop closes the drawer', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await page.setViewportSize(DESKTOP)
@@ -1214,12 +1214,12 @@ test.describe('header: mobile drawer', () => {
   })
 
   test('theme toggle stays usable next to the burger', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(themeToggle(page)).toBeVisible()
   })
 
   test('drawer link focus is ringed', async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     await page.keyboard.press('Tab')
     const first = drawer(page).getByRole('navigation').getByRole('link').first()
@@ -1234,7 +1234,7 @@ test.describe('header: mobile drawer', () => {
 
   test('reduced motion: drawer opens without travelling transform', async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     const popup = drawer(page)
     await expect(popup).toBeVisible()
@@ -1253,7 +1253,7 @@ test.describe('header: drawer top row matches the header', () => {
         await page.setViewportSize({ width, height: 800 })
         await page.emulateMedia({ colorScheme: scheme })
         await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
-        await page.goto('/')
+        await page.goto('/preview')
         await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
         const rects = (root: string, toggle: string, close: string) =>
           page.evaluate(
@@ -1306,7 +1306,7 @@ test.describe('header: drawer top row matches the header', () => {
 
   test('top row stays still while the body travels in (no transform on the bar)', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     const bar = drawer(page).locator('> div').first()
     await expect(bar).toHaveCSS('transform', 'none')
@@ -1315,7 +1315,7 @@ test.describe('header: drawer top row matches the header', () => {
   test('reduced motion: popup and body carry no transform at any time', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
-    await page.goto('/')
+    await page.goto('/preview')
     await burger(page).click()
     const popup = drawer(page)
     await expect(popup).toBeVisible()
@@ -1363,7 +1363,7 @@ test.describe('header: drawer top row matches the header', () => {
       })
     }
     const page = await context.newPage()
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
     await burger(page).tap()
     await expect(drawer(page)).toBeVisible()
@@ -1885,7 +1885,7 @@ test.describe('header: contrast in both themes', () => {
     test(`nav link text >= 4.5:1 and active underline >= 3:1 (${scheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme })
       await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       const { idle, active, underline } = await page.evaluate(ratioScript)
       expect(idle, 'idle link contrast').toBeGreaterThanOrEqual(4.5)
@@ -1902,7 +1902,7 @@ test.describe('header: contrast in both themes', () => {
       await injectSections(page)
       await page.emulateMedia({ colorScheme: scheme })
       await page.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await revealHeaderCta(page)
       await expect
