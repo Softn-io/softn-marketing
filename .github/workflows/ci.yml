@@ -134,7 +134,7 @@ jobs:
           name: next-build
           path: .next
       - run: pnpm lighthouse
-        continue-on-error: true
+        #continue-on-error: true
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
