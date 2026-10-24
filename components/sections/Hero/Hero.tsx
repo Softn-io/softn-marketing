@@ -1,5 +1,5 @@
+import { PointerGlow } from '@components/ui/PointerGlow'
 import { hero } from '@/locales/fr/hero'
-import { HeroGlow } from './HeroGlow'
 import { HeroPrimaryCta } from './HeroPrimaryCta'
 import { HeroScrollIndicator } from './HeroScrollIndicator'
 import { HeroSecondaryCta } from './HeroSecondaryCta'
@@ -17,7 +17,7 @@ import styles from './styles/Hero.module.css'
 export const Hero = () => {
   return (
     <section className={styles.hero}>
-      <HeroGlow />
+      <PointerGlow />
       <div className={`${styles.content} mx-auto max-w-6xl`}>
         <p className={`${styles.reveal} text-caption text-brand-foreground uppercase`}>{hero.eyebrow}</p>
         <h1 className={`${styles.title} mt-5 font-display text-display-md text-foreground sm:text-display-xl`}>

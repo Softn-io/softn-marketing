@@ -1,11 +1,11 @@
 /*
  * Hero section. Colors, typography, radii and spacing come from --softn-* tokens: Tailwind
  * utilities in the markup, and this file for what has no utility — the fluid section rhythm,
- * the text measures taken from the design, the two radial glows, the entrance keyframes and the
- * interactive states (hover, focus, reduced motion).
+ * the text measures taken from the design, the entrance keyframes and the interactive states
+ * (hover, focus, reduced motion).
  *
- * The stagger delays and the pointer position use hero-local custom properties (--hero-*), never a
- * --softn-* token: the design staggers its entrance per element and no token family covers that.
+ * The stagger delays use a hero-local custom property (--hero-reveal-delay), never a --softn-*
+ * token: the design staggers its entrance per element and no token family covers that.
  */
 
 .hero {
@@ -26,19 +26,6 @@
     padding-block: clamp(var(--softn-space-16), 11vh, var(--softn-space-30))
       clamp(var(--softn-space-16), 9vw, var(--softn-space-24));
   }
-}
-
-.glow {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    radial-gradient(
-      34% 40% at var(--hero-pointer-x, 50%) var(--hero-pointer-y, 10%),
-      var(--softn-brand-aura),
-      transparent 68%
-    ),
-    radial-gradient(56% 62% at 50% -6%, var(--softn-brand-background), transparent 74%);
 }
 
 /* The design's h1 measure. Below `sm` the h1 uses the display-md step (36px), where `15ch` (359px)
@@ -207,8 +194,8 @@
 
 /* No hero animation runs when motion is reduced: no reveal, no fade, no drift, no hover transition.
    The hero text therefore stays at full opacity and in place from the first paint (no base rule
-   holds it back), and `HeroGlow` reads the same preference and stops writing the pointer position,
-   so the glow stays where the stylesheet puts it. */
+   holds it back), and `PointerGlow` reads the same preference and stops writing the pointer
+   position, so the glow stays where the stylesheet puts it. */
 @media (prefers-reduced-motion: reduce) {
   .reveal,
   .drift {

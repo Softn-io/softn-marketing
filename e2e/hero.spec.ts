@@ -79,18 +79,19 @@ test.describe('hero: cursor-following glow', () => {
 
   test('moving the pointer over the hero repositions the glow layer', async ({ page }) => {
     await page.goto('/preview')
+    // The hero's decorative glow is the shared `PointerGlow` island (promoted from `HeroGlow`
+    // in #91): the element carries `aria-hidden`, and the pointer position is written to its
+    // `--pointer-glow-x/--pointer-glow-y` custom properties.
     const glow = heroSection(page).locator('div[aria-hidden="true"]').first()
-    const before = await glow.evaluate((el) => getComputedStyle(el).getPropertyValue('--hero-pointer-x').trim())
+    const readGlowX = (): Promise<string> =>
+      glow.evaluate((el) => getComputedStyle(el).getPropertyValue('--pointer-glow-x').trim())
+    const before = await readGlowX()
     // Move the real mouse inside the hero box (a hovering pointer, not touch).
     const box = await heroSection(page).boundingBox()
     if (box === null) throw new Error('hero section has no bounding box')
     await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.4)
-    await expect
-      .poll(() => glow.evaluate((el) => getComputedStyle(el).getPropertyValue('--hero-pointer-x').trim()), {
-        message: 'glow position follows the pointer',
-      })
-      .not.toBe(before)
-    const x = await glow.evaluate((el) => getComputedStyle(el).getPropertyValue('--hero-pointer-x').trim())
+    await expect.poll(readGlowX, { message: 'glow position follows the pointer' }).not.toBe(before)
+    const x = await readGlowX()
     expect(Number.parseFloat(x)).toBeGreaterThan(10)
     expect(Number.parseFloat(x)).toBeLessThan(50)
   })
@@ -431,12 +432,13 @@ test.describe('hero: reduced motion', () => {
       return bad
     })
     expect(offenders, 'elements with a hero animation').toEqual([])
-    // The pointer-follow glow writes nothing: the island attaches no listener under the preference,
-    // so the glow keeps the static position the stylesheet gives it.
+    // The pointer-follow glow writes nothing: the island (`PointerGlow`, promoted from `HeroGlow`
+    // in #91) attaches no listener under the preference, so the glow keeps the static position
+    // the stylesheet gives it.
     const pointerVarUnset = await heroSection(page)
       .locator('div[aria-hidden="true"]')
       .first()
-      .evaluate((el) => (el as HTMLElement).style.getPropertyValue('--hero-pointer-x') === '')
+      .evaluate((el) => (el as HTMLElement).style.getPropertyValue('--pointer-glow-x') === '')
     expect(pointerVarUnset, 'glow keeps its static stylesheet position').toBe(true)
     // The JS branch, not just the CSS one: on a hover-capable device the island is mounted under the
     // reduced-motion preference and must still refuse to track the pointer (its `matchMedia` guard
@@ -452,7 +454,7 @@ test.describe('hero: reduced motion', () => {
           heroSection(page)
             .locator('div[aria-hidden="true"]')
             .first()
-            .evaluate((el) => (el as HTMLElement).style.getPropertyValue('--hero-pointer-x')),
+            .evaluate((el) => (el as HTMLElement).style.getPropertyValue('--pointer-glow-x')),
         { message: 'no pointer position written while motion is reduced', timeout: 1000 },
       )
       .toBe('')

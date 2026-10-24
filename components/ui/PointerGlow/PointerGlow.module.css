@@ -1,0 +1,18 @@
+/*
+ * Warm pointer-following glow over the static brand radial at the top. Both gradients reuse the
+ * hero's original colours: --softn-brand-aura is the warm amber aura, --softn-brand-background the
+ * translucent violet. The custom properties are local to this decoration, never design tokens.
+ */
+
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(
+      34% 40% at var(--pointer-glow-x, 50%) var(--pointer-glow-y, 10%),
+      var(--softn-brand-aura),
+      transparent 68%
+    ),
+    radial-gradient(56% 62% at 50% -6%, var(--softn-brand-background), transparent 74%);
+}
