@@ -1,14 +1,29 @@
 import { z } from 'zod'
 
 /**
+ * Treats an empty or whitespace-only value as unset, so a copied `.env.example` with empty
+ * placeholders does not fail validation.
+ */
+const optionalString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().min(1).optional(),
+)
+
+/**
  * Server-side environment schema, validated at every `readEnv` call. Every
  * consumer goes through this module — never `process.env` directly.
- * Feature-specific keys (Airtable, Fillout, Umami…) extend this schema in
- * their own issue rather than being anticipated here.
+ *
+ * The Airtable keys are optional: the build, the tests and the preview route
+ * must work without them, and the Airtable helper reports a server error when
+ * they are unset. They stay server-side and must never be prefixed with
+ * `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   ENABLE_PREVIEW_ROUTE: z.enum(['true', 'false']).default('false'),
+  AIRTABLE_TOKEN: optionalString,
+  AIRTABLE_BASE_ID: optionalString,
+  AIRTABLE_WAITLIST_TABLE_ID: optionalString,
 })
 
 export type Env = z.infer<typeof EnvSchema>

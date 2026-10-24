@@ -6,7 +6,7 @@
 
 | Third party | Role | Data concerned | Loaded when | Hosting | DPA signed or accepted | Transfer safeguard outside EU | Mentioned in privacy policy |
 |---|---|---|---|---|---|---|---|
-| Airtable | Lead storage | Name, email, message, slot, consent | Server-side send, after consent | To verify | To verify | To verify | To do |
+| Airtable | Lead storage | Name, email, message, slot, consent; coming-soon waitlist e-mail | Server-side send, after consent; server-side send on waitlist form submit | To verify | To verify | To verify | To do |
 | Fillout | Booking (embed + webhook) | Name, email, slot | Chatbot booking step, after consent | To verify (US by default per the API docs; EU region tied to Enterprise plans) | To verify | To verify | To do |
 | Google Calendar | Booking calendar (via Fillout) | Slot, invitee email | Via Fillout | To verify | To verify | To verify | To do |
 | Vercel | Site hosting, logs | IP address, technical logs | Every visit | To verify | To verify | To verify | To do |
