@@ -13,6 +13,9 @@ permissions:
     resource: "*.env.*"
     effect: deny
   - action: edit
+    resource: "*.env.example"
+    effect: allow
+  - action: edit
     resource: ".github/*"
     effect: deny
   - action: edit
