@@ -14,7 +14,7 @@ export const metadataContent = {
   comingSoon: {
     title: 'Softn.io | Automatisation et agents IA, bientôt en ligne',
     description:
-      "Je crée votre site et vos web apps, et j'automatise vos tâches répétitives avec des agents IA. Le site complet de Softn.io arrive bientôt.",
+      "Sites, web apps, automatisation et agents IA. Le nouveau site arrive bientôt : laissez votre e-mail, je vous écris à l'ouverture.",
     openGraph: {
       title: 'Softn.io : sites, web apps, automatisation et agents IA',
       description:
