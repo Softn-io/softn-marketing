@@ -52,7 +52,7 @@ describe('WaitlistSubmissionSchema', () => {
     expect(result.data.renderedAt).toBe('1720000000000')
   })
 
-  it('exposes the shared field names and Airtable constants', () => {
+  it('exposes the shared field names and storage constants', () => {
     expect(WAITLIST_FIELDS.honeypot).not.toBe('site')
     expect(WAITLIST_MIN_DELAY_MS).toBe(2000)
     expect(WAITLIST_SOURCE).toBe('coming-soon')

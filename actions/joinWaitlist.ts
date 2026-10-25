@@ -1,6 +1,6 @@
 'use server'
 
-import { createAirtableRecord } from '@/lib/airtable'
+import { createBaserowRow } from '@/lib/baserow'
 import { readEnv } from '@/lib/env'
 import {
   WAITLIST_FIELDS,
@@ -34,12 +34,12 @@ const isSubmittedTooFast = (renderedAt: string): boolean => {
  * Joins the coming-soon e-mail waitlist.
  *
  * Validates the submission with the shared Zod schema, re-checks the honeypot and the render delay
- * server-side, then writes one record through the Airtable helper. A tripped honeypot or a too-fast
+ * server-side, then writes one row through the Baserow helper. A tripped honeypot or a too-fast
  * submission answers with the success state without a network call, so a bot cannot tell the trap
  * from a real signup.
  *
  * Returns a {@link WaitlistResult} and never throws to the client. The submitted e-mail and the
- * Airtable error body never leave this function: only a generic `invalid` or `server` code does.
+ * Baserow error body never leave this function: only a generic `invalid` or `server` code does.
  */
 export const joinWaitlist = async (_previous: WaitlistResult | null, formData: FormData): Promise<WaitlistResult> => {
   try {
@@ -54,10 +54,10 @@ export const joinWaitlist = async (_previous: WaitlistResult | null, formData: F
     const { email, honeypot, renderedAt } = parsed.data
     if (honeypot !== '' || isSubmittedTooFast(renderedAt)) return { ok: true }
 
-    const tableId = readEnv().AIRTABLE_WAITLIST_TABLE_ID
+    const tableId = readEnv().BASEROW_WAITLIST_TABLE_ID
     if (tableId === undefined) return { ok: false, error: 'server' }
 
-    const result = await createAirtableRecord({
+    const result = await createBaserowRow({
       tableId,
       fields: { Email: email, Source: WAITLIST_SOURCE },
     })
