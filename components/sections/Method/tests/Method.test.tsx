@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SECTION_IDS } from '@/lib/anchors'
 import { method } from '@/locales/fr/method'
+import { stepCaption } from '../data/methodTimeline'
 import { Method } from '../Method'
 
-/** Every string the section and its diagram are allowed to render, as the locale defines them. */
+/** Every string the section, its diagram and its timeline are allowed to render, as the locale defines them. */
 const localeStrings = [
   method.eyebrow,
   method.title.part1,
@@ -16,6 +17,11 @@ const localeStrings = [
   method.loop.label,
   ...Object.values(method.loop.lanes),
   ...Object.values(method.loop.status),
+  ...method.steps.flatMap((step, index) => [
+    stepCaption(method.stepCounter, index, method.steps.length, step.label),
+    step.title,
+    step.text,
+  ]),
 ]
 
 // Vitest rewrites `import.meta.url`, so the folder is resolved from the project root instead.
@@ -102,6 +108,17 @@ describe('Method', () => {
     for (const lane of Object.values(method.loop.lanes)) expect(screen.getByText(lane)).toBeTruthy()
     const status = screen.getByText(method.loop.status.live)
     expect(status.getAttribute('aria-live')).toBe('polite')
+  })
+
+  it('renders the five-step timeline after the diagram, as the section last child', () => {
+    const { container } = render(<Method />)
+    const section = container.querySelector('section')
+    expect(Array.from(section?.children ?? []).map((child) => child.tagName)).toEqual(['DIV', 'DIV', 'OL'])
+    const list = screen.getByRole('list')
+    expect(list.tagName).toBe('OL')
+    expect(within(list).getAllByRole('listitem')).toHaveLength(method.steps.length)
+    expect(container.querySelector('[data-diagram-track]')).not.toBeNull()
+    expect(section?.lastElementChild).toBe(list)
   })
 
   it('arms the pinned scroll mode when motion is allowed', () => {
