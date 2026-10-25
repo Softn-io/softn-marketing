@@ -242,6 +242,21 @@ const auditInPage = ({
     offerKicker2: offerCards[1]?.querySelector('span') ?? null,
     offerTitle2: offerCards[1]?.querySelector('h3') ?? null,
     offerPill2: offerCards[1]?.querySelector('li') ?? null,
+    // Method (#13): the section, its content box (section rhythm), the heading and its highlighted
+    // second part, the intro, then the diagram's stage header — loop label and the announced status
+    // sentence. The SVG shapes are painted with `fill`/`stroke`, which the color probes above do not
+    // read; their token source is covered by `e2e/method.spec.ts` (lane label fill against the
+    // eyebrow's foreground-tertiary) and by the static audit in the QA report.
+    methodSection: document.getElementById(methodId),
+    methodContent: document.querySelector(`#${methodId} > div`),
+    methodEyebrow: document.querySelector(`#${methodId} > div > p`),
+    methodH2: document.querySelector(`#${methodId} h2`),
+    methodH2Highlight: document.querySelector(`#${methodId} h2 span`),
+    methodIntro: document.querySelector(`#${methodId} > div > p:last-of-type`),
+    methodTrack: document.querySelector('[data-diagram-track]'),
+    methodStage: document.querySelector('[data-diagram-stage]'),
+    methodLoopLabel: document.querySelector('[data-diagram-stage] > div > p'),
+    methodStatus: document.querySelector('[data-diagram-stage] [aria-live="polite"]'),
   }
 
   const mismatches: string[] = []

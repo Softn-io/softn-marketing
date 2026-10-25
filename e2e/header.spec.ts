@@ -80,6 +80,25 @@ const injectSections = async (page: Page) => {
 }
 
 /**
+ * Waits until the document's height stops changing from one frame to the next. Sections can grow
+ * once they hydrate — the method diagram arms its tall pinned track (`data-motion` adds 250vh/180vh
+ * to the page) — and a scroll performed against the server-rendered layout would silently land
+ * somewhere else once that growth shifts the content below it. Capped so a page that keeps
+ * mutating cannot hang the suite.
+ */
+const awaitStableDocumentHeight = async (page: Page): Promise<void> => {
+  await page.evaluate(async () => {
+    let last = -1
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      const height = document.documentElement.scrollHeight
+      if (height === last) return
+      last = height
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    }
+  })
+}
+
+/**
  * Scrolls the hero CTA fully above the viewport, waits for the header CTA to be revealed, then waits
  * for the `sn-pop` reveal to have **landed** (`opacity: 1`, no `translate`, no `scale`). The reveal
  * runs on `--softn-duration-sheet-drawer` (350 ms) and the wrapper's painted box is scaled during it,
@@ -299,6 +318,9 @@ test.describe('header: desktop', () => {
     await injectSections(page)
     await page.goto('/preview')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
+    // Scroll against the layout the sections have settled into, not the server-rendered one: the
+    // method diagram grows the page when it hydrates (see awaitStableDocumentHeight).
+    await awaitStableDocumentHeight(page)
     await page.evaluate(() => document.getElementById('coulisses')?.scrollIntoView())
     await expect(nav.getByRole('link', { name: BACKSTAGE_NAME })).toHaveAttribute('aria-current', 'location')
     await page.evaluate(() => window.scrollTo(0, 0))
