@@ -1,18 +1,19 @@
 import { SECTION_IDS } from '@/lib/anchors'
 import { method } from '@/locales/fr/method'
 import { MethodDiagram } from './MethodDiagram'
+import { MethodTimeline } from './MethodTimeline'
 import styles from './styles/Method.module.css'
 
 /** Id of the heading that names the section, also used by the diagram's surrounding copy. */
 const HEADING_ID = 'method-title'
 
 /**
- * Method section: eyebrow, a single `<h2>` whose second part carries the highlight, the intro and the
- * scroll-driven review-loop diagram.
+ * Method section: eyebrow, a single `<h2>` whose second part carries the highlight, the intro, the
+ * scroll-driven review-loop diagram and the five-step timeline that follows it.
  *
  * Every string comes from `locales/fr/method.ts`; the section itself is a server component and only
- * the diagram is a client island. The five-step timeline of the design is a later section and is not
- * rendered here.
+ * the diagram is a client island. The timeline pins and stacks one block per step as the reader
+ * scrolls it.
  */
 export const Method = () => (
   <section id={SECTION_IDS.method} aria-labelledby={HEADING_ID}>
@@ -24,5 +25,6 @@ export const Method = () => (
       <p className={`${styles.intro} text-body-md text-foreground-secondary`}>{method.intro}</p>
     </div>
     <MethodDiagram />
+    <MethodTimeline />
   </section>
 )

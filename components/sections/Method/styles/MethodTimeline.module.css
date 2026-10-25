@@ -1,0 +1,92 @@
+/*
+ * Method section, timeline. Colors, spacing, type and motion come from --softn-* tokens; this file
+ * only holds what has no utility: the sticky stacking of the blocks and the caption line.
+ */
+
+/*
+ * Sticky timeline. The blocks pin under the sticky site header and pile up as the reader scrolls:
+ * each one pins one step lower than the block above it, so the caption lines of the steps already
+ * pinned stay readable above the current one, and each block's opaque page background paints over
+ * the ones behind it. Sticky stacking is layout, not motion: nothing here animates, and
+ * `prefers-reduced-motion` leaves the pile alone.
+ */
+.timeline {
+  /*
+   * Clearance of the sticky site header, built the way the site already builds it: the header's
+   * tallest row item is a --softn-space-10 control (theme toggle, menu button) and the header pads
+   * --softn-space-4 above and below it, which is the same sum `app/globals.css` keeps its anchor
+   * targets clear with. No magic pixel value, and nothing here redefines a --softn-* token.
+   */
+  --method-header-clearance: calc(var(--softn-space-10) + var(--softn-space-8));
+
+  padding-block-start: clamp(var(--softn-space-8), 6vw, var(--softn-space-16));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+/*
+ * The design's settle spacer, about one viewport tall. It stays inside the list on purpose: it
+ * extends the sticky containing block of the last block, so the pile keeps its pin for one more
+ * screen before the section ends — appended after the list, the same spacer would release the last
+ * block as soon as the list's own bottom passes.
+ */
+.timeline::after {
+  content: '';
+  display: block;
+  block-size: 100vh;
+  block-size: 100svh;
+}
+
+/*
+ * Sticky offset of a block: its zero-based index — the --method-step-index custom property the
+ * component sets inline on every block — times the stagger step below. The design pins each block
+ * 30px below the previous one; one --softn-space-8 step (32px) is the closest token, and the
+ * smallest one that still leaves a whole caption line, with its top padding, visible above the block
+ * covering it. Deriving the offset from the index keeps the stagger right for any number of steps.
+ */
+.step {
+  /*
+   * A block without an index falls back to 0 and pins at the header clearance itself.
+   */
+  --method-step-offset: calc(var(--method-step-index, 0) * var(--softn-space-8));
+
+  position: sticky;
+  top: calc(var(--method-header-clearance) + var(--method-step-offset));
+  max-inline-size: 56ch;
+  padding-block: var(--softn-space-3) clamp(var(--softn-space-6), 3.4vw, var(--softn-space-8));
+  margin-block-end: clamp(var(--softn-space-6), 4vw, var(--softn-space-10));
+  border-block-start: 1px solid var(--softn-border-subtle);
+  /* Opaque page background: every block covers the ones already pinned behind it. */
+  background-color: var(--softn-background);
+}
+
+/* The design gives the last block no bottom margin: its spacer follows straight away. */
+.step:last-child {
+  margin-block-end: var(--softn-space-0);
+}
+
+.caption {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-3);
+}
+
+/*
+ * Decorative brand dot opening the caption line. The design draws it at 9px; the token scale
+ * publishes one dot size (--softn-size-dotIndicator, 5px), the one the rest of the site already uses.
+ */
+.dot {
+  flex: none;
+  inline-size: var(--softn-size-dotIndicator);
+  block-size: var(--softn-size-dotIndicator);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-brand-vivid);
+}
+
+/* The design's 14px gaps under the caption and under the title: one --softn-space-3 step (12px). */
+.stepTitle {
+  margin-block-start: var(--softn-space-3);
+}
+
+.stepText {
+  margin-block-start: var(--softn-space-3);
+}
