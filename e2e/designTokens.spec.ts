@@ -257,6 +257,15 @@ const auditInPage = ({
     methodStage: document.querySelector('[data-diagram-stage]'),
     methodLoopLabel: document.querySelector('[data-diagram-stage] > div > p'),
     methodStatus: document.querySelector('[data-diagram-stage] [aria-live="polite"]'),
+    // Method timeline (#14): the list, its first block and the four elements that paint inside it —
+    // caption line, decorative dot, step title, step text. The pin offsets themselves are covered by
+    // `e2e/methodTimeline.spec.ts` against the live header height.
+    methodTimeline: document.querySelector(`#${methodId} > ol`),
+    methodStep: document.querySelector(`#${methodId} > ol > li`),
+    methodStepCaption: document.querySelector(`#${methodId} > ol > li > p`),
+    methodStepDot: document.querySelector(`#${methodId} > ol > li > p > span`),
+    methodStepTitle: document.querySelector(`#${methodId} > ol > li > h3`),
+    methodStepText: document.querySelector(`#${methodId} > ol > li > h3 + p`),
   }
 
   const mismatches: string[] = []
