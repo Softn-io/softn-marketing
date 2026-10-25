@@ -46,7 +46,7 @@ After the `git-pr` worker reports success, verify yourself that the PR exists an
 
 The shared role contracts are in `docs/orchestration/roles/<role>.md`; both the Claude and the OpenCode agent files point to them.
 
-To move a role to OpenCode: create `.opencode/agents/<role>.md` (model and permissions in its frontmatter), change Harness to `opencode` and Agent file to that path, and leave Model empty. `nextjs-dev` stays on `claude` until a replay on an already merged PR shows that its OpenCode model produces acceptable work.
+To move a role to OpenCode: create `.opencode/agents/<role>.md` (model and permissions in its frontmatter), change Harness to `opencode` and Agent file to that path, and leave Model empty. 
 
 ## Harness rules
 

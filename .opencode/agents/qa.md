@@ -1,7 +1,7 @@
 ---
 description: QA engineer for the softn.io site. Verifies and writes tests, never fixes application code.
 mode: primary
-model: openrouter/z-ai/glm-5.3#max
+model: openrouter/z-ai/glm-5.3-flash#max
 permissions:
   - action: edit
     resource: "*"
