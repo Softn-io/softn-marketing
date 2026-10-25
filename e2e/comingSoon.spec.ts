@@ -3,7 +3,7 @@
  *
  * The home page is the single-screen launch page (`components/sections/ComingSoon/`): header with
  * the wordmark and the theme toggle, left-aligned launch copy under the giant decorative
- * `aria-hidden` « softn.io » wordmark, the Airtable-backed e-mail waitlist form, and the
+ * the `aria-hidden` « softn.io » wordmark, the Baserow-backed e-mail waitlist form, and the
  * copyright footer, over the shared `PointerGlow` backdrop. The full one-page site stays
  * behind the gated `/preview` route, covered by the retargeted `header`/`hero`/`offers`/`theme`/
  * `accessibility`/`designTokens` specs and `e2e/preview.spec.ts`.
@@ -21,8 +21,8 @@
  * - the anti-spam paths: a filled honeypot and a submission under two seconds both answer with the
  *   success state *without* a Server Action call;
  * - the Server Action paths: a mocked success response interpolates the submitted e-mail in the
- *   success message, and a missing Airtable environment surfaces the generic server error — the
- *   real Airtable API is never called (its origin is routed to a hard failure in every test, so an
+ *   success message, and a missing Baserow environment surfaces the generic server error — the
+ *   real Baserow API is never called (its origin is routed to a hard failure in every test, so an
  *   accidental live call aborts loudly instead of writing a record);
  * - the keyboard-only journey (Tab reaches every control, Enter submits, the focus ring stays
  *   visible) and `prefers-reduced-motion` (no infinite animation runs);
@@ -40,7 +40,7 @@
  * is an RSC stream (`text/x-component`) whose `1:` row holds the serialized `WaitlistResult`.
  * `mockWaitlistAction` fetches the real response and replaces that row with the wanted result, so
  * the React client resolves `useActionState` through the genuine decoding path. The server-side
- * run is harmless without an Airtable environment, and the Airtable origin is hard-aborted in
+ * run is harmless without a Baserow environment, and the Baserow origin is hard-aborted in
  * every test: no test can write a live record.
  */
 import { AxeBuilder } from '@axe-core/playwright'
@@ -73,8 +73,9 @@ const EMAIL = 'mel@example.fr'
  * The real POST is fetched (`route.fetch()`), so the RSC stream's shape (`text/x-component`, the
  * `0:` flight root with its build id) is genuine, and only the `1:` row — the serialized
  * `WaitlistResult` — is replaced. The React client then decodes the patched stream through its
- * real production path. The server-side run stays harmless: the test server has no Airtable
- * environment, and the Airtable origin is hard-aborted in every test (see `guardAirtable`).
+ * real production path. The server-side run stays harmless: the test server has no Baserow
+ * environment (`playwright.config.ts` blanks every provider key), and the Baserow origin is
+ * hard-aborted in every test (see `guardBaserow`).
  */
 const mockWaitlistAction = (page: Page, result: unknown): void => {
   void page.route('**/*', (route) => {
@@ -93,16 +94,43 @@ const mockWaitlistAction = (page: Page, result: unknown): void => {
 }
 
 /**
- * Blocks the real Airtable API for the whole file and records every non-localhost request, so a
- * live call aborts loudly instead of writing a record, and the consent check has its list.
+ * Every host a waitlist write could reach: Baserow Cloud plus the configured `BASEROW_API_URL`
+ * origin, so a self-hosted instance is blocked too. `process.env.BASEROW_API_URL` here is the
+ * test-runner process, not the server under test: the server's own URL is blanked in
+ * `playwright.config.ts`, so its helper never issues a request at all.
  */
-const guardAirtable = (page: Page): string[] => {
+const BASEROW_HOSTS = ['api.baserow.io']
+if (process.env.BASEROW_API_URL) {
+  try {
+    BASEROW_HOSTS.push(new URL(process.env.BASEROW_API_URL).hostname)
+  } catch {
+    /* not a parseable URL: nothing extra to block */
+  }
+}
+
+/** Whether a request URL targets a waitlist provider host. */
+const isBaserowRequest = (url: string): boolean => {
+  try {
+    return BASEROW_HOSTS.includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Blocks the real Baserow API (Cloud or the configured `BASEROW_API_URL`) for the whole file and
+ * records every non-localhost request, so a live call aborts loudly instead of writing a record,
+ * and the consent check has its list. Browser-side requests only: the Server Action's
+ * server-side calls are not interceptable by `page.route`, which is why `playwright.config.ts`
+ * blanks every provider key on the test server.
+ */
+const guardBaserow = (page: Page): string[] => {
   const external: string[] = []
   page.on('request', (request) => {
     const { hostname } = new URL(request.url())
     if (hostname !== 'localhost' && !hostname.startsWith('127.')) external.push(request.url())
   })
-  void page.route('**://api.airtable.com/**', (route) => route.abort())
+  for (const host of BASEROW_HOSTS) void page.route(`**://${host}/**`, (route) => route.abort())
   return external
 }
 
@@ -135,6 +163,29 @@ const emailField = (page: Page): Locator => page.getByLabel(form.label, { exact:
  * or success) is the last one.
  */
 const visibleAnnouncement = (page: Page, text: string): Locator => page.getByText(text).last()
+
+/**
+ * The *visible* success paragraph (PR #92 follow-up): the only `<p>` carrying a `<strong>`,
+ * because the submitted address renders bold inside the interpolated sentence. The `aria-live`
+ * status region is a separate `role="status"` node, never this one.
+ */
+const successParagraph = (page: Page): Locator => page.locator('p:has(strong)')
+
+/**
+ * Asserts the bold success state (issue #91, PR #92 follow-up): the visible paragraph holds
+ * exactly one `<strong>` whose text is the submitted address, the paragraph's full text is the
+ * interpolated locale sentence, and the live region announces the same sentence as plain text —
+ * the bold styling never reaches the announcement.
+ */
+const expectBoldSuccess = async (page: Page, address: string): Promise<void> => {
+  const sentence = form.success.replace('{email}', address)
+  const paragraph = successParagraph(page)
+  const bold = paragraph.locator('strong')
+  await expect(bold).toHaveCount(1)
+  await expect(bold).toHaveText(address)
+  await expect(paragraph).toHaveText(sentence)
+  await expect(page.getByRole('status')).toHaveText(sentence)
+}
 
 test.describe('coming-soon: structure and copy', () => {
   test('header wordmark link, theme toggle, single h1 and both body lines render from the locales', async ({
@@ -339,7 +390,7 @@ test.describe('coming-soon: indexed metadata', () => {
 
 test.describe('coming-soon: waitlist form', () => {
   test.beforeEach(async ({ page }) => {
-    guardAirtable(page)
+    guardBaserow(page)
     // The clock is installed *before* navigation so the form's `startedAt` ref (written on
     // hydration) and the anti-spam delay are both deterministic: `runFor` simulates the seconds a
     // visitor would spend, no real sleeps.
@@ -427,7 +478,7 @@ test.describe('coming-soon: waitlist form', () => {
 
     await page.getByRole('button', { name: form.submit }).click()
 
-    await expect(visibleAnnouncement(page, form.success.replace('{email}', EMAIL))).toBeVisible()
+    await expectBoldSuccess(page, EMAIL)
     await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
     expect(posts, 'no Server Action POST may leave the browser for a trapped bot').toEqual([])
   })
@@ -437,16 +488,42 @@ test.describe('coming-soon: waitlist form', () => {
   }) => {
     const posts: string[] = []
     page.on('request', (request) => {
-      if (request.method() === 'POST') posts.push(request.url())
+      if (request.method() === 'POST') {
+        // Diagnostics for a leak observed on this test in mixed parallel batches (see the QA
+        // report): the body and the Next-Action header tell a Server Action POST from a native
+        // pre-hydration submit, and the response shows what the server answered.
+        console.log('LEAKED POST headers:', JSON.stringify(request.headers()))
+        console.log('LEAKED POST body:', request.postData())
+        posts.push(request.url())
+      }
+    })
+    page.on('response', async (response) => {
+      if (response.request().method() === 'POST') {
+        try {
+          console.log('LEAKED POST response status:', response.status())
+          console.log('LEAKED POST response body:', (await response.text()).slice(0, 2000))
+        } catch {
+          console.log('LEAKED POST response: not readable')
+        }
+      }
     })
 
+    // The fake clock flows in real time after `install`, so under parallel load the gap between
+    // hydration (which stamps `startedAt`) and the click is uncontrolled real time, and it can
+    // cross the two-second window on its own: the trap then misses and the form really submits.
+    // The clock is therefore frozen *before* the form is touched: the +500 ms jump lands the
+    // freeze safely in the future (the clock keeps ticking across the evaluate roundtrip, and a
+    // bare `now` reads as fast-forwarding to the past), and with the 1000 ms `runFor` the
+    // submission ends up 1.0–1.5 s old — always under the two-second delay, a bot's giveaway,
+    // whatever the machine load.
+    const fakeNow = await page.evaluate(() => Date.now())
+    await page.clock.pauseAt(new Date(fakeNow + 500))
     await emailField(page).fill(EMAIL)
-    // 1.5 s after hydration: under the two-second delay, a bot's giveaway.
-    await page.clock.runFor(1500)
+    await page.clock.runFor(1000)
 
     await page.getByRole('button', { name: form.submit }).click()
 
-    await expect(visibleAnnouncement(page, form.success.replace('{email}', EMAIL))).toBeVisible()
+    await expectBoldSuccess(page, EMAIL)
     await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
     expect(posts, 'no Server Action POST may leave the browser for a too-fast bot').toEqual([])
   })
@@ -459,15 +536,111 @@ test.describe('coming-soon: waitlist form', () => {
 
     await page.getByRole('button', { name: form.submit }).click()
 
-    // The locale template interpolates the submitted address into the success copy.
-    const success = visibleAnnouncement(page, form.success.replace('{email}', EMAIL))
-    await expect(success).toBeVisible()
+    // The bold success state: the submitted address is the paragraph's only `<strong>`, the
+    // paragraph keeps the full interpolated locale sentence, and the live region announces that
+    // sentence as plain text.
+    await expectBoldSuccess(page, EMAIL)
     await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
-    // The live region announces the same message for assistive technology.
-    await expect(page.getByRole('status')).toHaveText(form.success.replace('{email}', EMAIL))
   })
 
-  test('a mocked Airtable failure surfaces the generic server error and keeps the form', async ({ page }) => {
+  test('a markup-like submitted address renders as bold text, never as HTML', async ({ page }) => {
+    mockWaitlistAction(page, { ok: true })
+
+    // The address carries real markup characters; the client-side pattern still accepts it.
+    const address = '<b>x</b>@example.fr'
+    await emailField(page).fill(address)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    // React renders the address as one text node inside the `<strong>`: nothing in it may become
+    // an element, on this page or inside the bold itself.
+    await expectBoldSuccess(page, address)
+    await expect(page.locator('b'), 'the markup-like address never creates an element').toHaveCount(0)
+    await expect(successParagraph(page).locator('strong *'), 'the bold holds plain text only').toHaveCount(0)
+  })
+
+  test('the bold address uses a package weight token and adds no other raw value', async ({ page }) => {
+    mockWaitlistAction(page, { ok: true })
+
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(successParagraph(page)).toBeVisible()
+
+    /*
+     * QA 4a-1, scoped to the new `<strong>` only (narrowed pass): its font-weight must resolve to
+     * a value the `@softnio-labs/tokens` package declares, and the element may add no other design
+     * value of its own — every other typography property must stay inherited from its parent, so
+     * the bold introduces no new raw value. The specific token is Mel's call (it already moved
+     * from title-md to title-sm during this pass), so the audit pins membership and inheritance,
+     * never the token name.
+     */
+    type BoldAudit = {
+      fontWeight: string
+      weightTokens: Record<string, string>
+      colorInherited: boolean
+      fontSizeInherited: boolean
+      lineHeightInherited: boolean
+      fontFamilyInherited: boolean
+      letterSpacingInherited: boolean
+    }
+    const audit = await page.evaluate((): BoldAudit => {
+      const strong = document.querySelector('p strong')
+      if (strong === null) throw new Error('no <strong> in the success paragraph')
+      const parent = strong.parentElement
+      if (parent === null) throw new Error('the <strong> has no parent')
+
+      // Resolve every --softn-font-weight-* token the page declares through a probe span.
+      const probe = document.createElement('span')
+      probe.style.fontSize = '100px'
+      document.body.appendChild(probe)
+      const probeStyle = getComputedStyle(probe)
+      const weightTokens: Record<string, string> = {}
+      for (const name of Array.from(getComputedStyle(document.documentElement))) {
+        if (!name.startsWith('--softn-font-weight-')) continue
+        probe.style.fontWeight = `var(${name})`
+        weightTokens[name] = probeStyle.fontWeight
+      }
+      probe.remove()
+
+      const style = getComputedStyle(strong)
+      const parentStyle = getComputedStyle(parent)
+      const inherited = (key: 'color' | 'fontSize' | 'lineHeight' | 'fontFamily' | 'letterSpacing'): boolean =>
+        style[key] === parentStyle[key]
+      return {
+        fontWeight: style.fontWeight,
+        weightTokens,
+        colorInherited: inherited('color'),
+        fontSizeInherited: inherited('fontSize'),
+        lineHeightInherited: inherited('lineHeight'),
+        fontFamilyInherited: inherited('fontFamily'),
+        letterSpacingInherited: inherited('letterSpacing'),
+      }
+    })
+
+    expect(Object.keys(audit.weightTokens).length, 'package font-weight tokens resolved').toBeGreaterThan(0)
+    expect(
+      Object.values(audit.weightTokens),
+      `the bold font-weight ${audit.fontWeight} must be a package token value`,
+    ).toContain(audit.fontWeight)
+    const matchingTokens = Object.entries(audit.weightTokens)
+      .filter(([, value]) => value === audit.fontWeight)
+      .map(([name]) => name)
+    test.info().annotations.push({
+      type: 'measure',
+      description: `the bold font-weight ${audit.fontWeight} resolves package token(s): ${matchingTokens.join(', ')}`,
+    })
+    expect(audit.colorInherited, 'the bold adds no new color').toBe(true)
+    expect(audit.fontSizeInherited, 'the bold adds no new font-size').toBe(true)
+    expect(audit.lineHeightInherited, 'the bold adds no new line-height').toBe(true)
+    expect(audit.fontFamilyInherited, 'the bold adds no new font-family').toBe(true)
+    expect(audit.letterSpacingInherited, 'the bold adds no new letter-spacing').toBe(true)
+  })
+
+  test('a mocked Baserow failure surfaces the generic server error and keeps the form', async ({ page }) => {
     mockWaitlistAction(page, { ok: false, error: 'server' })
 
     await emailField(page).fill(EMAIL)
@@ -484,17 +657,16 @@ test.describe('coming-soon: waitlist form', () => {
   })
 })
 
-test.describe('coming-soon: the real Server Action without an Airtable environment', () => {
+test.describe('coming-soon: the real Server Action without a Baserow environment', () => {
   /*
    * The honest end-to-end path: the real Server Action runs (no `mockWaitlistAction` here), finds
-   * no `AIRTABLE_WAITLIST_TABLE_ID` on the test server and answers the generic `server` error —
-   * the same message the mock above replays. The Airtable origin stays hard-aborted, so this test
-   * cannot write a live record even if the environment changed under it.
+   * no `BASEROW_WAITLIST_TABLE_ID` on the test server (`playwright.config.ts` blanks every
+   * provider key) and answers the generic `server` error — the same message the mock above
+   * replays. The Baserow origin stays hard-aborted, so this test cannot write a live record even
+   * if the environment changed under it.
    */
-  test('the missing Airtable environment surfaces the generic server error, with no Airtable call', async ({
-    page,
-  }) => {
-    const external = guardAirtable(page)
+  test('the missing Baserow environment surfaces the generic server error, with no Baserow call', async ({ page }) => {
+    const external = guardBaserow(page)
     await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
     await page.goto('/')
     await expect(emailField(page)).toBeVisible()
@@ -505,7 +677,8 @@ test.describe('coming-soon: the real Server Action without an Airtable environme
 
     await expect(visibleAnnouncement(page, form.errorServer)).toBeVisible()
     await expect(page.getByRole('button', { name: form.submit })).toBeVisible()
-    expect(external, 'third-party requests (Airtable included)').toEqual([])
+    expect(external, 'third-party requests').toEqual([])
+    expect(external.filter(isBaserowRequest), 'the browser never requests the Baserow host').toEqual([])
   })
 })
 
@@ -513,7 +686,7 @@ test.describe('coming-soon: keyboard-only journey', () => {
   test('every control is reachable with Tab alone, Enter submits and the focus ring stays visible', async ({
     page,
   }) => {
-    guardAirtable(page)
+    guardBaserow(page)
     mockWaitlistAction(page, { ok: true })
     await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
     await page.goto('/')
@@ -558,7 +731,7 @@ test.describe('coming-soon: keyboard-only journey', () => {
 
 test.describe('coming-soon: reduced motion', () => {
   test('no infinite animation runs when motion is reduced', async ({ page }) => {
-    guardAirtable(page)
+    guardBaserow(page)
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.goto('/')
     await expect(page.getByRole('banner')).toBeVisible()
@@ -866,13 +1039,166 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
   }
 })
 
+test.describe('coming-soon: axe on the success state (WCAG 2.1 AA)', () => {
+  /*
+   * Success state only (narrowed pass, PR #92 follow-up): after a mocked successful signup the
+   * form is gone and the bold address paragraph is on screen, so this audit covers exactly the
+   * new markup — the `<strong>` inside the visible paragraph and the plain-text live region — in
+   * both themes. Reported color-contrast nodes are re-measured on rendered sRGB pixels for the
+   * same reason as the form-state audit above: axe 4.14 misparses the `lab()` computed colors
+   * `@softnio-labs/tokens` produces, so a violation is only trusted once the real painted pixels
+   * confirm it. The bold address is then measured directly: making the address bold must not
+   * break its contrast (16 px bold is not "large text": 4.5:1 stays the bar).
+   */
+  type RenderedRatio = { target: string; fg: string; bg: string; ratio: number }
+  const measureRendered = (targets: ReadonlyArray<ReadonlyArray<string | readonly string[]>>): RenderedRatio[] => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    if (ctx === null) throw new Error('no 2d context')
+    /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation. */
+    const toSrgb = (value: string): [number, number, number] | null => {
+      if (value === 'transparent') return null
+      ctx.fillStyle = '#010203'
+      ctx.fillStyle = value
+      if (String(ctx.fillStyle) === '#010203' && value !== '#010203') throw new Error(`unparsable: ${value}`)
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillRect(0, 0, 1, 1)
+      const pixel = ctx.getImageData(0, 0, 1, 1).data
+      if ((pixel[3] ?? 0) === 0) return null
+      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+    }
+    const luminance = (rgb: [number, number, number]): number => {
+      const lin = rgb.map((channel) => {
+        const s = channel / 255
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+    }
+    const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+      const la = luminance(a)
+      const lb = luminance(b)
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+    }
+    const resolve = (parts: ReadonlyArray<string | readonly string[]>): Element | null => {
+      let root: ParentNode = document
+      let last: Element | null = null
+      for (const part of parts) {
+        const selector = typeof part === 'string' ? part : part.join('')
+        const found: Element | null = root.querySelector(selector)
+        if (found === null) return null
+        last = found
+        root = found.shadowRoot ?? found
+      }
+      return last
+    }
+    return targets.map((parts) => {
+      const element = resolve(parts)
+      if (element === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+      const style = getComputedStyle(element)
+      const fg = toSrgb(style.color)
+      let bg = toSrgb(style.backgroundColor)
+      let ancestor = element.parentElement
+      while (bg === null && ancestor !== null) {
+        bg = toSrgb(getComputedStyle(ancestor).backgroundColor)
+        ancestor = ancestor.parentElement
+      }
+      if (fg === null || bg === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+      return {
+        target: JSON.stringify(parts),
+        fg: `rgb(${fg.map((c) => String(Math.round(c))).join(', ')})`,
+        bg: `rgb(${bg.map((c) => String(Math.round(c))).join(', ')})`,
+        ratio: ratio(fg, bg),
+      }
+    })
+  }
+
+  for (const scheme of SCHEMES) {
+    test(`clean in the ${scheme} theme after a successful signup, bold address included`, async ({ page }) => {
+      guardBaserow(page)
+      await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
+      await gotoWithTheme(page, scheme)
+      mockWaitlistAction(page, { ok: true })
+      await expect(emailField(page)).toBeVisible()
+
+      await emailField(page).fill(EMAIL)
+      await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+      await page.getByRole('button', { name: form.submit }).click()
+
+      // The audit targets the success state: the bold paragraph, not the form.
+      await expectBoldSuccess(page, EMAIL)
+      await awaitFonts(page)
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
+
+      const contrastViolations = results.violations.filter((violation) => violation.id === 'color-contrast')
+      const otherViolations = results.violations.filter((violation) => violation.id !== 'color-contrast')
+      expect(
+        otherViolations,
+        `coming-soon success (${scheme}): ${String(otherViolations.length)} non-color-contrast WCAG 2.1 A/AA violation(s)\n${otherViolations
+          .map(
+            (violation) =>
+              `- ${violation.id}: ${violation.help} at ${violation.nodes.map((node) => node.target.join(' >>> ')).join(' | ')}`,
+          )
+          .join('\n')}`,
+      ).toHaveLength(0)
+
+      const violationTargets = contrastViolations.flatMap((violation) => violation.nodes.map((node) => node.target))
+      const boldTarget: ReadonlyArray<string | readonly string[]> = ['p:has(strong)', 'strong']
+      const ratios = await page.evaluate(measureRendered, [...violationTargets, boldTarget])
+      for (const measured of ratios) {
+        expect(
+          measured.ratio,
+          `rendered contrast on ${measured.target}: ${measured.fg} on ${measured.bg} must keep 4.5:1 (axe 4.14 misparses lab() computed colors — see the form-state audit)`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+      test.info().annotations.push({
+        type: 'measure',
+        description: `success state (${scheme}): rendered contrast ${
+          ratios
+            .map((measured) => `${measured.fg} on ${measured.bg} = ${measured.ratio.toFixed(2)}:1 (${measured.target})`)
+            .join(' | ') || 'none measured'
+        }`,
+      })
+
+      // Non-vacuity: the copy the audit cannot resolve (the lab() colors) must include the new
+      // success sentence — axe really looked at the state under test.
+      const incompleteContrast = results.incomplete.find((rule) => rule.id === 'color-contrast')
+      expect(incompleteContrast, 'axe reported no color-contrast incomplete nodes at all').toBeTruthy()
+      const lookedAt = await page.evaluate(
+        (targets) =>
+          targets.map((parts) => {
+            let root: ParentNode = document
+            let last: Element | null = null
+            for (const part of parts) {
+              const selector = typeof part === 'string' ? part : part.join('')
+              const found: Element | null = root.querySelector(selector)
+              if (found === null) return ''
+              last = found
+              root = found.shadowRoot ?? found
+            }
+            return last?.textContent ?? ''
+          }),
+        (incompleteContrast?.nodes ?? []).map((node) => node.target),
+      )
+      const needle = form.success.slice(0, 12)
+      expect(
+        lookedAt.some((text) => text.includes(needle)),
+        `axe looked at the success copy that contains "${needle}" (it lands in the incomplete set)`,
+      ).toBe(true)
+    })
+  }
+})
+
 test.describe('coming-soon: consent and privacy', () => {
-  test('no third-party request before consent', async ({ page }) => {
-    const external = guardAirtable(page)
+  test('no third-party request before consent, and never the Baserow host', async ({ page }) => {
+    const external = guardBaserow(page)
     await page.goto('/')
     await expect(page.getByRole('banner')).toBeVisible()
     await awaitFonts(page)
     expect(external, 'third-party requests').toEqual([])
+    expect(external.filter(isBaserowRequest), 'the browser never requests the Baserow host').toEqual([])
   })
 })
 
