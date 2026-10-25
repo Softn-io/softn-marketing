@@ -291,6 +291,26 @@
   }
 }
 
+/*
+ * Tablet renders the wide drawing, but the viewport scales its viewBox down, which paints the caption
+ * lane labels at 8-10px: they take the narrow layout's size instead. The stage sizes to its content,
+ * like the narrow one, rather than stretching the pinned area over the whole viewport. The drawing
+ * coordinates stay the design's own.
+ */
+@media (47.5rem <= width <= 64rem) {
+  .stage {
+    padding-block: var(--softn-space-5);
+  }
+
+  .track[data-motion='scroll'] .stage {
+    min-height: auto;
+  }
+
+  .label {
+    font-size: var(--softn-font-size-title-sm);
+  }
+}
+
 @keyframes method-dash {
   to {
     stroke-dashoffset: -48;
