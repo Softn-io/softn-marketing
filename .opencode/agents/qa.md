@@ -76,6 +76,9 @@ permissions:
     resource: "e2e/**"
     effect: allow
   - action: edit
+    resource: "playwright.config.ts"
+    effect: allow
+  - action: edit
     resource: ".orchestration/reports/**"
     effect: allow
   - action: read
