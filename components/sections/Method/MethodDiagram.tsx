@@ -10,7 +10,7 @@ import {
   type MethodDiagramLayout,
   type MethodDiagramStatus,
 } from './data/methodGeometry'
-import styles from './styles/Method.module.css'
+import styles from './styles/MethodDiagram.module.css'
 
 /** Drawing layout the SVG renders on the server, where the viewport is unknown. */
 const SERVER_LAYOUT: MethodDiagramLayout = 'wide'

@@ -1,6 +1,6 @@
 import { method } from '@/locales/fr/method'
 import { METHOD_BLOCK_COUNT, METHOD_FAILING_BLOCK_INDEX, type MethodDiagramLayout } from './data/methodGeometry'
-import styles from './styles/Method.module.css'
+import styles from './styles/MethodDiagram.module.css'
 
 /** Id of the clip that reveals the review line as its lane grows. */
 const REVIEW_CLIP_ID = 'method-review-lane-clip'
