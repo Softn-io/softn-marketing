@@ -74,8 +74,12 @@ const readGeometry = (page: Page): Promise<DiagramGeometry> =>
 
 /** Scroll position at which the pinned choreography reaches a given progress. */
 const scrollYForProgress = (geometry: DiagramGeometry, progress: number): number =>
-  geometry.trackTop - geometry.stickyTop +
-  Math.min(geometry.trackHeight - geometry.stageHeight, geometry.maxScrollY - (geometry.trackTop - geometry.stickyTop)) *
+  geometry.trackTop -
+  geometry.stickyTop +
+  Math.min(
+    geometry.trackHeight - geometry.stageHeight,
+    geometry.maxScrollY - (geometry.trackTop - geometry.stickyTop),
+  ) *
     progress
 
 /** Collects console errors, page errors and hydration-related warnings for one page. */
@@ -129,15 +133,18 @@ test.describe('method diagram, desktop', () => {
     // The image is exposed once, named by the locale, with its drawing texts hidden from AT.
     await expect(svg(page)).toHaveAttribute('role', 'img')
     await expect(svg(page)).toHaveAttribute('aria-label', method.loop.ariaLabel)
-    const hiddenStates = await svg(page).locator('text').evaluateAll((texts) =>
-      texts.map((text) => text.getAttribute('aria-hidden')),
-    )
+    const hiddenStates = await svg(page)
+      .locator('text')
+      .evaluateAll((texts) => texts.map((text) => text.getAttribute('aria-hidden')))
     expect(hiddenStates).toHaveLength(3)
     for (const state of hiddenStates) expect(state).toBe('true')
 
     // The drawing's lane labels are painted with `fill`, which the token audit's color probes do not
     // read: their fill must be the same tertiary color the section eyebrow uses, in the live theme.
-    const labelFill = await svg(page).locator('text').first().evaluate((element) => getComputedStyle(element).fill)
+    const labelFill = await svg(page)
+      .locator('text')
+      .first()
+      .evaluate((element) => getComputedStyle(element).fill)
     const eyebrowColor = await page
       .locator(`section#${SECTION_IDS.method} > div > p.text-caption`)
       .evaluate((element) => getComputedStyle(element).color)
@@ -166,8 +173,8 @@ test.describe('method diagram, desktop', () => {
 
     // The keyboard never enters the diagram: nothing inside the track can hold focus, so the pinned
     // stage cannot swallow focus or hide a focus ring.
-    const focusables = await track(page).evaluate((element) =>
-      element.querySelectorAll('a, button, input, select, textarea, [tabindex]').length,
+    const focusables = await track(page).evaluate(
+      (element) => element.querySelectorAll('a, button, input, select, textarea, [tabindex]').length,
     )
     expect(focusables).toBe(0)
 
@@ -233,9 +240,7 @@ test.describe('method diagram, desktop', () => {
     await page.evaluate((y) => window.scrollTo(0, y), pinStart + travel + 300)
     await nextFrame(page)
     const releasedTop = await stage(page).evaluate((element) => element.getBoundingClientRect().top)
-    expect(releasedTop, 'the stage left the pinned offset upwards with the page').toBeLessThan(
-      geometry.stickyTop - 100,
-    )
+    expect(releasedTop, 'the stage left the pinned offset upwards with the page').toBeLessThan(geometry.stickyTop - 100)
     expect(releasedTop).toBeGreaterThan(geometry.stickyTop - 500)
     expect(await computedVar(stage(page), '--method-lane-live')).toBe('1')
   })
@@ -266,5 +271,150 @@ test.describe('method diagram, narrow', () => {
     expect(await computedVar(stage(page), '--method-lane-live')).toBe('1')
 
     expect(problems, 'no console errors and no hydration warnings on the narrow page').toEqual([])
+  })
+})
+
+/*
+ * The tablet band (47.5rem <= width <= 64rem, inclusive at both ends) still draws the wide picture,
+ * but the viewport scales its viewBox down: the caption-size lane labels would paint at 8-10px, so
+ * the band gives them the narrow layout's 18px step, and the stage sizes to its content instead of
+ * stretching over the viewport below the header (Mel's tablet rules, issue #13). The step back to
+ * the 11px caption happens only at 1025px.
+ */
+test.describe('method diagram, tablet', () => {
+  test.use({ viewport: { width: 768, height: 1024 } })
+
+  test('keeps the wide drawing at 18px labels on a content-sized pinned stage', async ({ page }) => {
+    const problems = collectConsoleProblems(page)
+    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' })
+    await page.goto('/preview')
+    await expect(track(page)).toHaveAttribute('data-motion', 'scroll')
+    await page.evaluate(() => document.fonts.ready)
+
+    // The tablet band keeps the wide drawing: only the label size and the stage box differ.
+    await expect(svg(page)).toHaveAttribute('viewBox', '0 0 960 300')
+    const geometry = await readGeometry(page)
+    expect(geometry.stagePosition).toBe('sticky')
+    expect(Math.abs(geometry.trackHeight - 1024 * 2.5), 'the tablet track stays 250vh').toBeLessThanOrEqual(2)
+
+    // The stage sizes to its content like the narrow one: with the base rule it would stretch over
+    // the viewport below the header (~930px at this height); the content-sized box stays far below
+    // that, at roughly 300px.
+    expect(geometry.stageHeight, 'the tablet stage sizes to its content').toBeLessThan(500)
+
+    // The lane labels take the narrow layout's 18px step: the scaled-down caption would paint at
+    // about 8px, below every legibility floor.
+    const labelSizes = await svg(page)
+      .locator('text')
+      .evaluateAll((texts) => texts.map((text) => getComputedStyle(text).fontSize))
+    expect(labelSizes).toEqual(['18px', '18px', '18px'])
+
+    // The labels still paint the live theme's tertiary color, the eyebrow's own token.
+    const labelFill = await svg(page)
+      .locator('text')
+      .first()
+      .evaluate((element) => getComputedStyle(element).fill)
+    const eyebrowColor = await page
+      .locator(`section#${SECTION_IDS.method} > div > p.text-caption`)
+      .evaluate((element) => getComputedStyle(element).color)
+    expect(labelFill).toBe(eyebrowColor)
+
+    // The pinned stage holds its top offset mid-choreography, then the page-end cap still walks the
+    // diagram to completion.
+    await page.evaluate((y) => window.scrollTo(0, y), scrollYForProgress(geometry, 0.3))
+    await nextFrame(page)
+    await expect(statusRegion(page)).toHaveText(method.loop.status.rising)
+    expect(await stage(page).evaluate((element) => element.getBoundingClientRect().top)).toBeCloseTo(
+      geometry.stickyTop,
+      0,
+    )
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await nextFrame(page)
+    await expect(statusRegion(page)).toHaveText(method.loop.status.live)
+    expect(await computedVar(stage(page), '--method-lane-live')).toBe('1')
+
+    // No label box collides with the drawing's shapes in the complete state: the 18px step must
+    // not push a caption onto its lane, the review line, the gate or the resting blocks. Blocks
+    // sweep across the whole drawing mid-flight by design, so their resting rows are the geometry
+    // the layout guarantees. Measured in screen pixels after the drawing settles.
+    const collisions = await page.evaluate(() => {
+      const svgElement = document.querySelector('[data-diagram-stage] svg')
+      if (svgElement === null) throw new Error('svg missing')
+      const labels = Array.from(svgElement.querySelectorAll('text'))
+      const gate = svgElement.querySelector('line[x1="0"]')?.parentElement?.querySelector('g') ?? null
+      const shapes = [
+        svgElement.querySelector('rect[data-lane="live"]'),
+        svgElement.querySelector('line[x1="0"]'),
+        gate,
+        svgElement.querySelector('rect[data-lane="agents"]'),
+        ...Array.from(svgElement.querySelectorAll('g[data-block]')),
+      ].filter((shape): shape is Element => shape !== null)
+      const overlaps = (a: DOMRect, b: DOMRect): boolean =>
+        a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1
+      const hit: string[] = []
+      for (const label of labels) {
+        const labelBox = label.getBoundingClientRect()
+        for (const shape of shapes) {
+          if (overlaps(labelBox, shape.getBoundingClientRect())) {
+            hit.push(
+              `${label.textContent ?? 'label'} overlaps ${
+                shape.getAttribute('data-lane') ?? shape.getAttribute('data-block') ?? shape.tagName
+              }`,
+            )
+          }
+        }
+      }
+      return hit
+    })
+    expect(collisions, 'label boxes must clear the lanes, review line, gate and resting blocks').toEqual([])
+
+    expect(problems, 'no console errors and no hydration warnings on the tablet page').toEqual([])
+  })
+})
+
+/*
+ * 64rem is the band's inclusive ceiling: the tablet layout holds at exactly 1024px and steps back
+ * to the desktop one only at 1025px. Both orientations of a 1024px-wide tablet stay inside the band.
+ */
+test.describe('method diagram, tablet boundary', () => {
+  test.use({ viewport: { width: 1024, height: 768 } })
+
+  test('64rem keeps the tablet layout in both orientations and still completes', async ({ page }) => {
+    const problems = collectConsoleProblems(page)
+    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' })
+    await page.goto('/preview')
+    await expect(track(page)).toHaveAttribute('data-motion', 'scroll')
+    await page.evaluate(() => document.fonts.ready)
+
+    // Landscape at the ceiling: still the tablet box — 18px labels, content-sized stage.
+    await expect(svg(page)).toHaveAttribute('viewBox', '0 0 960 300')
+    expect(
+      await svg(page)
+        .locator('text')
+        .first()
+        .evaluate((element) => getComputedStyle(element).fontSize),
+    ).toBe('18px')
+    expect((await readGeometry(page)).stageHeight, 'the landscape stage sizes to its content').toBeLessThan(500)
+
+    // Portrait rotation inside the band: same contract, the taller track still completes.
+    await page.setViewportSize({ width: 1024, height: 1366 })
+    await nextFrame(page)
+    expect(
+      await svg(page)
+        .locator('text')
+        .first()
+        .evaluate((element) => getComputedStyle(element).fontSize),
+    ).toBe('18px')
+    const geometry = await readGeometry(page)
+    expect(Math.abs(geometry.trackHeight - 1366 * 2.5), 'the portrait track stays 250vh').toBeLessThanOrEqual(2)
+    expect(geometry.stageHeight, 'the portrait stage sizes to its content').toBeLessThan(500)
+
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight))
+    await nextFrame(page)
+    await expect(statusRegion(page)).toHaveText(method.loop.status.live)
+    expect(await computedVar(stage(page), '--method-lane-live')).toBe('1')
+
+    expect(problems, 'no console errors and no hydration warnings at the band ceiling').toEqual([])
   })
 })

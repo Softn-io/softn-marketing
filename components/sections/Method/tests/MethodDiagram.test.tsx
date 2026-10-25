@@ -62,17 +62,18 @@ let reducedMotionInitial = false
 let fakeScrollY = 0
 
 /** A `getBoundingClientRect` result jsdom never produces on its own. */
-const makeRect = (top: number, height: number): DOMRect => ({
-  x: 0,
-  y: top,
-  top,
-  bottom: top + height,
-  left: 0,
-  right: 0,
-  width: 0,
-  height,
-  toJSON: () => ({}),
-}) as DOMRect
+const makeRect = (top: number, height: number): DOMRect =>
+  ({
+    x: 0,
+    y: top,
+    top,
+    bottom: top + height,
+    left: 0,
+    right: 0,
+    width: 0,
+    height,
+    toJSON: () => ({}),
+  }) as DOMRect
 
 /** Fires the `change` listeners of one stubbed query with a new `matches` value. */
 const flipQuery = (query: string, matches: boolean): void => {
@@ -126,9 +127,7 @@ beforeEach(() => {
 
   // The island measures the track and the stage inside its mount effect, so the stub has to be on
   // the prototype before React runs that effect.
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
-    this: HTMLElement,
-  ) {
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     if (this.hasAttribute('data-diagram-track')) return makeRect(TRACK_TOP - fakeScrollY, TRACK_HEIGHT)
     if (this.hasAttribute('data-diagram-stage')) return makeRect(0, STAGE_HEIGHT)
     return makeRect(0, 0)
