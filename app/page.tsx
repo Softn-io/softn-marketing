@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import { ComingSoon } from '@components/sections/ComingSoon'
-import { SECTION_IDS } from '@/lib/anchors'
 import { metadataContent } from '@/locales/fr/metadata'
 
 const { comingSoon } = metadataContent
@@ -20,13 +19,9 @@ export const metadata: Metadata = {
   },
 }
 
-/** Home page: a single-screen coming-soon message, centred in the viewport with no scroll. */
+/** Home page: the coming-soon screen and its e-mail waitlist. */
 const Home = () => {
-  return (
-    <main id={SECTION_IDS.main} className="h-dvh overflow-hidden bg-base text-foreground">
-      <ComingSoon />
-    </main>
-  )
+  return <ComingSoon />
 }
 
 export default Home

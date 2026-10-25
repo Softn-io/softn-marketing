@@ -1,33 +1,55 @@
 /**
- * E2E coverage for the coming-soon home page `/` (GitHub issue #86).
+ * E2E coverage for the redesigned coming-soon home page `/` (GitHub issue #91).
  *
- * The home page is now a single-viewport, no-scroll section (`components/sections/ComingSoon/`),
- * with the full one-page site moved behind the gated `/preview` route (covered by the retargeted
- * `header`/`hero`/`offers`/`theme`/`accessibility`/`designTokens` specs and `e2e/preview.spec.ts`).
+ * The home page is the single-screen launch page (`components/sections/ComingSoon/`): header with
+ * the wordmark and the theme toggle, left-aligned launch copy under the giant decorative
+ * the `aria-hidden` « softn.io » wordmark, the Baserow-backed e-mail waitlist form, and the
+ * copyright footer, over the shared `PointerGlow` backdrop. The full one-page site stays
+ * behind the gated `/preview` route, covered by the retargeted `header`/`hero`/`offers`/`theme`/
+ * `accessibility`/`designTokens` specs and `e2e/preview.spec.ts`.
  *
- * Checks, end to end:
- * - the copy structure: the logo wordmark (plain text, not a link), the eyebrow, the page's single
- *   h1, the body and the caption, all imported from `locales/fr/` — never hardcoded here (QA
- *   rule);
- * - no vertical or horizontal scroll at 320x568, 375x667, 390x844, 768x1024, 1280x800 and
- *   1440x900;
+ * Checks, end to end (issue #91):
+ * - the copy structure: the wordmark *link* and the theme toggle in the header, the eyebrow, the
+ *   giant decorative wordmark between them and the h1 (`aria-hidden`, never a heading, no
+ *   overflow at 360 px), the page's single h1, both body lines — all imported from `locales/fr/`,
+ *   never hardcoded here (QA rule); and the left alignment the design draws;
+ * - no third-party request before consent and no clipped content at 360x640 (the page grows and
+ *   scrolls when the viewport is too short: nothing reachable may be cut off, and no horizontal
+ *   scroll may appear);
+ * - the form's label wiring (`aria-describedby`, `aria-invalid`) and its empty / invalid e-mail
+ *   errors, shown without a network call;
+ * - the anti-spam paths: a filled honeypot and a submission under two seconds both answer with the
+ *   success state *without* a Server Action call;
+ * - the Server Action paths: a mocked success response interpolates the submitted e-mail in the
+ *   success message, and a missing Baserow environment surfaces the generic server error — the
+ *   real Baserow API is never called (its origin is routed to a hard failure in every test, so an
+ *   accidental live call aborts loudly instead of writing a record);
+ * - the keyboard-only journey (Tab reaches every control, Enter submits, the focus ring stays
+ *   visible) and `prefers-reduced-motion` (no infinite animation runs);
  * - the indexed metadata: title, description, `index,follow` robots and the canonical URL;
- * - axe WCAG 2.1 A/AA clean in both themes (the section is static: nothing to settle but fonts);
- * - the caption under the card: horizontally centred line by line, and at least 4.5:1 against
- *   both the nearest solid surface and the actually painted glow composite, in both themes —
- *   with the glyph cores painted at the caption token color, since the positioned wrapper paints
- *   them over the decorative glow (Re-verification 5);
- * - no request to a third-party origin;
+ * - axe WCAG 2.1 A/AA clean in both themes (color-contrast nodes cross-measured on rendered sRGB
+ *   pixels: axe 4.14 misparses the `lab()` computed colors `@softnio-labs/tokens` produces — see
+ *   the axe describe);
  * - the QA 4a-1 token audit, scoped to the coming-soon elements: every computed color, font family,
  *   size, weight, line height, letter spacing, padding, radius and shadow must exist as a value of
  *   `@softnio-labs/tokens`, in both themes — the same probe method as `e2e/designTokens.spec.ts`.
+ *
+ * ## How the Server Action is mocked
+ *
+ * `useActionState` posts the form to the page's own URL with a `Next-Action` header; the response
+ * is an RSC stream (`text/x-component`) whose `1:` row holds the serialized `WaitlistResult`.
+ * `mockWaitlistAction` fetches the real response and replaces that row with the wanted result, so
+ * the React client resolves `useActionState` through the genuine decoding path. The server-side
+ * run is harmless without a Baserow environment, and the Baserow origin is hard-aborted in
+ * every test: no test can write a live record.
  */
 import { AxeBuilder } from '@axe-core/playwright'
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { SITE_URL } from '../lib/site'
 import { comingSoon } from '../locales/fr/comingSoon'
 import { nav } from '../locales/fr/hero'
 import { metadataContent } from '../locales/fr/metadata'
+import { WAITLIST_MIN_DELAY_MS } from '../schemas/waitlist'
 
 /** localStorage key the inline theme script reads; same contract as `lib/theme`. */
 const THEME_STORAGE_KEY = 'softn-theme'
@@ -39,6 +61,78 @@ const SCHEMES = ['dark', 'light'] as const
 type Scheme = (typeof SCHEMES)[number]
 
 const WORDMARK = `${nav.logo.name}${nav.logo.suffix}`
+
+const { form } = comingSoon
+
+/** An address no bot-list owns; never sent anywhere: every server call is mocked or blocked. */
+const EMAIL = 'mel@example.fr'
+
+/**
+ * Fulfils every waitlist Server Action POST with the given `WaitlistResult`.
+ *
+ * The real POST is fetched (`route.fetch()`), so the RSC stream's shape (`text/x-component`, the
+ * `0:` flight root with its build id) is genuine, and only the `1:` row — the serialized
+ * `WaitlistResult` — is replaced. The React client then decodes the patched stream through its
+ * real production path. The server-side run stays harmless: the test server has no Baserow
+ * environment (`playwright.config.ts` blanks every provider key), and the Baserow origin is
+ * hard-aborted in every test (see `guardBaserow`).
+ */
+const mockWaitlistAction = (page: Page, result: unknown): void => {
+  void page.route('**/*', (route) => {
+    void (async () => {
+      const request = route.request()
+      if (request.method() !== 'POST' || (await request.headerValue('next-action')) === null) {
+        await route.fallback()
+        return
+      }
+      const response = await route.fetch()
+      const body = await response.text()
+      const patched = body.replace(/^1:\{.*$/m, `1:${JSON.stringify(result)}`)
+      await route.fulfill({ response, body: patched })
+    })()
+  })
+}
+
+/**
+ * Every host a waitlist write could reach: Baserow Cloud plus the configured `BASEROW_API_URL`
+ * origin, so a self-hosted instance is blocked too. `process.env.BASEROW_API_URL` here is the
+ * test-runner process, not the server under test: the server's own URL is blanked in
+ * `playwright.config.ts`, so its helper never issues a request at all.
+ */
+const BASEROW_HOSTS = ['api.baserow.io']
+if (process.env.BASEROW_API_URL) {
+  try {
+    BASEROW_HOSTS.push(new URL(process.env.BASEROW_API_URL).hostname)
+  } catch {
+    /* not a parseable URL: nothing extra to block */
+  }
+}
+
+/** Whether a request URL targets a waitlist provider host. */
+const isBaserowRequest = (url: string): boolean => {
+  try {
+    return BASEROW_HOSTS.includes(new URL(url).hostname)
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Blocks the real Baserow API (Cloud or the configured `BASEROW_API_URL`) for the whole file and
+ * records every non-localhost request, so a live call aborts loudly instead of writing a record,
+ * and the consent check has its list. Browser-side requests only: the Server Action's
+ * server-side calls are not interceptable by `page.route`, which is why `playwright.config.ts`
+ * blanks every provider key on the test server.
+ */
+const guardBaserow = (page: Page): string[] => {
+  const external: string[] = []
+  page.on('request', (request) => {
+    const { hostname } = new URL(request.url())
+    if (hostname !== 'localhost' && !hostname.startsWith('127.')) external.push(request.url())
+  })
+  for (const host of BASEROW_HOSTS) void page.route(`**://${host}/**`, (route) => route.abort())
+  return external
+}
 
 /** Forces one theme the way the site's theme script consumes it, before navigation. */
 const forceTheme = async (page: Page, scheme: Scheme): Promise<void> => {
@@ -60,32 +154,81 @@ const awaitFonts = async (page: Page): Promise<void> => {
   })
 }
 
-/** The coming-soon section: the one `main` section of the home page. */
-const section = (page: Page) => page.locator('main section')
+/** The e-mail field, labelled from the locale (never a hardcoded string). */
+const emailField = (page: Page): Locator => page.getByLabel(form.label, { exact: true })
 
 /**
- * The caption line under the card: the section's last child holds one paragraph of secondary copy
- * (Mel 2026-10-23). It sits outside the card, in the area the decorative glow paints, so its
- * contrast is measured against both the page surface and a worst-case glow composite (see the
- * caption describe below), not just inherited from the card.
+ * The *visible* element carrying the given announcement. The `role="status"` live region renders
+ * the same text first in the DOM, so `getByText` matches two nodes: the visible paragraph (error
+ * or success) is the last one.
  */
-const caption = (page: Page) => page.locator('main section > div:last-child > p')
+const visibleAnnouncement = (page: Page, text: string): Locator => page.getByText(text).last()
+
+/**
+ * The *visible* success paragraph (PR #92 follow-up): the only `<p>` carrying a `<strong>`,
+ * because the submitted address renders bold inside the interpolated sentence. The `aria-live`
+ * status region is a separate `role="status"` node, never this one.
+ */
+const successParagraph = (page: Page): Locator => page.locator('p:has(strong)')
+
+/**
+ * Asserts the bold success state (issue #91, PR #92 follow-up): the visible paragraph holds
+ * exactly one `<strong>` whose text is the submitted address, the paragraph's full text is the
+ * interpolated locale sentence, and the live region announces the same sentence as plain text —
+ * the bold styling never reaches the announcement.
+ */
+const expectBoldSuccess = async (page: Page, address: string): Promise<void> => {
+  const sentence = form.success.replace('{email}', address)
+  const paragraph = successParagraph(page)
+  const bold = paragraph.locator('strong')
+  await expect(bold).toHaveCount(1)
+  await expect(bold).toHaveText(address)
+  await expect(paragraph).toHaveText(sentence)
+  await expect(page.getByRole('status')).toHaveText(sentence)
+}
 
 test.describe('coming-soon: structure and copy', () => {
-  test('wordmark, eyebrow, single h1, body and caption render from the locales, with nothing interactive', async ({
+  test('header wordmark link, theme toggle, single h1 and both body lines render from the locales', async ({
     page,
   }) => {
-    await page.goto('/')
-    await expect(section(page)).toBeVisible()
+    // The theme is forced (not left to the machine's system preference) so the toggle's label is
+    // deterministic: in dark theme it offers the light one.
+    await gotoWithTheme(page, 'dark')
+    await expect(page.getByRole('banner')).toBeVisible()
 
-    // The wordmark is plain text, not a link: this section is already the home page.
-    // `exact: true` keeps the locator off the h1, which also mentions "Softn.io".
-    const wordmark = section(page).getByText(WORDMARK, { exact: true })
+    // The wordmark is a link to `/` again (issue #91): the coming-soon page has a header.
+    const wordmark = page.getByRole('link', { name: nav.logo.ariaLabel })
     await expect(wordmark).toBeVisible()
+    await expect(wordmark).toHaveAttribute('href', '/')
     await expect(wordmark).toHaveText(WORDMARK)
     await expect(wordmark.locator('span')).toHaveText(nav.logo.suffix)
 
-    await expect(section(page).getByText(comingSoon.eyebrow)).toBeVisible()
+    // The header's other control is the shared theme toggle, labelled from `nav.themeToggle`.
+    await expect(page.getByRole('button', { name: nav.themeToggle.toLight })).toBeVisible()
+
+    await expect(page.getByText(comingSoon.eyebrow)).toBeVisible()
+
+    // The giant decorative « softn.io » wordmark (design: `Softn.io Coming Soon.dc.html`) sits
+    // between the eyebrow and the h1: presentational only. It is hidden from assistive technology
+    // and never a heading, so the copy structure keeps exactly one h1 below.
+    const giant = page.locator('main div[aria-hidden="true"]').filter({ hasText: WORDMARK })
+    await expect(giant).toBeVisible()
+    await expect(giant).toHaveAttribute('aria-hidden', 'true')
+    await expect(page.getByRole('heading', { name: WORDMARK })).toHaveCount(0)
+    const order = await page.evaluate((wordmark: string) => {
+      const content = document.querySelector('main > div')
+      const children = content === null ? [] : Array.from(content.children)
+      return {
+        eyebrow: children.findIndex((child) => child.tagName === 'P'),
+        giant: children.findIndex(
+          (child) => child.getAttribute('aria-hidden') === 'true' && (child.textContent ?? '').includes(wordmark),
+        ),
+        h1: children.findIndex((child) => child.tagName === 'H1'),
+      }
+    }, WORDMARK)
+    expect(order.eyebrow, 'the eyebrow precedes the decorative wordmark').toBeGreaterThanOrEqual(0)
+    expect(order.giant, 'the decorative wordmark directly follows the eyebrow').toBe(order.eyebrow + 1)
+    expect(order.h1, 'the h1 directly follows the decorative wordmark').toBe(order.giant + 1)
 
     const headings = page.getByRole('heading', { level: 1 })
     await expect(headings).toHaveCount(1)
@@ -94,62 +237,124 @@ test.describe('coming-soon: structure and copy', () => {
     // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level.
     await expect(page.getByRole('heading')).toHaveCount(1)
 
-    await expect(section(page).getByText(comingSoon.body)).toBeVisible()
-    await expect(caption(page)).toHaveText(comingSoon.caption)
+    await expect(page.getByText(comingSoon.body)).toBeVisible()
+    await expect(page.getByText(comingSoon.bodyInvite)).toBeVisible()
 
-    // Single-screen launch page: no header, no navigation, no call to action — nothing to operate.
-    await expect(page.getByRole('banner')).toHaveCount(0)
-    await expect(page.getByRole('navigation')).toHaveCount(0)
-    await expect(page.getByRole('link')).toHaveCount(0)
-    await expect(page.getByRole('button')).toHaveCount(0)
-    await expect(page.locator('form')).toHaveCount(0)
+    // The copyright footer, computed from the locale template with the live year.
+    const year = String(new Date().getFullYear())
+    await expect(page.getByText(comingSoon.footer.copyright.replace('{year}', year))).toBeVisible()
+
+    // The footer's Contact and legal links stay hidden until their routes exist (approved, #91).
+    await expect(page.getByRole('link')).toHaveCount(1)
+  })
+
+  test('the launch content column is left-aligned as in the design', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 })
+    await gotoWithTheme(page, 'dark')
+    await awaitFonts(page)
+
+    // `Softn.io Coming Soon.dc.html` draws the launch copy left-aligned (its content column sets
+    // `align-items: flex-start; text-align: left`), the giant wordmark flush above the h1.
+    const alignment = await page.evaluate(() => {
+      const content = document.querySelector('main > div')
+      const left = (selector: string): number | null => {
+        const el = document.querySelector(selector)
+        return el === null ? null : el.getBoundingClientRect().left
+      }
+      return {
+        textAlign: content === null ? '' : getComputedStyle(content).textAlign,
+        alignItems: content === null ? '' : getComputedStyle(content).alignItems,
+        lefts: [
+          left('main > div > p'),
+          left('main > div > div[aria-hidden="true"]'),
+          left('main h1'),
+          left('main h1 + div p'),
+          left('main form'),
+        ],
+      }
+    })
+    expect(alignment.textAlign, 'the content column is left-aligned').toBe('left')
+    expect(alignment.alignItems, 'the content column stacks its blocks at the start').toBe('flex-start')
+
+    // Every block of the column is flush at the same left edge: nothing is centred.
+    const present = alignment.lefts.filter((value): value is number => value !== null)
+    expect(present, 'every launch block resolves').toHaveLength(alignment.lefts.length)
+    const leftEdge = Math.min(...present.map((value) => Math.round(value)))
+    for (const value of present) {
+      expect(Math.round(value), `block left edge ${String(value)} is flush with the column`).toBe(leftEdge)
+    }
   })
 })
 
-test.describe('coming-soon: no scroll at any viewport', () => {
+test.describe('coming-soon: viewport', () => {
   /*
-   * The page is a single screen: `main` is `h-dvh overflow-hidden`, so the document must never
-   * scroll — vertically or horizontally — at any of the reference viewports, from the smallest
-   * phone (320x568) to desktop (1440x900). The caption added under the card (2026-10-23) makes
-   * the column taller, so 375x667 and 1280x800 are asserted too. The document box is read, not
-   * just `main`: a child that escapes its box would still grow `documentElement.scrollHeight`
-   * under `overflow: hidden`.
+   * The page keeps a minimum viewport height but scrolls when the content grows (issue #91): a
+   * short screen must never clip. Only horizontal scroll is a defect; vertical scroll is the
+   * escape valve. 360x640 (the smallest reference phone) is asserted explicitly, plus the other
+   * reference viewports.
+   *
+   * "Clipped" means painted outside the scrollable document box while being reachable content: an
+   * element hidden from assistive technology (the decorative orbs, the honeypot trap) or inside an
+   * `overflow: hidden` ancestor (the backdrop, the honeypot wrapper) is intentionally clipped
+   * decoration or an invisible trap, not lost content.
    */
   const VIEWPORTS = [
-    { width: 320, height: 568 },
+    { width: 360, height: 640 },
     { width: 375, height: 667 },
     { width: 390, height: 844 },
     { width: 768, height: 1024 },
     { width: 1280, height: 800 },
-    { width: 1440, height: 900 },
   ] as const
 
   for (const { width, height } of VIEWPORTS) {
-    test(`no vertical or horizontal scroll at ${width}x${height}`, async ({ page }) => {
+    test(`no horizontal scroll and no clipped content at ${width}x${height}`, async ({ page }) => {
       await page.setViewportSize({ width, height })
       await page.goto('/')
-      await expect(section(page)).toBeVisible()
+      await expect(page.getByRole('banner')).toBeVisible()
       await awaitFonts(page)
       const metrics = await page.evaluate(() => {
         const root = document.documentElement
+        const tolerance = 1
+        const isDecorative = (element: Element): boolean => element.closest('[aria-hidden="true"]') !== null
+        const clippedByAncestor = (element: Element): boolean => {
+          for (let node = element.parentElement; node !== null && node !== document.body; node = node.parentElement) {
+            const { overflowX, overflowY } = getComputedStyle(node)
+            if (overflowX === 'hidden' || overflowX === 'clip' || overflowY === 'hidden' || overflowY === 'clip') {
+              return true
+            }
+          }
+          return false
+        }
+        const clipped = [...document.body.querySelectorAll<HTMLElement>('*')]
+          .filter((element) => {
+            const box = element.getBoundingClientRect()
+            return box.width > 0 && box.height > 0
+          })
+          .filter((element) => !isDecorative(element) && !clippedByAncestor(element))
+          .filter((element) => {
+            const box = element.getBoundingClientRect()
+            return box.right > root.clientWidth + tolerance || box.bottom > root.scrollHeight + tolerance
+          })
+          .map((element) => {
+            const box = element.getBoundingClientRect()
+            return `${element.tagName} at ${String(Math.round(box.right))},${String(Math.round(box.bottom))}`
+          })
         return {
-          scrollHeight: Math.max(root.scrollHeight, document.body.scrollHeight),
           scrollWidth: Math.max(root.scrollWidth, document.body.scrollWidth),
-          viewportHeight: window.innerHeight,
+          scrollHeight: Math.max(root.scrollHeight, document.body.scrollHeight),
           viewportWidth: window.innerWidth,
+          viewportHeight: window.innerHeight,
+          clipped,
         }
       })
       expect(
         metrics.scrollWidth,
         `document scrollWidth ${String(metrics.scrollWidth)} vs viewport ${String(metrics.viewportWidth)}`,
       ).toBeLessThanOrEqual(metrics.viewportWidth)
-      expect(
-        metrics.scrollHeight,
-        `document scrollHeight ${String(metrics.scrollHeight)} vs viewport ${String(metrics.viewportHeight)}`,
-      ).toBeLessThanOrEqual(metrics.viewportHeight)
+      expect(metrics.clipped, 'reachable elements painted outside the document box').toEqual([])
       test.info().annotations.push({
         type: 'measure',
-        description: `${width}x${height}: ${String(metrics.scrollWidth)}x${String(metrics.scrollHeight)} in ${String(metrics.viewportWidth)}x${String(metrics.viewportHeight)}`,
+        description: `${width}x${height}: ${String(metrics.scrollWidth)}x${String(metrics.scrollHeight)} in ${String(metrics.viewportWidth)}x${String(metrics.viewportHeight)}, clipped: ${metrics.clipped.join(' | ') || 'none'}`,
       })
     })
   }
@@ -183,16 +388,399 @@ test.describe('coming-soon: indexed metadata', () => {
   })
 })
 
+test.describe('coming-soon: waitlist form', () => {
+  test.beforeEach(async ({ page }) => {
+    guardBaserow(page)
+    // The clock is installed *before* navigation so the form's `startedAt` ref (written on
+    // hydration) and the anti-spam delay are both deterministic: `runFor` simulates the seconds a
+    // visitor would spend, no real sleeps.
+    await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
+    await page.goto('/')
+    await expect(emailField(page)).toBeVisible()
+  })
+
+  test('the labelled e-mail field is wired to its reassurance and error descriptions', async ({ page }) => {
+    const input = emailField(page)
+    await expect(input).toHaveAttribute('name', 'email')
+    await expect(input).toHaveAttribute('type', 'email')
+    await expect(input).toHaveAttribute('autocomplete', 'email')
+    await expect(input).toHaveAttribute('placeholder', form.placeholder)
+
+    // No error yet: the field points at the reassurance copy.
+    const describedBy = await input.getAttribute('aria-describedby')
+    expect(describedBy).not.toBeNull()
+    await expect(page.locator(`#${describedBy ?? ''}`)).toHaveText(form.reassurance)
+    await expect(page.getByText(form.reassurance)).toBeVisible()
+    await expect(input).not.toHaveAttribute('aria-invalid', 'true')
+
+    // The honeypot field exists, named `reference`, and stays out of the tab order.
+    const honeypot = page.locator('form input[name="reference"]')
+    await expect(honeypot).toHaveCount(1)
+    await expect(honeypot).toHaveAttribute('tabindex', '-1')
+  })
+
+  test('an empty submission shows the empty error without a network call', async ({ page }) => {
+    const posts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push(request.url())
+    })
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(visibleAnnouncement(page, form.errorEmpty)).toBeVisible()
+    const input = emailField(page)
+    await expect(input).toHaveAttribute('aria-invalid', 'true')
+    const describedBy = await input.getAttribute('aria-describedby')
+    await expect(page.locator(`#${describedBy ?? ''}`)).toHaveText(form.errorEmpty)
+
+    // RSC prefetches of the wordmark link are same-origin GETs; the form must not POST at all.
+    expect(posts, 'no form POST may leave the browser on a client-side rejection').toEqual([])
+    // The form is still there: no success state, submit button still visible.
+    await expect(page.getByRole('button', { name: form.submit })).toBeVisible()
+  })
+
+  test('an invalid e-mail shows the invalid error on submit and on blur, without a network call', async ({ page }) => {
+    const posts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push(request.url())
+    })
+
+    await emailField(page).fill('not-an-email')
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(visibleAnnouncement(page, form.errorInvalid)).toBeVisible()
+    const input = emailField(page)
+    await expect(input).toHaveAttribute('aria-invalid', 'true')
+    const describedBy = await input.getAttribute('aria-describedby')
+    await expect(page.locator(`#${describedBy ?? ''}`)).toHaveText(form.errorInvalid)
+    expect(posts).toEqual([])
+
+    // Typing clears the error; blurring a still-invalid value brings it back.
+    await input.fill('still-not-an-email')
+    await expect(page.getByText(form.errorInvalid)).toBeHidden()
+    await input.blur()
+    await expect(visibleAnnouncement(page, form.errorInvalid)).toBeVisible()
+    expect(posts).toEqual([])
+  })
+
+  test('a filled honeypot answers with the success state without a Server Action call', async ({ page }) => {
+    const posts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push(request.url())
+    })
+
+    await emailField(page).fill(EMAIL)
+    // The hidden field is filled programmatically: a visitor cannot reach it (tabindex -1).
+    await page.locator('form input[name="reference"]').evaluate((node) => {
+      if (node instanceof HTMLInputElement) node.value = 'https://spam.example'
+    })
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expectBoldSuccess(page, EMAIL)
+    await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
+    expect(posts, 'no Server Action POST may leave the browser for a trapped bot').toEqual([])
+  })
+
+  test('a submission under two seconds answers with the success state without a Server Action call', async ({
+    page,
+  }) => {
+    const posts: string[] = []
+    page.on('request', (request) => {
+      if (request.method() === 'POST') {
+        // Diagnostics for a leak observed on this test in mixed parallel batches (see the QA
+        // report): the body and the Next-Action header tell a Server Action POST from a native
+        // pre-hydration submit, and the response shows what the server answered.
+        console.log('LEAKED POST headers:', JSON.stringify(request.headers()))
+        console.log('LEAKED POST body:', request.postData())
+        posts.push(request.url())
+      }
+    })
+    page.on('response', async (response) => {
+      if (response.request().method() === 'POST') {
+        try {
+          console.log('LEAKED POST response status:', response.status())
+          console.log('LEAKED POST response body:', (await response.text()).slice(0, 2000))
+        } catch {
+          console.log('LEAKED POST response: not readable')
+        }
+      }
+    })
+
+    // The fake clock flows in real time after `install`, so under parallel load the gap between
+    // hydration (which stamps `startedAt`) and the click is uncontrolled real time, and it can
+    // cross the two-second window on its own: the trap then misses and the form really submits.
+    // The clock is therefore frozen *before* the form is touched: the +500 ms jump lands the
+    // freeze safely in the future (the clock keeps ticking across the evaluate roundtrip, and a
+    // bare `now` reads as fast-forwarding to the past), and with the 1000 ms `runFor` the
+    // submission ends up 1.0–1.5 s old — always under the two-second delay, a bot's giveaway,
+    // whatever the machine load.
+    const fakeNow = await page.evaluate(() => Date.now())
+    await page.clock.pauseAt(new Date(fakeNow + 500))
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expectBoldSuccess(page, EMAIL)
+    await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
+    expect(posts, 'no Server Action POST may leave the browser for a too-fast bot').toEqual([])
+  })
+
+  test('a mocked Server Action success interpolates the submitted e-mail in the success message', async ({ page }) => {
+    mockWaitlistAction(page, { ok: true })
+
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    // The bold success state: the submitted address is the paragraph's only `<strong>`, the
+    // paragraph keeps the full interpolated locale sentence, and the live region announces that
+    // sentence as plain text.
+    await expectBoldSuccess(page, EMAIL)
+    await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
+  })
+
+  test('a markup-like submitted address renders as bold text, never as HTML', async ({ page }) => {
+    mockWaitlistAction(page, { ok: true })
+
+    // The address carries real markup characters; the client-side pattern still accepts it.
+    const address = '<b>x</b>@example.fr'
+    await emailField(page).fill(address)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    // React renders the address as one text node inside the `<strong>`: nothing in it may become
+    // an element, on this page or inside the bold itself.
+    await expectBoldSuccess(page, address)
+    await expect(page.locator('b'), 'the markup-like address never creates an element').toHaveCount(0)
+    await expect(successParagraph(page).locator('strong *'), 'the bold holds plain text only').toHaveCount(0)
+  })
+
+  test('the bold address uses a package weight token and adds no other raw value', async ({ page }) => {
+    mockWaitlistAction(page, { ok: true })
+
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(successParagraph(page)).toBeVisible()
+
+    /*
+     * QA 4a-1, scoped to the new `<strong>` only (narrowed pass): its font-weight must resolve to
+     * a value the `@softnio-labs/tokens` package declares, and the element may add no other design
+     * value of its own — every other typography property must stay inherited from its parent, so
+     * the bold introduces no new raw value. The specific token is Mel's call (it already moved
+     * from title-md to title-sm during this pass), so the audit pins membership and inheritance,
+     * never the token name.
+     */
+    type BoldAudit = {
+      fontWeight: string
+      weightTokens: Record<string, string>
+      colorInherited: boolean
+      fontSizeInherited: boolean
+      lineHeightInherited: boolean
+      fontFamilyInherited: boolean
+      letterSpacingInherited: boolean
+    }
+    const audit = await page.evaluate((): BoldAudit => {
+      const strong = document.querySelector('p strong')
+      if (strong === null) throw new Error('no <strong> in the success paragraph')
+      const parent = strong.parentElement
+      if (parent === null) throw new Error('the <strong> has no parent')
+
+      // Resolve every --softn-font-weight-* token the page declares through a probe span.
+      const probe = document.createElement('span')
+      probe.style.fontSize = '100px'
+      document.body.appendChild(probe)
+      const probeStyle = getComputedStyle(probe)
+      const weightTokens: Record<string, string> = {}
+      for (const name of Array.from(getComputedStyle(document.documentElement))) {
+        if (!name.startsWith('--softn-font-weight-')) continue
+        probe.style.fontWeight = `var(${name})`
+        weightTokens[name] = probeStyle.fontWeight
+      }
+      probe.remove()
+
+      const style = getComputedStyle(strong)
+      const parentStyle = getComputedStyle(parent)
+      const inherited = (key: 'color' | 'fontSize' | 'lineHeight' | 'fontFamily' | 'letterSpacing'): boolean =>
+        style[key] === parentStyle[key]
+      return {
+        fontWeight: style.fontWeight,
+        weightTokens,
+        colorInherited: inherited('color'),
+        fontSizeInherited: inherited('fontSize'),
+        lineHeightInherited: inherited('lineHeight'),
+        fontFamilyInherited: inherited('fontFamily'),
+        letterSpacingInherited: inherited('letterSpacing'),
+      }
+    })
+
+    expect(Object.keys(audit.weightTokens).length, 'package font-weight tokens resolved').toBeGreaterThan(0)
+    expect(
+      Object.values(audit.weightTokens),
+      `the bold font-weight ${audit.fontWeight} must be a package token value`,
+    ).toContain(audit.fontWeight)
+    const matchingTokens = Object.entries(audit.weightTokens)
+      .filter(([, value]) => value === audit.fontWeight)
+      .map(([name]) => name)
+    test.info().annotations.push({
+      type: 'measure',
+      description: `the bold font-weight ${audit.fontWeight} resolves package token(s): ${matchingTokens.join(', ')}`,
+    })
+    expect(audit.colorInherited, 'the bold adds no new color').toBe(true)
+    expect(audit.fontSizeInherited, 'the bold adds no new font-size').toBe(true)
+    expect(audit.lineHeightInherited, 'the bold adds no new line-height').toBe(true)
+    expect(audit.fontFamilyInherited, 'the bold adds no new font-family').toBe(true)
+    expect(audit.letterSpacingInherited, 'the bold adds no new letter-spacing').toBe(true)
+  })
+
+  test('a mocked Baserow failure surfaces the generic server error and keeps the form', async ({ page }) => {
+    mockWaitlistAction(page, { ok: false, error: 'server' })
+
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(visibleAnnouncement(page, form.errorServer)).toBeVisible()
+    // The form survives a server error: the visitor can retry.
+    await expect(page.getByRole('button', { name: form.submit })).toBeVisible()
+    await expect(emailField(page)).toHaveAttribute('aria-invalid', 'true')
+    const describedBy = await emailField(page).getAttribute('aria-describedby')
+    await expect(page.locator(`#${describedBy ?? ''}`)).toHaveText(form.errorServer)
+  })
+})
+
+test.describe('coming-soon: the real Server Action without a Baserow environment', () => {
+  /*
+   * The honest end-to-end path: the real Server Action runs (no `mockWaitlistAction` here), finds
+   * no `BASEROW_WAITLIST_TABLE_ID` on the test server (`playwright.config.ts` blanks every
+   * provider key) and answers the generic `server` error — the same message the mock above
+   * replays. The Baserow origin stays hard-aborted, so this test cannot write a live record even
+   * if the environment changed under it.
+   */
+  test('the missing Baserow environment surfaces the generic server error, with no Baserow call', async ({ page }) => {
+    const external = guardBaserow(page)
+    await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
+    await page.goto('/')
+    await expect(emailField(page)).toBeVisible()
+
+    await emailField(page).fill(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+    await page.getByRole('button', { name: form.submit }).click()
+
+    await expect(visibleAnnouncement(page, form.errorServer)).toBeVisible()
+    await expect(page.getByRole('button', { name: form.submit })).toBeVisible()
+    expect(external, 'third-party requests').toEqual([])
+    expect(external.filter(isBaserowRequest), 'the browser never requests the Baserow host').toEqual([])
+  })
+})
+
+test.describe('coming-soon: keyboard-only journey', () => {
+  test('every control is reachable with Tab alone, Enter submits and the focus ring stays visible', async ({
+    page,
+  }) => {
+    guardBaserow(page)
+    mockWaitlistAction(page, { ok: true })
+    await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
+    await page.goto('/')
+    await expect(page.getByRole('banner')).toBeVisible()
+
+    // Keyboard order: wordmark link, theme toggle, e-mail field, submit button. The honeypot
+    // input is removed from the tab order; the footer holds no control.
+    await page.keyboard.press('Tab')
+    await expect(page.locator(':focus')).toHaveText(WORDMARK)
+    await page.keyboard.press('Tab')
+    const toggle = page.locator(':focus')
+    await expect(toggle).toBeVisible()
+    const focusedLabel = await toggle.getAttribute('aria-label')
+    expect(
+      focusedLabel === nav.themeToggle.toLight || focusedLabel === nav.themeToggle.toDark,
+      `the second Tab stop is the theme toggle (got ${String(focusedLabel)})`,
+    ).toBe(true)
+
+    await page.keyboard.press('Tab')
+    await expect(page.locator(':focus')).toHaveAttribute('name', 'email')
+
+    // The visible focus ring is an outline, not a colour change alone (WCAG 2.4.7).
+    const focusStyles = await page.evaluate(() => {
+      const element = document.activeElement
+      if (element === null) return null
+      const style = getComputedStyle(element)
+      return { outlineWidth: style.outlineWidth, outlineStyle: style.outlineStyle }
+    })
+    expect(focusStyles?.outlineStyle, 'the focused field shows a visible outline').not.toBe('none')
+
+    // Type an address and submit with Enter alone.
+    await page.keyboard.type(EMAIL)
+    await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+    await page.keyboard.press('Tab')
+    await expect(page.locator(':focus')).toHaveText(form.submit)
+    await page.keyboard.press('Enter')
+
+    await expect(visibleAnnouncement(page, form.success.replace('{email}', EMAIL))).toBeVisible()
+    await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
+  })
+})
+
+test.describe('coming-soon: reduced motion', () => {
+  test('no infinite animation runs when motion is reduced', async ({ page }) => {
+    guardBaserow(page)
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await page.goto('/')
+    await expect(page.getByRole('banner')).toBeVisible()
+    await awaitFonts(page)
+    const running = await page.evaluate(() =>
+      document
+        .getAnimations()
+        .filter((animation) => (animation.effect?.getComputedTiming().iterations ?? 1) === Infinity)
+        .map((animation) => {
+          if (animation instanceof CSSTransition) return String(animation.transitionProperty)
+          if (animation instanceof CSSAnimation) return String(animation.animationName)
+          return String(animation.id)
+        }),
+    )
+    expect(running, 'infinite animations under reduced motion').toEqual([])
+    // The pointer glow must not follow the pointer either (its listener is never installed).
+    await page.mouse.move(400, 200)
+    await expect(page.getByRole('banner')).toBeVisible()
+  })
+})
+
 test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
   for (const scheme of SCHEMES) {
     test(`clean in the ${scheme} theme, with the text really measured`, async ({ page }) => {
       await gotoWithTheme(page, scheme)
-      await expect(section(page)).toBeVisible()
+      await expect(page.getByRole('banner')).toBeVisible()
       await awaitFonts(page)
       const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
+
+      /*
+       * axe 4.14 cannot parse wide-gamut computed colors: `@softnio-labs/tokens` declares its
+       * palette as `oklch()` with a `lab()` fallback under `@supports (color:lab(…))`, and Chrome
+       * serializes the computed `color`/`background-color` of the elements that use them back as
+       * `lab(…)` strings (measured: `color: lab(100 0 0)`, `background-color:
+       * lab(24.6681 42.0692 -57.9772)`). axe then reports invented sRGB pairs — for the submit
+       * Button it claimed `#3e3c4c` on `#1a0f37` (1.67:1, dark) and `#faf8ff` on `#b897ee`
+       * (2.29:1, light), none of which Chrome renders (canvas conversion of the same computed
+       * values: `#ffffff` on `#4c1d95`, 10.96:1 dark; `#ffffff` on `#6d28d9`, 7.10:1 light).
+       *
+       * So `color-contrast` violations are not silenced with `disableRules` (a real regression
+       * must still fail): every reported node is re-measured on its own computed colors, converted
+       * through a canvas to the sRGB bytes Chrome actually paints, and the real ratio must clear
+       * 4.5:1. Any other rule stays a plain violation.
+       */
+      const contrastViolations = results.violations.filter((violation) => violation.id === 'color-contrast')
+      const otherViolations = results.violations.filter((violation) => violation.id !== 'color-contrast')
       expect(
-        results.violations,
-        `coming-soon (${scheme}): ${String(results.violations.length)} WCAG 2.1 A/AA violation(s)\n${results.violations
+        otherViolations,
+        `coming-soon (${scheme}): ${String(otherViolations.length)} non-color-contrast WCAG 2.1 A/AA violation(s)\n${otherViolations
           .map(
             (violation) =>
               `- ${violation.id}: ${violation.help} at ${violation.nodes.map((node) => node.target.join(' >>> ')).join(' | ')}`,
@@ -200,12 +788,107 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
           .join('\n')}`,
       ).toHaveLength(0)
 
-      // Non-vacuity: the audit is only meaningful if axe really measured the section's text.
-      // The text sits on the card's solid surface (no gradient behind it), so every line is
-      // measurable — the pass set is resolved against the live page, not the truncated snippet.
-      const contrast = results.passes.find((rule) => rule.id === 'color-contrast')
-      expect(contrast, 'axe reported no color-contrast passes at all').toBeTruthy()
-      const texts = await page.evaluate(
+      type RenderedRatio = { target: string; fg: string; bg: string; ratio: number }
+      const measureRendered = (targets: ReadonlyArray<ReadonlyArray<string | readonly string[]>>): RenderedRatio[] => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 1
+        canvas.height = 1
+        const ctx = canvas.getContext('2d')
+        if (ctx === null) throw new Error('no 2d context')
+        /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation. */
+        const toSrgb = (value: string): [number, number, number] | null => {
+          if (value === 'transparent') return null
+          ctx.fillStyle = '#010203'
+          ctx.fillStyle = value
+          if (String(ctx.fillStyle) === '#010203' && value !== '#010203') throw new Error(`unparsable: ${value}`)
+          ctx.clearRect(0, 0, 1, 1)
+          ctx.fillRect(0, 0, 1, 1)
+          const pixel = ctx.getImageData(0, 0, 1, 1).data
+          if ((pixel[3] ?? 0) === 0) return null
+          return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+        }
+        const luminance = (rgb: [number, number, number]): number => {
+          const lin = rgb.map((channel) => {
+            const s = channel / 255
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+          })
+          return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+        }
+        const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+          const la = luminance(a)
+          const lb = luminance(b)
+          return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+        }
+        const resolve = (parts: ReadonlyArray<string | readonly string[]>): Element | null => {
+          let root: ParentNode = document
+          let last: Element | null = null
+          for (const part of parts) {
+            const selector = typeof part === 'string' ? part : part.join('')
+            const found: Element | null = root.querySelector(selector)
+            if (found === null) return null
+            last = found
+            root = found.shadowRoot ?? found
+          }
+          return last
+        }
+        return targets.map((parts) => {
+          const element = resolve(parts)
+          if (element === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+          const style = getComputedStyle(element)
+          const fg = toSrgb(style.color)
+          let bg = toSrgb(style.backgroundColor)
+          let ancestor = element.parentElement
+          while (bg === null && ancestor !== null) {
+            bg = toSrgb(getComputedStyle(ancestor).backgroundColor)
+            ancestor = ancestor.parentElement
+          }
+          if (fg === null || bg === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+          return {
+            target: JSON.stringify(parts),
+            fg: `rgb(${fg.map((c) => String(Math.round(c))).join(', ')})`,
+            bg: `rgb(${bg.map((c) => String(Math.round(c))).join(', ')})`,
+            ratio: ratio(fg, bg),
+          }
+        })
+      }
+      const ratios = await page.evaluate(
+        measureRendered,
+        contrastViolations.flatMap((violation) => violation.nodes.map((node) => node.target)),
+      )
+      expect(ratios.length, 'every reported color-contrast node is re-measured').toBe(
+        contrastViolations.flatMap((violation) => violation.nodes).length,
+      )
+      for (const measured of ratios) {
+        expect(
+          measured.ratio,
+          `axe color-contrast on ${measured.target}: rendered ${measured.fg} on ${measured.bg} must keep 4.5:1 (axe 4.14 misparses lab() computed colors — see the comment above)`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+      test.info().annotations.push({
+        type: 'measure',
+        description: `axe color-contrast re-measured on rendered sRGB pixels: ${
+          ratios.map((measured) => `${measured.fg} on ${measured.bg} = ${measured.ratio.toFixed(2)}:1`).join(' | ') ||
+          'none reported'
+        }`,
+      })
+
+      /*
+       * Non-vacuity, and an honest account of what axe can and cannot do here.
+       *
+       * Every text color on the page resolves through the `lab()` fallback of
+       * `@softnio-labs/tokens`, and axe 4.14 cannot parse `lab()` computed colors: it pushes ALL
+       * of the copy to `incomplete` ("could not determine…") — measured: 10 incomplete nodes,
+       * one pass (the clipped honeypot input), and a bogus violation on the submit Button
+       * (re-measured above). So the audit is only meaningful if (a) axe really *looked* at the
+       * section's copy — asserted on the `incomplete` set, the set it lands in — and (b) the
+       * contrast axe cannot resolve is measured somewhere else: below, on the rendered sRGB
+       * pixels, against the solid page background AND a worst-case composite of the decorative
+       * orbs (each orb color at its computed opacity over the page background, plus the amber
+       * aura stop of the pointer glow), in the same theme.
+       */
+      const incompleteContrast = results.incomplete.find((rule) => rule.id === 'color-contrast')
+      expect(incompleteContrast, 'axe reported no color-contrast incomplete nodes at all').toBeTruthy()
+      const lookedAt = await page.evaluate(
         (targets) =>
           targets.map((parts) => {
             let root: ParentNode = document
@@ -217,60 +900,339 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
               last = found
               root = found.shadowRoot ?? found
             }
-            return last === null ? '' : (last.textContent ?? '')
+            return last?.textContent ?? ''
           }),
-        (contrast?.nodes ?? []).map((node) => node.target),
+        (incompleteContrast?.nodes ?? []).map((node) => node.target),
       )
-      expect(texts.filter((text) => text !== '').length, 'measured nodes resolve to real elements').toBe(
-        (contrast?.nodes ?? []).length,
-      )
-      // Non-vacuity for the copy axe can resolve: the caption sits in the decorative glow's
-      // area, so axe marks its color-contrast `incomplete` — "Element's background color could
-      // not be determined due to a background gradient". Re-verified after the caption's wrapper
-      // became `position: relative` (Re-verification 5): axe analyses DOM geometry, not paint
-      // order, so the absolutely-positioned backdrop still geometrically overlaps the caption and
-      // the check stays `incomplete` (zero violations — the caption is simply not measurable).
-      // Its contrast is measured against the actually painted pixels by the dedicated caption
-      // describe below, so it is not required here.
-      for (const needle of [comingSoon.eyebrow, comingSoon.title.slice(0, 24), comingSoon.body.slice(0, 24)]) {
+      for (const needle of [comingSoon.eyebrow, comingSoon.title.slice(0, 24), comingSoon.bodyInvite.slice(0, 24)]) {
         expect(
-          texts.some((text) => text.includes(needle)),
-          `axe measured the copy that contains "${needle}"`,
+          lookedAt.some((text) => text.includes(needle)),
+          `axe looked at the copy that contains "${needle}" (it lands in the incomplete set)`,
         ).toBe(true)
       }
+
+      // (b) The contrast axe cannot resolve, measured on the rendered pixels.
+      type TextContrast = {
+        element: string
+        fg: string
+        solid: string
+        worst: string
+        ratioSolid: number
+        ratioWorst: number
+      }
+      const measureTextContrast = (keys: string[]): TextContrast[] => {
+        const canvas = document.createElement('canvas')
+        canvas.width = 1
+        canvas.height = 1
+        const ctx = canvas.getContext('2d')
+        if (ctx === null) throw new Error('no 2d context')
+        const toSrgb = (value: string): [number, number, number] | null => {
+          if (value === 'transparent') return null
+          ctx.fillStyle = '#010203'
+          ctx.fillStyle = value
+          if (String(ctx.fillStyle) === '#010203' && value !== '#010203') return null
+          ctx.clearRect(0, 0, 1, 1)
+          ctx.fillRect(0, 0, 1, 1)
+          const pixel = ctx.getImageData(0, 0, 1, 1).data
+          if ((pixel[3] ?? 0) === 0) return null
+          return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+        }
+        const luminance = (rgb: [number, number, number]): number => {
+          const lin = rgb.map((channel) => {
+            const s = channel / 255
+            return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+          })
+          return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+        }
+        const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+          const la = luminance(a)
+          const lb = luminance(b)
+          return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+        }
+        const blend = (
+          base: [number, number, number],
+          over: [number, number, number],
+          alpha: number,
+        ): [number, number, number] => [
+          base[0] * (1 - alpha) + over[0] * alpha,
+          base[1] * (1 - alpha) + over[1] * alpha,
+          base[2] * (1 - alpha) + over[2] * alpha,
+        ]
+        const rgbString = (rgb: [number, number, number]): string =>
+          `rgb(${rgb.map((c) => String(Math.round(c))).join(', ')})`
+        return keys.map((selector) => {
+          const element = document.querySelector(selector)
+          if (element === null) throw new Error(`missing ${selector}`)
+          const fg = toSrgb(getComputedStyle(element).color)
+          if (fg === null) throw new Error(`no color on ${selector}`)
+          const mainEl = element.closest('main')
+          // First opaque background up the tree, and whether it is the page surface (the text
+          // paints directly over the decorative orbs) or a component's own background (the input
+          // field: the orbs never show through it).
+          let ancestor: HTMLElement | null = element instanceof HTMLElement ? element : element.parentElement
+          let solid: [number, number, number] | null = null
+          let pageLevel = true
+          while (ancestor !== null && solid === null) {
+            const bg = toSrgb(getComputedStyle(ancestor).backgroundColor)
+            if (bg !== null) {
+              solid = bg
+              pageLevel = !(mainEl !== null && (mainEl === ancestor || mainEl.contains(ancestor)))
+            }
+            ancestor = ancestor.parentElement
+          }
+          if (solid === null) {
+            solid = toSrgb(getComputedStyle(document.body).backgroundColor) ?? [255, 255, 255]
+          }
+          // Worst-case decorative composites behind page-level text: each orb at its computed
+          // opacity over the page surface, plus the pointer glow's amber aura stop (12% alpha).
+          const composites: [number, number, number][] = [solid]
+          if (pageLevel) {
+            for (const orb of Array.from(document.querySelectorAll<HTMLElement>('[class*="orb-"]'))) {
+              const color = toSrgb(getComputedStyle(orb).backgroundColor)
+              const alpha = Number.parseFloat(getComputedStyle(orb).opacity)
+              if (color !== null && Number.isFinite(alpha)) composites.push(blend(solid, color, alpha))
+            }
+            const aura = toSrgb('#fbb847')
+            if (aura !== null) composites.push(blend(solid, aura, 0.12))
+          }
+          const worst = composites.reduce((current, candidate) =>
+            ratio(fg, candidate) < ratio(fg, current) ? candidate : current,
+          )
+          return {
+            element: selector,
+            fg: rgbString(fg),
+            solid: rgbString(solid),
+            worst: rgbString(worst),
+            ratioSolid: ratio(fg, solid),
+            ratioWorst: ratio(fg, worst),
+          }
+        })
+      }
+      const textContrasts = await page.evaluate(measureTextContrast, [
+        'main p:first-of-type',
+        'main h1',
+        'main h1 + div p:first-of-type',
+        'main h1 + div p:nth-of-type(2)',
+        `input[name="email"]`,
+        'footer p',
+      ])
+      for (const measured of textContrasts) {
+        expect(
+          measured.ratioSolid,
+          `${scheme}: ${measured.element} renders ${measured.fg} on ${measured.solid} (solid ancestor)`,
+        ).toBeGreaterThanOrEqual(4.5)
+        expect(
+          measured.ratioWorst,
+          `${scheme}: ${measured.element} renders ${measured.fg} on the worst decorative composite ${measured.worst} (orbs + aura)`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+      test.info().annotations.push({
+        type: 'measure',
+        description: `${scheme}: rendered text contrast ${textContrasts
+          .map(
+            (measured) =>
+              `${measured.element}: ${measured.ratioSolid.toFixed(2)}:1 solid, ${measured.ratioWorst.toFixed(2)}:1 worst composite`,
+          )
+          .join(' | ')}`,
+      })
     })
   }
 })
 
-test.describe('coming-soon: privacy', () => {
-  test('the page issues no third-party network request', async ({ page }) => {
-    const external: string[] = []
-    page.on('request', (request) => {
-      const host = new URL(request.url()).hostname
-      if (host !== 'localhost' && !host.startsWith('127.')) external.push(request.url())
+test.describe('coming-soon: axe on the success state (WCAG 2.1 AA)', () => {
+  /*
+   * Success state only (narrowed pass, PR #92 follow-up): after a mocked successful signup the
+   * form is gone and the bold address paragraph is on screen, so this audit covers exactly the
+   * new markup — the `<strong>` inside the visible paragraph and the plain-text live region — in
+   * both themes. Reported color-contrast nodes are re-measured on rendered sRGB pixels for the
+   * same reason as the form-state audit above: axe 4.14 misparses the `lab()` computed colors
+   * `@softnio-labs/tokens` produces, so a violation is only trusted once the real painted pixels
+   * confirm it. The bold address is then measured directly: making the address bold must not
+   * break its contrast (16 px bold is not "large text": 4.5:1 stays the bar).
+   */
+  type RenderedRatio = { target: string; fg: string; bg: string; ratio: number }
+  const measureRendered = (targets: ReadonlyArray<ReadonlyArray<string | readonly string[]>>): RenderedRatio[] => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1
+    canvas.height = 1
+    const ctx = canvas.getContext('2d')
+    if (ctx === null) throw new Error('no 2d context')
+    /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation. */
+    const toSrgb = (value: string): [number, number, number] | null => {
+      if (value === 'transparent') return null
+      ctx.fillStyle = '#010203'
+      ctx.fillStyle = value
+      if (String(ctx.fillStyle) === '#010203' && value !== '#010203') throw new Error(`unparsable: ${value}`)
+      ctx.clearRect(0, 0, 1, 1)
+      ctx.fillRect(0, 0, 1, 1)
+      const pixel = ctx.getImageData(0, 0, 1, 1).data
+      if ((pixel[3] ?? 0) === 0) return null
+      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+    }
+    const luminance = (rgb: [number, number, number]): number => {
+      const lin = rgb.map((channel) => {
+        const s = channel / 255
+        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+    }
+    const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+      const la = luminance(a)
+      const lb = luminance(b)
+      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+    }
+    const resolve = (parts: ReadonlyArray<string | readonly string[]>): Element | null => {
+      let root: ParentNode = document
+      let last: Element | null = null
+      for (const part of parts) {
+        const selector = typeof part === 'string' ? part : part.join('')
+        const found: Element | null = root.querySelector(selector)
+        if (found === null) return null
+        last = found
+        root = found.shadowRoot ?? found
+      }
+      return last
+    }
+    return targets.map((parts) => {
+      const element = resolve(parts)
+      if (element === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+      const style = getComputedStyle(element)
+      const fg = toSrgb(style.color)
+      let bg = toSrgb(style.backgroundColor)
+      let ancestor = element.parentElement
+      while (bg === null && ancestor !== null) {
+        bg = toSrgb(getComputedStyle(ancestor).backgroundColor)
+        ancestor = ancestor.parentElement
+      }
+      if (fg === null || bg === null) return { target: JSON.stringify(parts), fg: '', bg: '', ratio: -1 }
+      return {
+        target: JSON.stringify(parts),
+        fg: `rgb(${fg.map((c) => String(Math.round(c))).join(', ')})`,
+        bg: `rgb(${bg.map((c) => String(Math.round(c))).join(', ')})`,
+        ratio: ratio(fg, bg),
+      }
     })
+  }
+
+  for (const scheme of SCHEMES) {
+    test(`clean in the ${scheme} theme after a successful signup, bold address included`, async ({ page }) => {
+      guardBaserow(page)
+      await page.clock.install({ time: new Date('2026-10-24T12:00:00Z') })
+      await gotoWithTheme(page, scheme)
+      mockWaitlistAction(page, { ok: true })
+      await expect(emailField(page)).toBeVisible()
+
+      await emailField(page).fill(EMAIL)
+      await page.clock.runFor(WAITLIST_MIN_DELAY_MS + 1000)
+      await page.getByRole('button', { name: form.submit }).click()
+
+      // The audit targets the success state: the bold paragraph, not the form.
+      await expectBoldSuccess(page, EMAIL)
+      await awaitFonts(page)
+
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
+
+      const contrastViolations = results.violations.filter((violation) => violation.id === 'color-contrast')
+      const otherViolations = results.violations.filter((violation) => violation.id !== 'color-contrast')
+      expect(
+        otherViolations,
+        `coming-soon success (${scheme}): ${String(otherViolations.length)} non-color-contrast WCAG 2.1 A/AA violation(s)\n${otherViolations
+          .map(
+            (violation) =>
+              `- ${violation.id}: ${violation.help} at ${violation.nodes.map((node) => node.target.join(' >>> ')).join(' | ')}`,
+          )
+          .join('\n')}`,
+      ).toHaveLength(0)
+
+      const violationTargets = contrastViolations.flatMap((violation) => violation.nodes.map((node) => node.target))
+      const boldTarget: ReadonlyArray<string | readonly string[]> = ['p:has(strong)', 'strong']
+      const ratios = await page.evaluate(measureRendered, [...violationTargets, boldTarget])
+      for (const measured of ratios) {
+        expect(
+          measured.ratio,
+          `rendered contrast on ${measured.target}: ${measured.fg} on ${measured.bg} must keep 4.5:1 (axe 4.14 misparses lab() computed colors — see the form-state audit)`,
+        ).toBeGreaterThanOrEqual(4.5)
+      }
+      test.info().annotations.push({
+        type: 'measure',
+        description: `success state (${scheme}): rendered contrast ${
+          ratios
+            .map((measured) => `${measured.fg} on ${measured.bg} = ${measured.ratio.toFixed(2)}:1 (${measured.target})`)
+            .join(' | ') || 'none measured'
+        }`,
+      })
+
+      // Non-vacuity: the copy the audit cannot resolve (the lab() colors) must include the new
+      // success sentence — axe really looked at the state under test.
+      const incompleteContrast = results.incomplete.find((rule) => rule.id === 'color-contrast')
+      expect(incompleteContrast, 'axe reported no color-contrast incomplete nodes at all').toBeTruthy()
+      const lookedAt = await page.evaluate(
+        (targets) =>
+          targets.map((parts) => {
+            let root: ParentNode = document
+            let last: Element | null = null
+            for (const part of parts) {
+              const selector = typeof part === 'string' ? part : part.join('')
+              const found: Element | null = root.querySelector(selector)
+              if (found === null) return ''
+              last = found
+              root = found.shadowRoot ?? found
+            }
+            return last?.textContent ?? ''
+          }),
+        (incompleteContrast?.nodes ?? []).map((node) => node.target),
+      )
+      const needle = form.success.slice(0, 12)
+      expect(
+        lookedAt.some((text) => text.includes(needle)),
+        `axe looked at the success copy that contains "${needle}" (it lands in the incomplete set)`,
+      ).toBe(true)
+    })
+  }
+})
+
+test.describe('coming-soon: consent and privacy', () => {
+  test('no third-party request before consent, and never the Baserow host', async ({ page }) => {
+    const external = guardBaserow(page)
     await page.goto('/')
-    await expect(section(page)).toBeVisible()
+    await expect(page.getByRole('banner')).toBeVisible()
+    await awaitFonts(page)
     expect(external, 'third-party requests').toEqual([])
+    expect(external.filter(isBaserowRequest), 'the browser never requests the Baserow host').toEqual([])
   })
 })
 
 test.describe('coming-soon: computed styles match @softnio-labs/tokens values (QA 4a-1)', () => {
   /*
    * Same method as `e2e/designTokens.spec.ts`: the browser is the oracle. Each `--softn-*` custom
-   * property is resolved through a probe element, and every computed design value on the section's
+   * property is resolved through a probe element, and every computed design value on the page's
    * key elements must appear in the resulting value sets — in both themes. The audit runs at
-   * 1280x800 (both themes) and at 320x568 (dark): at those widths the two `clamp()` paddings sit on
-   * their token bounds (space-12/space-10 desktop, space-5/space-6 mobile), so no mid-clamp value
-   * can pass as a token.
+   * 1280x800 (both themes) and at 360x640 (dark).
    *
-   * The glow gradients are audited too: every colour stop in the computed `background-image` of
-   * the decorative backdrop must resolve to a token colour.
+   * The page's fluid rhythm (`margin`/`padding` declared as `clamp(token, vh, token)` in the
+   * module stylesheet) produces computed values no token equals by design — e.g. the title's
+   * `clamp(--softn-space-4, 3.4vh, --softn-space-8)` mid-range. Those intervals are collected from
+   * the stylesheets and accepted when the value sits inside the min/max the stylesheet itself
+   * declares: the bounds are tokens, the mockup's fluid term is the design's own
+   * (`clamp(18px, 3.4vh, 34px)` in `Softn.io Coming Soon.dc.html`). A value outside its declared
+   * bounds, or a non-fluid value matching no token, stays a mismatch.
+   *
+   * The orb gradients are audited too: every colour stop in the computed `background-image` of the
+   * decorative backdrop must resolve to a token colour.
+   *
+   * One approved raw value exists (Mel, interim): the decorative `aria-hidden` wordmark sizes
+   * itself with `clamp(56px, 14vw, 168px)` — no package step covers 56–168 px yet (`display-xl`
+   * tops out at 86 px). The audit pins that exact formula (bounds and the 14vw term) on the
+   * wordmark, and accepts a raw fluid font size on `aria-hidden` elements only; reachable content
+   * keeps the strict token scale.
    */
   type AuditParams = { theme: 'dark' | 'light' }
   type AuditResult = {
     theme: string
     tokenCount: number
+    fluidIntervals: [number, number][]
+    fontSizeFluidIntervals: [number, number][]
+    wordmarkLargeFontSize: number
     mismatches: string[]
     gradientColorMismatches: string[]
     loadedFontFamilies: string[]
@@ -279,7 +1241,7 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
     wordmarkFamily: string
     h1Family: string
     bodyCopyFamily: string
-    captionFamily: string
+    footerFamily: string
   }
 
   const auditInPage = ({ theme }: AuditParams): AuditResult => {
@@ -336,6 +1298,100 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       return raw
     }
 
+    /** Resolves one clamp() part (a token, a vh term, a ch…) to pixels through the probe. */
+    const resolveLength = (part: string): number => {
+      probe.style.marginTop = part
+      const value = num(probeStyle.marginTop)
+      probe.style.marginTop = '0px'
+      return value
+    }
+
+    // 3. Collect the fluid `clamp(min, preferred, max)` intervals the page stylesheets declare on
+    // margin/padding, bounds resolved to px (vh terms against the current viewport).
+    //
+    // The declarations are read from `rule.cssText`, not from `getPropertyValue(longhand)`: the
+    // module stylesheets declare the rhythm through shorthands (`padding-block:`, `padding-inline:`)
+    // and CSSOM leaves those longhands empty (`getPropertyValue('padding-block-start') === ''` when
+    // the shorthand value contains `var()`), while `cssText` keeps the whole declaration. The
+    // `clamp(` argument list is then extracted with a balanced-paren scan: a `[^)]+` regex would
+    // stop at the first `)` *inside* `var(--softn-space-…)`.
+    const fluidIntervals: [number, number][] = []
+    const extractClampArgs = (text: string, start: number): string | null => {
+      let depth = 1
+      let index = start
+      while (index < text.length) {
+        const char = text[index]
+        if (char === '(') depth += 1
+        else if (char === ')') {
+          depth -= 1
+          if (depth === 0) return text.slice(start, index)
+        }
+        index += 1
+      }
+      return null
+    }
+    const collectFluid = (rules: CSSRuleList): void => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSStyleRule) {
+          const text = rule.cssText
+          const pattern = /(?<![a-zA-Z-])(?:margin|padding)[a-zA-Z-]*\s*:\s*clamp\(/g
+          for (const match of text.matchAll(pattern)) {
+            const args = extractClampArgs(text, (match.index ?? 0) + match[0].length)
+            if (args === null) continue
+            const parts = args.split(',').map((part) => part.trim())
+            if (parts.length !== 3) continue
+            const lo = resolveLength(parts[0] ?? '')
+            const hi = resolveLength(parts[2] ?? '')
+            if (Number.isFinite(lo) && Number.isFinite(hi) && hi >= lo) fluidIntervals.push([lo, hi])
+          }
+        } else if (rule instanceof CSSGroupingRule) {
+          collectFluid(rule.cssRules)
+        }
+      }
+    }
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        collectFluid(sheet.cssRules)
+      } catch {
+        /* unreadable sheet: never crash the audit */
+      }
+    }
+
+    /*
+     * The raw `font-size: clamp(...)` declarations the stylesheets carry. Today exactly one exists:
+     * the decorative wordmark's `clamp(56px, 14vw, 168px)`, an interim raw value Mel approved
+     * because no package step covers 56–168 px (`display-xl` tops out at 86 px). Decorative-only
+     * allowance: a raw fluid size on reachable content still fails the audit below, and the
+     * intervals are returned so the report lists the raw pair instead of hiding it.
+     */
+    const fontSizeFluidIntervals: [number, number][] = []
+    const collectFontSizeFluid = (rules: CSSRuleList): void => {
+      for (const rule of Array.from(rules)) {
+        if (rule instanceof CSSStyleRule) {
+          const text = rule.cssText
+          const pattern = /(?<![a-zA-Z-])font-size\s*:\s*clamp\(/g
+          for (const match of text.matchAll(pattern)) {
+            const args = extractClampArgs(text, (match.index ?? 0) + match[0].length)
+            if (args === null) continue
+            const parts = args.split(',').map((part) => part.trim())
+            if (parts.length !== 3) continue
+            const lo = resolveLength(parts[0] ?? '')
+            const hi = resolveLength(parts[2] ?? '')
+            if (Number.isFinite(lo) && Number.isFinite(hi) && hi >= lo) fontSizeFluidIntervals.push([lo, hi])
+          }
+        } else if (rule instanceof CSSGroupingRule) {
+          collectFontSizeFluid(rule.cssRules)
+        }
+      }
+    }
+    for (const sheet of Array.from(document.styleSheets)) {
+      try {
+        collectFontSizeFluid(sheet.cssRules)
+      } catch {
+        /* unreadable sheet: never crash the audit */
+      }
+    }
+
     for (const name of names) {
       const raw = resolve(name)
       if (raw === '') continue
@@ -367,16 +1423,15 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
         const w = probeStyle.fontWeight
         if (w !== '' && !Number.isNaN(num(w))) weights.add(w)
       }
-      if (/line-height|letter-spacing/.test(name)) {
-        probe.style.fontSize = '100px'
-      }
       if (/line-height/.test(name)) {
+        probe.style.fontSize = '100px'
         probe.style.lineHeight = `var(${name})`
         const lh = num(probeStyle.lineHeight)
         const pf = num(probeStyle.fontSize)
         if (Number.isFinite(lh) && pf > 0) ratios.add(Number((lh / pf).toFixed(3)))
       }
       if (/letter-spacing/.test(name)) {
+        probe.style.fontSize = '100px'
         probe.style.letterSpacing = `var(${name})`
         const ls = probeStyle.letterSpacing
         if (ls !== 'normal') {
@@ -400,24 +1455,32 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       for (const t of lengths) if (Math.abs(t - v) < 0.06) return true
       return false
     }
+    const fluidOk = (v: number): boolean => {
+      for (const [min, max] of fluidIntervals) if (v >= min - 0.06 && v <= max + 0.06) return true
+      return false
+    }
+    const fontSizeFluidOk = (v: number): boolean => {
+      for (const [min, max] of fontSizeFluidIntervals) if (v >= min - 0.06 && v <= max + 0.06) return true
+      return false
+    }
     const colorOk = (v: string): boolean => colors.has(norm(v))
     const shadowOk = (v: string): boolean => shadows.has(norm(v))
 
-    // 3. Audit the coming-soon elements: the page shell, the section, the card, its text blocks,
-    // the caption under the card and the decorative backdrop.
-    const card = document.querySelector('main section > div:not([aria-hidden="true"])')
-    const paragraphs = card === null ? [] : Array.from(card.querySelectorAll(':scope > p'))
+    // 4. Audit the coming-soon elements: the page shell, the header, the decorative wordmark, the
+    // copy blocks, the form field, the button and the footer.
     const elements: Record<string, Element | null> = {
       body: document.body,
+      header: document.querySelector('body > div > header'),
+      wordmark: document.querySelector('body > div > header a'),
+      toggle: document.querySelector('body > div > header button'),
       main: document.querySelector('main'),
-      section: document.querySelector('main section'),
-      backdrop: document.querySelector('main section > div[aria-hidden="true"]'),
-      card,
-      wordmark: paragraphs[0] ?? null,
-      eyebrow: paragraphs[1] ?? null,
+      eyebrow: document.querySelector('main p'),
+      wordmarkLarge: document.querySelector('main > div > div[aria-hidden="true"]'),
       h1: document.querySelector('main h1'),
-      bodyCopy: paragraphs[2] ?? null,
-      caption: document.querySelector('main section > div:last-child > p'),
+      bodyCopy: document.querySelector('main h1 + div p'),
+      field: document.querySelector('main input[type="email"]'),
+      button: document.querySelector('main button[type="submit"]'),
+      footer: document.querySelector('body > div > footer'),
     }
 
     const mismatches: string[] = []
@@ -446,19 +1509,29 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
           /plus.?jakarta|zalando|fallback/i.test(clean)
         if (!known) mismatches.push(`${name}.fontFamily: unexpected family ${fam.trim()}`)
       }
+      const decorative = el.getAttribute('aria-hidden') === 'true'
       for (const prop of ['fontSize', 'borderTopLeftRadius'] as const) {
         const v = num(c[prop])
-        if (Number.isFinite(v) && !lengthOk(v)) mismatches.push(`${name}.${prop}: ${c[prop]} not in token scale`)
+        if (!Number.isFinite(v) || lengthOk(v)) continue
+        // Decorative-only allowance (see collectFontSizeFluid): today just the giant wordmark's
+        // raw `clamp(56px, 14vw, 168px)`. A raw size on reachable content still fails.
+        if (decorative && fontSizeFluidOk(v)) continue
+        mismatches.push(`${name}.${prop}: ${c[prop]} not in token scale`)
       }
+      // Fluid clamps are accepted inside their declared bounds; every other padding value must
+      // resolve to a token step.
       for (const v of c.padding.split(/\s+/)) {
         const p = num(v)
-        if (Number.isFinite(p) && !lengthOk(p)) mismatches.push(`${name}.padding: ${v} not in token scale`)
+        if (Number.isFinite(p) && !lengthOk(p) && !fluidOk(p)) {
+          mismatches.push(`${name}.padding: ${v} not in token scale or declared clamp bounds`)
+        }
       }
-      // Spacing utilities land on margins too (`mt-4` on the h1 and the body, `mt-5` on the
-      // caption, `mt-6` on the eyebrow): every margin longhand must resolve to a token step.
+      // Spacing utilities land on margins too (`mt-4`-style rhythm is fluid here): same rule.
       for (const v of c.margin.split(/\s+/)) {
         const m = num(v)
-        if (Number.isFinite(m) && !lengthOk(m)) mismatches.push(`${name}.margin: ${v} not in token scale`)
+        if (Number.isFinite(m) && !lengthOk(m) && !fluidOk(m)) {
+          mismatches.push(`${name}.margin: ${v} not in token scale or declared clamp bounds`)
+        }
       }
       if (!weights.has(c.fontWeight)) mismatches.push(`${name}.fontWeight: ${c.fontWeight} not a token weight`)
       if (c.lineHeight !== 'normal') {
@@ -473,14 +1546,14 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       }
     }
 
-    // 4. The glow gradients: every colour stop must be a token colour (transparent excluded).
+    // 5. The orb gradients: every colour stop must be a token colour (transparent excluded).
     const gradientColorMismatches: string[] = []
-    const backdropEl = elements.backdrop ?? null
-    if (backdropEl !== null) {
+    for (const backdropEl of Array.from(document.querySelectorAll<HTMLElement>('main [aria-hidden="true"]'))) {
       const image = getComputedStyle(backdropEl).backgroundImage
+      if (image === 'none') continue
       const stops = image.toLowerCase().match(/(?:oklch|oklab|lab|lch|rgb|rgba|hsl|hsla|color)\([^)]*\)/g) ?? []
       for (const stop of stops) {
-        if (!colorOk(stop)) gradientColorMismatches.push(`backdrop gradient stop ${stop} matches no token`)
+        if (!colorOk(stop)) gradientColorMismatches.push(`orb gradient stop ${stop} matches no token`)
       }
     }
 
@@ -500,6 +1573,10 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
     return {
       theme,
       tokenCount: names.size,
+      fluidIntervals,
+      fontSizeFluidIntervals,
+      wordmarkLargeFontSize:
+        elements.wordmarkLarge == null ? -1 : num(getComputedStyle(elements.wordmarkLarge).fontSize),
       mismatches,
       gradientColorMismatches,
       loadedFontFamilies: [...loaded],
@@ -508,13 +1585,13 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       wordmarkFamily: elements.wordmark == null ? '' : firstFamily(getComputedStyle(elements.wordmark).fontFamily),
       h1Family: elements.h1 == null ? '' : firstFamily(getComputedStyle(elements.h1).fontFamily),
       bodyCopyFamily: elements.bodyCopy == null ? '' : firstFamily(getComputedStyle(elements.bodyCopy).fontFamily),
-      captionFamily: elements.caption == null ? '' : firstFamily(getComputedStyle(elements.caption).fontFamily),
+      footerFamily: elements.footer == null ? '' : firstFamily(getComputedStyle(elements.footer).fontFamily),
     }
   }
 
   for (const { viewport, themes } of [
     { viewport: { width: 1280, height: 800 }, themes: ['dark', 'light'] as const },
-    { viewport: { width: 320, height: 568 }, themes: ['dark'] as const },
+    { viewport: { width: 360, height: 640 }, themes: ['dark'] as const },
   ]) {
     for (const scheme of themes) {
       test(`every computed value is a token value at ${viewport.width}x${viewport.height} (${scheme})`, async ({
@@ -525,10 +1602,27 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
         await awaitFonts(page)
         const result = await page.evaluate(auditInPage, { theme: scheme } satisfies AuditParams)
 
-        // Sanity: the audit is meaningless if it collected no tokens.
+        // Sanity: the audit is meaningless if it collected no tokens or no fluid intervals.
         expect(result.tokenCount, 'design token custom properties found on the page').toBeGreaterThan(20)
+        expect(result.fluidIntervals.length, 'fluid clamp() declarations found on the page').toBeGreaterThan(0)
         expect(result.mismatches, `token mismatches (${scheme} @ ${viewport.width})`).toEqual([])
-        expect(result.gradientColorMismatches, `glow gradient colours (${scheme} @ ${viewport.width})`).toEqual([])
+        expect(result.gradientColorMismatches, `orb gradient colours (${scheme} @ ${viewport.width})`).toEqual([])
+
+        // The decorative wordmark's size is the one approved raw value: the exact design clamp
+        // `clamp(56px, 14vw, 168px)` (Mel, interim — no package step covers 56–168 px). Pin the
+        // formula, then list every raw font-size clamp the audit is aware of.
+        const expectedWordmarkSize = Math.min(168, Math.max(56, viewport.width * 0.14))
+        expect(
+          result.wordmarkLargeFontSize,
+          `decorative wordmark font-size is clamp(56px, 14vw, 168px) at ${viewport.width}px`,
+        ).toBeCloseTo(expectedWordmarkSize, 1)
+        expect(result.fontSizeFluidIntervals.length, 'raw font-size clamps collected').toBeLessThanOrEqual(1)
+        test.info().annotations.push({
+          type: 'measure',
+          description: `raw decorative font-size clamps (${scheme} @ ${viewport.width}): ${
+            result.fontSizeFluidIntervals.map(([lo, hi]) => `${String(lo)}–${String(hi)}px`).join(' | ') || 'none'
+          }`,
+        })
 
         // The package declares both families; faces must exist for each and be used on the page.
         const families = result.loadedFontFamilies.join(' ')
@@ -553,250 +1647,8 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
         expect(result.wordmarkFamily, 'the wordmark renders the display face').toBe(displayFace)
         expect(result.h1Family, 'the h1 renders the display face').toBe(displayFace)
         expect(result.bodyCopyFamily, 'the body copy renders the body face').toBe(bodyFace)
-        expect(result.captionFamily, 'the caption renders the body face').toBe(bodyFace)
+        expect(result.footerFamily, 'the footer renders the body face').toBe(bodyFace)
       })
     }
   }
-})
-
-test.describe('coming-soon: caption under the card (2026-10-23 edit)', () => {
-  /*
-   * The caption is the one block painted outside the card, in the decorative glow's area. Its
-   * wrapper is `position: relative` (Re-verification 5): like the card, it paints after the
-   * absolutely-positioned backdrop, so the glow sits BEHIND the caption's glyphs — they render at
-   * the caption token color instead of being dimmed by the translucent overlay. The pixels around
-   * the glyphs are still the glow composite (page surface + blurred gradients), and axe still
-   * cannot resolve that background (see the axe describe). Three guards:
-   * - contrast: WCAG AA (4.5:1) in both themes, measured twice — the caption token color against
-   *   the nearest solid ancestor (what a static resolver such as axe would use), and the actually
-   *   rendered pixels against each other: the caption's own screenshot is histogrammed, the
-   *   glyph-core cluster gives the painted text color, the dominant clusters the painted
-   *   background (worst shade kept). Both measurements must clear 4.5:1.
-   * - fidelity: the painted glyph cores must match the caption token color (within 3 per channel)
-   *   — the glow dimming the glyphs back over the caption would fail here.
-   * - geometry: the caption must stay horizontally centred like the rest of the section, line by
-   *   line — a wrapped, left-aligned line under a centred card would be a visible regression.
-   */
-  type ContrastResult = {
-    theme: string
-    captionColor: string
-    solidBackground: string
-    modeBackground: string
-    worstBackground: string
-    paintedText: string
-    tokenText: string
-    tokenDelta: number
-    glowColor: string
-    glowOpacity: number
-    ratioSolid: number
-    ratioPainted: number
-  }
-
-  /** Runs in the page; computed colors come back as `lab()`, so colors are read as sRGB pixels. */
-  const measureContrast = async (b64: string): Promise<ContrastResult> => {
-    const captionEl = document.querySelector('main section > div:last-child > p')
-    const backdropEl = document.querySelector('main section > div[aria-hidden="true"]')
-    if (captionEl === null) throw new Error('caption paragraph not found')
-
-    const ctx = document.createElement('canvas').getContext('2d')
-    if (ctx === null) throw new Error('no 2d context')
-    /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation (`lab()`, oklch, hex); `null` when fully transparent. */
-    const toRgb = (value: string): [number, number, number] | null => {
-      ctx.fillStyle = '#010203'
-      ctx.fillStyle = value
-      if (String(ctx.fillStyle) === '#010203' && value !== '#010203') throw new Error(`unparsable color: ${value}`)
-      ctx.clearRect(0, 0, 1, 1)
-      ctx.fillRect(0, 0, 1, 1)
-      const pixel = ctx.getImageData(0, 0, 1, 1).data
-      if ((pixel[3] ?? 0) === 0) return null
-      return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
-    }
-
-    const luminance = (rgb: [number, number, number]): number => {
-      const lin = rgb.map((c) => {
-        const s = c / 255
-        return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
-      })
-      return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
-    }
-    const contrastRatio = (a: [number, number, number], b: [number, number, number]): number => {
-      const la = luminance(a)
-      const lb = luminance(b)
-      return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
-    }
-
-    const captionCss = getComputedStyle(captionEl).color
-    const caption = toRgb(captionCss)
-    if (caption === null) throw new Error('caption has no resolved color')
-
-    // Nearest solid ancestor: walk up until a non-transparent background-color (`main` holds
-    // `bg-base`); this is the background a static resolver such as axe resolves.
-    let solid: [number, number, number] | null = null
-    let solidCss = ''
-    let el: Element | null = captionEl
-    while (el !== null && solid === null) {
-      const bgc = getComputedStyle(el).backgroundColor
-      const rgb = bgc === '' ? null : toRgb(bgc)
-      if (rgb !== null) {
-        solid = rgb
-        solidCss = bgc
-      } else {
-        el = el.parentElement
-      }
-    }
-    if (solid === null) throw new Error('no solid ancestor background behind the caption')
-
-    // Painted pixels: histogram the caption's own screenshot. The background (surface + glow)
-    // dominates and clusters near the mode; the glyph cores are the farthest cluster from it
-    // (antialiasing shades always sit between the two, never beyond the text core).
-    const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))
-    const bitmap = await createImageBitmap(new Blob([bytes.buffer as ArrayBuffer], { type: 'image/png' }))
-    const canvas = document.createElement('canvas')
-    canvas.width = bitmap.width
-    canvas.height = bitmap.height
-    const shot = canvas.getContext('2d')
-    if (shot === null) throw new Error('no 2d context for the screenshot')
-    shot.drawImage(bitmap, 0, 0)
-    const data = shot.getImageData(0, 0, canvas.width, canvas.height).data
-    type Bucket = { count: number; r: number; g: number; b: number }
-    const buckets = new Map<string, Bucket>()
-    let total = 0
-    for (let i = 0; i < data.length; i += 4) {
-      if ((data[i + 3] ?? 0) === 0) continue
-      total += 1
-      const key = `${Math.round((data[i] ?? 0) / 8)},${Math.round((data[i + 1] ?? 0) / 8)},${Math.round((data[i + 2] ?? 0) / 8)}`
-      const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 }
-      bucket.count += 1
-      bucket.r += data[i] ?? 0
-      bucket.g += data[i + 1] ?? 0
-      bucket.b += data[i + 2] ?? 0
-      buckets.set(key, bucket)
-    }
-    if (total === 0) throw new Error('empty caption screenshot')
-    const asRgb = (bucket: Bucket): [number, number, number] => [
-      bucket.r / bucket.count,
-      bucket.g / bucket.count,
-      bucket.b / bucket.count,
-    ]
-    const channelDistance = (a: [number, number, number], b: [number, number, number]): number =>
-      Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2])
-    const mode = [...buckets.values()].reduce((a, b) => (b.count > a.count ? b : a))
-    const modeRgb = asRgb(mode)
-    const families = [...buckets.values()].filter((bucket) => bucket.count >= total * 0.005)
-    const backgroundShades = families.filter((bucket) => channelDistance(asRgb(bucket), modeRgb) < 100)
-    if (backgroundShades.length === 0) throw new Error('no painted background cluster found')
-    let text: Bucket | null = null
-    for (const bucket of families) {
-      const distance = channelDistance(asRgb(bucket), modeRgb)
-      if (distance >= 100 && (text === null || distance > channelDistance(asRgb(text), modeRgb))) text = bucket
-    }
-    if (text === null) throw new Error('no painted text cluster distinct from the background')
-    const paintedText = asRgb(text)
-    const worst = backgroundShades.reduce((a, b) =>
-      contrastRatio(paintedText, asRgb(b)) < contrastRatio(paintedText, asRgb(a)) ? b : a,
-    )
-
-    // The glow token and the backdrop opacity, recorded with the measurement.
-    const probe = document.createElement('span')
-    probe.style.color = 'var(--softn-brand-glow)'
-    document.body.appendChild(probe)
-    const glowColor = getComputedStyle(probe).color
-    probe.remove()
-    const glowOpacity = backdropEl === null ? 0 : Number.parseFloat(getComputedStyle(backdropEl).opacity)
-
-    const rgbString = (rgb: [number, number, number]): string => `rgb(${rgb.map((c) => Math.round(c)).join(', ')})`
-
-    // Fidelity of the paint order: the positioned wrapper makes the glow paint under the glyphs,
-    // so their cores must land on the caption token color (the overlay dimming them back over the
-    // caption — the pre-Re-verification-5 state, dark glyph cores at rgb(173, 165, 196) — moved
-    // them by up to 9 per channel in dark and 22 in light).
-    const tokenDelta = Math.max(
-      Math.abs(paintedText[0] - caption[0]),
-      Math.abs(paintedText[1] - caption[1]),
-      Math.abs(paintedText[2] - caption[2]),
-    )
-
-    return {
-      theme: document.documentElement.getAttribute('data-theme') ?? '',
-      captionColor: captionCss,
-      solidBackground: solidCss,
-      modeBackground: rgbString(asRgb(mode)),
-      worstBackground: rgbString(asRgb(worst)),
-      paintedText: rgbString(paintedText),
-      tokenText: rgbString(caption),
-      tokenDelta,
-      glowColor,
-      glowOpacity,
-      ratioSolid: contrastRatio(caption, solid),
-      ratioPainted: contrastRatio(paintedText, asRgb(worst)),
-    }
-  }
-
-  for (const scheme of SCHEMES) {
-    test(`the caption keeps at least 4.5:1 in the ${scheme} theme, painted glow included`, async ({ page }) => {
-      await gotoWithTheme(page, scheme)
-      await expect(section(page)).toBeVisible()
-      await awaitFonts(page)
-
-      const shot = await caption(page).screenshot({ type: 'png' })
-      const result = await page.evaluate(measureContrast, shot.toString('base64'))
-
-      expect(result.theme).toBe(scheme)
-      expect(result.ratioSolid, `${scheme}: caption vs solid ${result.solidBackground}`).toBeGreaterThanOrEqual(4.5)
-      expect(
-        result.ratioPainted,
-        `${scheme}: caption vs painted ${result.worstBackground} (glow ${result.glowColor} @ ${result.glowOpacity})`,
-      ).toBeGreaterThanOrEqual(4.5)
-      expect(
-        result.tokenDelta,
-        `${scheme}: painted glyphs ${result.paintedText} must render at the caption token color ${result.tokenText} (the glow must not dim them)`,
-      ).toBeLessThanOrEqual(3)
-      test.info().annotations.push({
-        type: 'measure',
-        description: `${scheme}: token ${result.captionColor} on solid ${result.solidBackground} = ${result.ratioSolid.toFixed(2)}:1; painted text ${result.paintedText} on ${result.worstBackground} (mode ${result.modeBackground}, glow ${result.glowColor} @ ${result.glowOpacity}) = ${result.ratioPainted.toFixed(2)}:1; painted vs token ${result.tokenText} Δ ${result.tokenDelta.toFixed(1)}`,
-      })
-    })
-  }
-
-  test('the caption stays horizontally centred, line by line, at every audited viewport', async ({ page }) => {
-    type Geometry = { sectionCenter: number; textAlign: string; lines: { center: number; width: number }[] }
-    for (const { width, height } of [
-      { width: 320, height: 568 },
-      { width: 375, height: 667 },
-      { width: 1280, height: 800 },
-    ] as const) {
-      await page.setViewportSize({ width, height })
-      await page.goto('/')
-      await expect(section(page)).toBeVisible()
-      await awaitFonts(page)
-      const geometry = await page.evaluate((): Geometry | null => {
-        const sectionEl = document.querySelector('main section')
-        const captionEl = document.querySelector('main section > div:last-child > p')
-        if (sectionEl === null || captionEl === null) return null
-        const box = sectionEl.getBoundingClientRect()
-        const range = document.createRange()
-        range.selectNodeContents(captionEl)
-        const lines = Array.from(range.getClientRects())
-          .filter((rect) => rect.width > 0 && rect.height > 0)
-          .map((rect) => ({ center: rect.left + rect.width / 2, width: rect.width }))
-        return {
-          sectionCenter: box.left + box.width / 2,
-          textAlign: getComputedStyle(captionEl).textAlign,
-          lines,
-        }
-      })
-      const g = geometry ?? { sectionCenter: 0, textAlign: 'missing', lines: [] }
-      expect(g.lines.length, `${width}x${height}: the caption renders at least one line`).toBeGreaterThan(0)
-      for (const [index, line] of g.lines.entries()) {
-        expect(
-          Math.abs(line.center - g.sectionCenter),
-          `${width}x${height}: caption line ${index} (${line.width.toFixed(1)}px) off-centre`,
-        ).toBeLessThanOrEqual(0.5)
-      }
-      test.info().annotations.push({
-        type: 'measure',
-        description: `${width}x${height}: ${g.lines.length} line(s), textAlign ${g.textAlign}, widths ${g.lines.map((line) => `${line.width.toFixed(1)}px`).join('/')}`,
-      })
-    }
-  })
 })

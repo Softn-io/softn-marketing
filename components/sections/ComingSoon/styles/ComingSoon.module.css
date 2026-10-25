@@ -1,0 +1,276 @@
+/*
+ * Coming-soon page shell: header, left-aligned content, footer and the decorative backdrop.
+ *
+ * Colors, type, spacing, radii and durations come from --softn-* tokens. The orbs are decorative
+ * geometry (viewport-relative sizes, circle shapes), painted with brand tokens only: the warm orb
+ * reuses --softn-brand-aura, the same amber aura as the hero's pointer glow. No status colour is
+ * used as decoration.
+ *
+ * The page keeps a minimum viewport height but never hides overflow: on a short screen the content
+ * grows and scrolls instead of being clipped.
+ */
+
+.page {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
+  background-color: var(--softn-background);
+  color: var(--softn-color);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.orb-vivid,
+.orb-rich,
+.orb-warm {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(var(--softn-space-16));
+  will-change: transform;
+}
+
+.orb-vivid {
+  inline-size: 52vmax;
+  block-size: 52vmax;
+  inset-block-start: -18vmax;
+  inset-inline-start: -14vmax;
+  background-color: var(--softn-brand-vivid);
+  opacity: var(--softn-opacity-20);
+  animation: orb-drift-vivid calc(var(--softn-duration-drift) * 5) ease-in-out infinite;
+}
+
+.orb-rich {
+  inline-size: 44vmax;
+  block-size: 44vmax;
+  inset-block-end: -20vmax;
+  inset-inline-end: -16vmax;
+  background-color: var(--softn-brand-rich);
+  opacity: var(--softn-opacity-50);
+  animation: orb-drift-rich calc(var(--softn-duration-drift) * 6) ease-in-out infinite;
+}
+
+/* The rich orb is much dimmer on the light page; the media query covers the system preference and
+   the attribute selector covers an explicit choice. */
+:global([data-theme='light']) .orb-rich {
+  opacity: var(--softn-opacity-15);
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme='dark'])) .orb-rich {
+    opacity: var(--softn-opacity-15);
+  }
+}
+
+.orb-warm {
+  inline-size: 26vmax;
+  block-size: 26vmax;
+  inset-block-start: 8vh;
+  inset-inline-end: 18vw;
+  background-color: var(--softn-brand-aura);
+  opacity: var(--softn-opacity-10);
+  animation: orb-drift-warm calc(var(--softn-duration-drift) * 7) ease-in-out infinite;
+}
+
+.backdrop-fade {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 40%;
+  background-image: linear-gradient(to top, var(--softn-background), transparent);
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--softn-space-5);
+  padding-block: clamp(var(--softn-space-4), 3vh, var(--softn-space-6));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.wordmark {
+  text-decoration: none;
+}
+
+.main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  inline-size: 100%;
+  max-inline-size: var(--softn-container-5xl);
+  text-align: left;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--softn-space-3);
+}
+
+/* No token covers the design's giant wordmark size yet (display-xl tops out at 86px), so the
+   fluid clamp stays here until a display-2xl step exists. */
+.wordmark-large {
+  margin-block-start: clamp(var(--softn-space-4), 2.4vh, var(--softn-space-6));
+  font-size: clamp(56px, 14vw, 168px);
+  font-weight: var(--softn-font-weight-title-lg);
+  line-height: var(--softn-font-line-height-display-xl);
+  letter-spacing: var(--softn-font-letter-spacing-display-xl);
+}
+
+.dot {
+  inline-size: var(--softn-size-dotIndicator);
+  block-size: var(--softn-size-dotIndicator);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-brand-vivid);
+  animation: dot-pulse calc(var(--softn-duration-drift) * 0.5) ease-in-out infinite;
+}
+
+.title {
+  margin-block-start: clamp(var(--softn-space-4), 3.4vh, var(--softn-space-8));
+  max-inline-size: 22ch;
+  text-wrap: balance;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  margin-block-start: clamp(var(--softn-space-3), 1.8vh, var(--softn-space-4));
+  max-inline-size: 44ch;
+  text-wrap: pretty;
+}
+
+.form-area {
+  display: flex;
+  justify-content: flex-start;
+  inline-size: 100%;
+  margin-block-start: clamp(var(--softn-space-5), 4vh, var(--softn-space-8));
+}
+
+.footer {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  padding-block: clamp(var(--softn-space-3), 3vh, var(--softn-space-6));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+  color: var(--softn-color-tertiary);
+}
+
+@keyframes orb-drift-vivid {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(6vw, 4vh) scale(1.12);
+  }
+}
+
+@keyframes orb-drift-rich {
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate(-5vw, -6vh) scale(0.92);
+  }
+}
+
+@keyframes orb-drift-warm {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+
+  50% {
+    transform: translate(-3vw, 5vh);
+  }
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    opacity: var(--softn-opacity-45);
+  }
+
+  50% {
+    opacity: var(--softn-opacity-100);
+  }
+}
+
+@keyframes coming-soon-reveal {
+  from {
+    opacity: var(--softn-opacity-20);
+    transform: translateY(var(--softn-space-4));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes coming-soon-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.reveal {
+  animation: coming-soon-reveal var(--softn-duration-reveal) var(--softn-easing-out) var(--coming-soon-reveal-delay, 0s)
+    both;
+}
+
+.reveal-delay-1 {
+  --coming-soon-reveal-delay: calc(var(--softn-duration-micro) * 1);
+}
+
+.reveal-delay-2 {
+  --coming-soon-reveal-delay: calc(var(--softn-duration-micro) * 2);
+}
+
+.reveal-delay-3 {
+  --coming-soon-reveal-delay: calc(var(--softn-duration-micro) * 3);
+}
+
+.reveal-delay-4 {
+  --coming-soon-reveal-delay: calc(var(--softn-duration-micro) * 4);
+}
+
+/* Reduced motion collapses every entrance animation to the design's 150 ms fade. The orbs stop
+   instead of fading: a fade would end on full opacity and override their token opacity. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .dot {
+    animation: coming-soon-fade var(--softn-duration-reduced-motion) linear both;
+  }
+
+  .orb-vivid,
+  .orb-rich,
+  .orb-warm {
+    animation: none;
+  }
+}
