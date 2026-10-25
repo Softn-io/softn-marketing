@@ -45,5 +45,15 @@ next-env.d.ts
 # claude
 /.claude/agent-memory
 
+# opencode
+/.opencode/opencode.json
+
+# orca
+/.orchestration/
+
 # Serena project files
 /.serena/
+
+# playwright
+/playwright-report/
+/test-results/

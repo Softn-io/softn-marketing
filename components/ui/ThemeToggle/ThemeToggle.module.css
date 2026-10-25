@@ -1,0 +1,9 @@
+.toggle-theme {
+  border: 1px solid var(--softn-border-default);
+  cursor: pointer;
+}
+
+.toggle-theme:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}

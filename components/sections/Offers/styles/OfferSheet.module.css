@@ -1,0 +1,204 @@
+/*
+ * Full-screen offer detail sheet. Colors, spacing, radii, motion and icon sizes come from the
+ * --softn-* tokens; the clamp() ranges only interpolate between those steps, and the fluid content
+ * width is capped by the 4xl container token in the markup.
+ *
+ * The viewport itself is the scroll container so the header can stay sticky. The entrance follows
+ * the design's rise-and-fade, sized with the motion tokens; reduced motion removes it entirely.
+ */
+
+.popup {
+  position: fixed;
+  inset: 0;
+  z-index: var(--softn-z-modal);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background-color: var(--softn-background);
+  animation: sheet-in var(--softn-duration-sheet-drawer) var(--softn-easing-out);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--softn-motion-translate-y));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--softn-z-sticky);
+  background-color: var(--softn-background);
+}
+
+.headerInner {
+  padding-block: var(--softn-space-4);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-8), 5vw, var(--softn-space-16));
+  padding-block: clamp(var(--softn-space-5), 4vw, var(--softn-space-12))
+    clamp(var(--softn-space-16), 9vw, var(--softn-space-30));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.title {
+  max-inline-size: 20ch;
+}
+
+.intro {
+  max-inline-size: 52ch;
+}
+
+/* Label column and body column; below 48rem the body simply stacks under its label. */
+.section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--softn-space-4);
+}
+
+.sectionBody {
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .section {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: clamp(var(--softn-space-5), 3vw, var(--softn-space-10));
+    align-items: start;
+  }
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-4), 2vw, var(--softn-space-6));
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-1);
+  max-inline-size: 56ch;
+}
+
+.phases {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  list-style: none;
+}
+
+.phase {
+  display: flex;
+  align-items: baseline;
+  gap: var(--softn-space-4);
+  max-inline-size: 56ch;
+}
+
+.phaseNumber {
+  flex: none;
+  min-inline-size: 5ch;
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  max-inline-size: 56ch;
+}
+
+/*
+ * The two calls to action share one row from the desktop breakpoint up. Below it the link wraps
+ * under the button, where the block gap needs more room than the inline one; desktop keeps the
+ * single gap value of the design.
+ */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--softn-space-4);
+  row-gap: var(--softn-space-6);
+  margin-block-start: var(--softn-space-2);
+}
+
+@media (min-width: 64rem) {
+  .actions {
+    row-gap: var(--softn-space-4);
+  }
+}
+
+.secondary {
+  padding-block-end: var(--softn-space-1);
+  border: 0;
+  border-bottom: 1px solid var(--softn-border-default);
+  color: var(--softn-color-secondary);
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.secondary:hover {
+  border-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+.secondary:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  inline-size: var(--softn-size-sm);
+  block-size: var(--softn-size-sm);
+  padding: 0;
+  border: 1px solid var(--softn-border-default);
+  border-radius: var(--softn-radius-pill);
+  background-color: transparent;
+  color: var(--softn-color-tertiary);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.close:hover {
+  border-color: var(--softn-border-strong);
+  color: var(--softn-color);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.closeIcon {
+  inline-size: var(--softn-icon-size-md);
+  block-size: var(--softn-icon-size-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    animation: none;
+  }
+
+  .secondary,
+  .close {
+    transition: none;
+  }
+}

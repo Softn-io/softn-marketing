@@ -1,0 +1,50 @@
+/*
+ * Composite button color tokens have no Tailwind utility (see nextjs.md), so colors, sizing
+ * and transitions live here. Typography and radius come from Tailwind utilities in the markup.
+ */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--softn-duration-micro) var(--softn-easing-out),
+    color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.intent-primary {
+  background-color: var(--softn-button-primary-background-default);
+  color: var(--softn-button-primary-text-default);
+}
+
+.intent-primary:hover {
+  background-color: var(--softn-button-primary-background-hover);
+  color: var(--softn-button-primary-text-hover);
+}
+
+/* Padding follows the size, as the design system's Button does: a small button keeps the same
+   height but a tighter inline padding than a large one. */
+.size-sm {
+  min-height: var(--softn-size-sm);
+  padding-inline: var(--softn-space-3);
+}
+
+.size-lg {
+  min-height: var(--softn-size-lg);
+  padding-inline: var(--softn-space-5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button {
+    transition: none;
+  }
+}

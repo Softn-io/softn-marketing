@@ -1,0 +1,413 @@
+/*
+ * Layers: the drawer backdrop and viewport sit on --softn-z-drawer, above the sticky header
+ * (--softn-z-sticky): the popup repeats the header's top row so the header appears unchanged.
+ * Display, sizing and radius come from Tailwind utilities in the markup; this file only holds
+ * what has no utility (composite button tokens, transitions, drawer states, focus ring).
+ */
+
+.header {
+  padding-block: var(--softn-space-4);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.skip-link {
+  position: fixed;
+  top: var(--softn-space-2);
+  left: var(--softn-space-2);
+  z-index: var(--softn-z-toast);
+  padding: var(--softn-space-3) var(--softn-space-4);
+  border: 1px solid var(--softn-border-active);
+  border-radius: var(--softn-radius-md);
+  background-color: var(--softn-background-elevated);
+  color: var(--softn-color);
+  transform: translateY(calc(-100% - var(--softn-space-2)));
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+.nav-link {
+  color: var(--softn-color-tertiary);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 1px;
+  text-underline-offset: var(--softn-space-2);
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    text-decoration-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.nav-link:hover {
+  color: var(--softn-color);
+}
+
+/* Active section: foreground color plus a brand underline, so the state never relies on color alone. */
+.nav-link[aria-current='location'],
+.drawer-link[aria-current='location'] {
+  color: var(--softn-color);
+  text-decoration-color: var(--softn-brand-accent);
+}
+
+.burger {
+  border: 0;
+  background-color: transparent;
+  color: var(--softn-color);
+  cursor: pointer;
+}
+
+/*
+ * Header CTA revealed on scroll.
+ *
+ * Hidden, the wrapper leaves the flow (absolute, anchored to the right edge of the header's row):
+ * it takes no space, so the theme toggle sits against the header's own right padding edge, and the
+ * toggle moves left on its own when the CTA comes back. `visibility: hidden` keeps it out of the tab
+ * order, out of the accessibility tree and out of hit testing on its own, and the hide is
+ * instantaneous, so it is never a half-visible focusable box; `inert` comes on top of it, added by the
+ * component once the script has mounted (`ScrollRevealCta`). It is anchored where it lands
+ * when revealed — right-aligned, vertically centred like the toggle next to it, whose flex row
+ * centres its items — so the drop-in is the only thing that moves.
+ * The hide is instantaneous on purpose: the box that must disappear is the one the toggle needs, so
+ * a fade-out would overlap the toggle for the length of the transition. The appearance is the
+ * direction the reader watches: the CTA drops in — transparent, one --softn-space-2 step above its
+ * resting position and scaled down to `--softn-motion-scale-from` — and settles opaque, unoffset and
+ * unscaled over `--softn-duration-sheet-drawer` with `--softn-easing-out`.
+ * The drop-in rides on `translate` and `scale`, properties of their own, so the anchor offset above
+ * stays out of the transition — and both go through `--scroll-reveal-translate` /
+ * `--scroll-reveal-scale` so the no-JavaScript and reduced-motion overrides below can cancel them
+ * (see there).
+ * A transition between the two states rather than a `@keyframes` animation: `data-state` already is
+ * the state machine, so the appearance needs no extra hook, and the two overrides cancel the movement
+ * by resetting the same custom properties — an animation would need an `animation: none` reset in
+ * each of them, and its fill mode would replay on load.
+ */
+.scroll-reveal {
+  position: static;
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  translate: var(--scroll-reveal-translate, none);
+  scale: var(--scroll-reveal-scale, none);
+  transition:
+    opacity var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    translate var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    scale var(--softn-duration-sheet-drawer) var(--softn-easing-out),
+    visibility 0s;
+}
+
+/*
+ * `inset-block-start: 50%` + a half-height translate rather than a stretched box: the wrapper keeps
+ * its own height (the CTA's), which is what the translate needs to land on the row's centre.
+ * The drop-in start values are declared as custom properties, not straight on `translate` / `scale`:
+ * Lightning CSS removes a declaration whose value is the property's initial value, and `none` is
+ * exactly what the no-JavaScript override needs — a `var()` is opaque to the minifier, so the
+ * declarations are always there to be overridden.
+ */
+.scroll-reveal[data-state='hidden'] {
+  /* One --softn-space-2 step (8px) up: it ties with --softn-space-3 (12px) for the design's 10px
+     offset, and 8px is the design system's own motion translate step. */
+  --scroll-reveal-translate: 0 calc(-1 * var(--softn-space-2));
+  /* Start of the drop-in, from the motion scale: the only step the design system publishes. */
+  --scroll-reveal-scale: var(--softn-motion-scale-from);
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: 0;
+  transform: translateY(-50%);
+  translate: var(--scroll-reveal-translate);
+  scale: var(--scroll-reveal-scale);
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 0s,
+    visibility 0s;
+}
+
+/*
+ * Without JavaScript nothing ever flips `data-state`, so the CTA would stay out of the header for
+ * the whole session. `scripting` is the media feature that reports the browser's own support, so the
+ * CSS alone shows the CTA — no inline script and no `<noscript>` stylesheet. Nothing here touches
+ * `display`: the wrapper's own `hidden lg:block` utilities keep deciding whether the header has room
+ * for a CTA at that width, and the drawer keeps it out of the way below `lg`.
+ */
+@media (scripting: none) {
+  .scroll-reveal[data-state='hidden'] {
+    /* No drop-in: the CTA sits exactly where the revealed state puts it. Resetting the two custom
+       properties to `none` (the identity value of both) also keeps the computed `translate` and
+       `scale` at their initial value, so nothing offsets or shrinks the painted button — and it goes
+       through the `var()` the minifier cannot fold, where a literal `translate: none` / `scale: none`
+       would be dropped as the properties' initial value and leak the hidden offset. */
+    --scroll-reveal-translate: none;
+    --scroll-reveal-scale: none;
+    position: static;
+    transform: none;
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+.logo:focus-visible,
+.nav-link:focus-visible,
+.burger:focus-visible,
+.skip-link:focus-visible,
+.drawer-link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.backdrop,
+.viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--softn-z-drawer);
+}
+
+/*
+ * Enter: --softn-duration-screen-transition (280ms) with ease-out. Exit: --softn-duration-micro
+ * (120ms) with ease-in, so closing feels immediate. Only opacity and a short translateY (one
+ * --softn-space-8 step) animate; the popup no longer travels the full viewport height.
+ */
+.backdrop {
+  background-color: var(--softn-background-overlay);
+  transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.backdrop[data-starting-style],
+.backdrop[data-ending-style] {
+  opacity: 0;
+}
+
+.backdrop[data-ending-style] {
+  transition-duration: var(--softn-duration-micro);
+  transition-timing-function: var(--softn-easing-in);
+}
+
+/*
+ * The swipe start zones (top row and handle) use touch-action: none so the browser never claims the
+ * vertical pan there (iOS Safari would otherwise cancel the touch stream and the drawer would not
+ * follow the finger). Everywhere else pinch-zoom stays available.
+ */
+.viewport {
+  touch-action: pan-y pinch-zoom;
+}
+
+/*
+ * The popup is transparent and never visually transformed: the top row (same background token as the
+ * sticky header, so no seam) stays on the header's position and only the menu body below it travels
+ * with the swipe. The library writes --drawer-swipe-movement-y on the popup only, as a non-inherited
+ * registered property that Safari cannot opt descendants in to; --drawer-body-offset is an ordinary
+ * custom property computed on the popup from it, which children inherit normally.
+ */
+.popup {
+  --drawer-body-offset: var(--drawer-swipe-movement-y, 0px);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  outline: none;
+  opacity: 1;
+  touch-action: pan-y pinch-zoom;
+  transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.drawer-bar {
+  flex: none;
+  background-color: var(--softn-background);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drawer-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  background-color: var(--softn-background);
+  transform: translateY(var(--drawer-body-offset, 0px));
+  transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* Full-width strip (>= 44px tall) under the top row: a touch starting here starts the swipe. */
+.drawer-handle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--softn-size-md);
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drawer-handle-pill {
+  display: block;
+  width: var(--softn-space-10);
+  height: var(--softn-space-1);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-color-tertiary);
+}
+
+/* Marked swipe-ignore in the markup: a touch starting here scrolls or taps, it never starts a dismissal. */
+.drawer-content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  gap: var(--softn-space-6);
+  padding-block: var(--softn-space-2) var(--softn-space-10);
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+/* The library writes an inline translate3d/scale on the popup while swiping; only !important beats it. */
+.popup[data-swiping] {
+  transform: none !important;
+}
+
+.popup[data-starting-style],
+.popup[data-ending-style] {
+  opacity: 0;
+}
+
+.popup[data-starting-style] .drawer-body,
+.popup[data-ending-style] .drawer-body {
+  transform: translateY(var(--softn-space-8));
+}
+
+.popup[data-ending-style],
+.popup[data-ending-style] .drawer-body {
+  transition-duration: var(--softn-duration-micro);
+  transition-timing-function: var(--softn-easing-in);
+}
+
+/*
+ * Dismissed by swipe: the body keeps going from where the finger released it to below the viewport,
+ * for a duration scaled by the release velocity (--drawer-swipe-strength, 0.1 to 1). The library
+ * clears its inline `transition: none` in the same frame as data-ending-style, so a CSS transition
+ * is never created and the popup would unmount at once; only a running animation keeps it mounted,
+ * which is why the popup holds its opacity and the body travels with keyframes.
+ */
+@keyframes drawer-swipe-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-swipe-exit {
+  from {
+    transform: translateY(var(--drawer-body-offset, 0px));
+  }
+
+  to {
+    transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
+  }
+}
+
+.popup[data-ending-style][data-swipe-dismissed] {
+  opacity: 1;
+  transition: none;
+  animation: drawer-swipe-hold calc(var(--drawer-swipe-strength, 1) * var(--softn-duration-screen-transition));
+}
+
+.popup[data-ending-style][data-swipe-dismissed] .drawer-body {
+  transform: translateY(calc(var(--drawer-body-offset, 0px) + 100%));
+  transition: none;
+  animation: drawer-swipe-exit calc(var(--drawer-swipe-strength, 1) * var(--softn-duration-screen-transition))
+    var(--softn-easing-out) forwards;
+}
+
+.popup[data-swiping],
+.popup[data-swiping] .drawer-body {
+  transition: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* The backdrop fades with the swipe; its own transition is dropped so it tracks the finger. */
+.backdrop {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+}
+
+.portal:has(.popup[data-swiping]) .backdrop {
+  transition: none;
+}
+
+.drawer-nav {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+  /* Room for the focus ring, which the scroll container would otherwise clip. */
+  padding: var(--softn-space-1);
+  /* Keyboard focus-scroll ignores padding; without this the edge link's outline is clipped. */
+  scroll-padding-block: var(--softn-space-1);
+  margin: calc(-1 * var(--softn-space-1));
+}
+
+.drawer-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.drawer-link {
+  min-height: var(--softn-size-xl);
+  gap: var(--softn-space-5);
+  border-bottom: 1px solid var(--softn-border-subtle);
+  color: var(--softn-color);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 2px;
+  text-underline-offset: var(--softn-space-1);
+  transition: text-decoration-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-link,
+  .drawer-link {
+    transition: none;
+  }
+
+  .skip-link {
+    transition: none;
+  }
+
+  /* The header CTA only fades in: the reveal transitions neither the drop-in offset (`translate`) nor
+     the scale. */
+  .scroll-reveal {
+    transition-property: opacity, visibility;
+    transition-duration: var(--softn-duration-reduced-motion);
+  }
+
+  /* The hidden state's own offset and scale are reset here as well, so the reveal never applies them,
+     not even on the frame it starts: the fade is the whole appearance. */
+  .scroll-reveal[data-state='hidden'] {
+    --scroll-reveal-translate: none;
+    --scroll-reveal-scale: none;
+  }
+
+  .backdrop,
+  .popup,
+  .popup[data-ending-style][data-swipe-dismissed] {
+    transition-property: opacity;
+    transition-duration: var(--softn-duration-micro);
+    transition-delay: 0s;
+  }
+
+  .popup[data-ending-style][data-swipe-dismissed] {
+    opacity: 0;
+    animation: none;
+  }
+
+  .drawer-body {
+    transition: none;
+  }
+
+  .popup[data-starting-style] .drawer-body,
+  .popup[data-ending-style] .drawer-body,
+  .popup[data-ending-style][data-swipe-dismissed] .drawer-body {
+    transform: none;
+    transition: none;
+    animation: none;
+  }
+}

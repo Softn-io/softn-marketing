@@ -1,23 +1,40 @@
-import type { Metadata } from "next";
-import { plusJakartaSans, zalandoSans } from "./fonts";
-import "./globals.css";
+import type { Metadata } from 'next'
+import { plusJakartaSans, zalandoSans } from './fonts'
+import { metadataContent } from '@/locales/fr/metadata'
+import { SITE_URL } from '@/lib/site'
+import { themeInitScript } from '@/lib/theme'
+import './globals.css'
 
-/**
- * Minimal metadata for the foundation layout. Title, description and
- * OpenGraph copy are pending validated content from `content-seo` and
- * `docs/seo-brief.md` (not yet written) — see final report.
- */
+const { home } = metadataContent
+
 export const metadata: Metadata = {
-  title: "Softn.io",
-};
+  metadataBase: new URL(SITE_URL),
+  title: home.title,
+  description: home.description,
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: home.openGraph.title,
+    description: home.openGraph.description,
+    locale: home.openGraph.locale,
+  },
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+const RootLayout = ({ children }: LayoutProps<'/'>) => {
   return (
     <html
       lang="fr"
       className={`${plusJakartaSans.variable} ${zalandoSans.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+      </head>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
-  );
+  )
 }
+
+export default RootLayout

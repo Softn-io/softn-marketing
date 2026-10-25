@@ -1,8 +1,27 @@
-/**
- * Foundation shell only: the real one-page sections (hero, offer, process…)
- * land in issues #9-22, which depend on this one. No copy here — content
- * comes from `content/fr/*.ts` once written and validated by `content-seo`.
- */
-export default function Home() {
-  return <main className="flex flex-1 flex-col bg-base text-foreground" />;
+import type { Metadata } from 'next'
+import { ComingSoon } from '@components/sections/ComingSoon'
+import { metadataContent } from '@/locales/fr/metadata'
+
+const { comingSoon } = metadataContent
+
+/** Coming-soon metadata: the only page indexed until the full site launches. */
+export const metadata: Metadata = {
+  title: comingSoon.title,
+  description: comingSoon.description,
+  alternates: { canonical: '/' },
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    url: '/',
+    title: comingSoon.openGraph.title,
+    description: comingSoon.openGraph.description,
+    locale: comingSoon.openGraph.locale,
+  },
 }
+
+/** Home page: the coming-soon screen and its e-mail waitlist. */
+const Home = () => {
+  return <ComingSoon />
+}
+
+export default Home

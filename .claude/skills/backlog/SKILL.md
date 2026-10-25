@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # /backlog — turn the design handoff into a tracked task list
 
-You run in the **main conversation**: creating 15–25 GitHub issues in bulk is expensive to redo, so Mel validates the breakdown before anything is created. Talk to Mel in French.
+You run in the **main conversation**: creating 15–25 GitHub issues in bulk is expensive to redo, so Mel validates the breakdown before anything is created. 
 
 ## Step 1 — Read the scope
 
@@ -18,7 +18,7 @@ You run in the **main conversation**: creating 15–25 GitHub issues in bulk is 
 ## Step 2 — Draft the task list (create nothing yet)
 
 - One task = one thing `/ship` can deliver as a single PR: a page section, the chatbot flow, a legal page, a CI workflow, an SEO pass — never "build the whole site", never "add one button."
-- For each task, work out: title, one-line scope, owning agent (`nextjs-dev` / `content-seo` / `chatbot-dev` / `qa` / `security` / `git-pr`), and its dependencies on other tasks (referenced by title — issue numbers don't exist yet).
+- For each task, work out: title, one-line scope, owning agent (`nextjs-dev` / `content-seo` / `chatbot-dev` / `qa` / `security-audit` / `git-pr`), and its dependencies on other tasks (referenced by title — issue numbers don't exist yet).
 - Order the list so a sensible build sequence is visible: foundation first (layout shell, tokens wiring, theming), then content sections, then the chatbot/booking flow, then SEO/CI/legal pages last.
 - Present the full list to Mel as a compact table (title · scope · agent · depends on). **Do not create any GitHub issue or Project until she approves it.** If she asks for changes, revise and re-present rather than partially creating issues.
 
