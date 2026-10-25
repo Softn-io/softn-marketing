@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
 import { Header } from '@components/layout/Header'
 import { Hero } from '@components/sections/Hero'
+import { Method } from '@components/sections/Method'
 import { Offers } from '@components/sections/Offers'
 import { SECTION_IDS } from '@/lib/anchors'
 import { isPreviewRouteEnabled } from '@/lib/preview'
@@ -39,6 +40,7 @@ const Preview = async () => {
       <main id={SECTION_IDS.main} className="flex flex-1 flex-col bg-base text-foreground">
         <Hero />
         <Offers />
+        <Method />
       </main>
     </>
   )
