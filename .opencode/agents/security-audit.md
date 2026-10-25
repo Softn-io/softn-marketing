@@ -1,7 +1,7 @@
 ---
 description: Read-only security and GDPR compliance review of the softn.io site. Use before each PR or after a change touching secrets, Route Handlers, the chatbot, third parties (Airtable, Fillout, Umami), cookies or CI.
 mode: primary
-model: openrouter/z-ai/glm-5.3
+model: openrouter/z-ai/glm-5.3#max
 permissions:
   - action: edit
     resource: "*"

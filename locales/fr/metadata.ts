@@ -11,6 +11,20 @@ export const metadataContent = {
       locale: 'fr_FR',
     },
   },
+  comingSoon: {
+    title: 'Softn.io | Automatisation et agents IA, bientôt en ligne',
+    description:
+      "Sites, web apps, automatisation et agents IA. Le nouveau site arrive bientôt : laissez votre e-mail, je vous écris à l'ouverture.",
+    openGraph: {
+      title: 'Softn.io : sites, web apps, automatisation et agents IA',
+      description:
+        "Création de sites et d'applications, automatisation avec des agents IA. Le site complet de Softn.io arrive bientôt.",
+      locale: 'fr_FR',
+    },
+  },
+  preview: {
+    title: 'Aperçu | Softn.io',
+  },
   legal: {
     mentions: {
       title: 'Mentions légales | Softn.io',

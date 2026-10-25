@@ -12,9 +12,9 @@
  *
  * ## Page states covered
  *
- * - Home page `/`, analysed as a whole, in dark and in light theme (default desktop viewport), once
- *   the finite entrance animations (the hero reveal) have settled, and again under
- *   `prefers-reduced-motion: reduce` where no animation runs at all.
+ * - The full one-page site on `/preview` (header + hero + offers), analysed as a whole, in dark and in
+ *   light theme (default desktop viewport), once the finite entrance animations (the hero reveal)
+ *   have settled, and again under `prefers-reduced-motion: reduce` where no animation runs at all.
  * - Header, scoped with `AxeBuilder#include`, in dark and in light theme, at a mobile viewport:
  *   - drawer closed: the `header` landmark itself;
  *   - drawer open: the drawer dialog. While the drawer is open the `header` element is `aria-hidden`
@@ -23,8 +23,8 @@
  * - Header again, at a desktop viewport, in dark and in light theme, **with the scroll-revealed
  *   booking call to action showing** (`ScrollRevealCta`): at the top of the page that CTA is hidden
  *   and out of the accessibility tree, so the analyses above never measure its contrast. Tall filler
- *   sections are injected before hydration (the home page holds only the hero until their own issues
- *   land, which is not enough scroll distance to push `#hero-cta` out of the viewport), the hero CTA
+ *   sections are injected before hydration (the preview page holds only the hero, which is not
+ *   enough scroll distance to push `#hero-cta` out of the viewport), the hero CTA
  *   is scrolled above the viewport, and the settled `header` landmark is analysed.
  *
  * The no-JavaScript rendering of the header CTA is *not* analysed here: axe-core is injected by
@@ -123,10 +123,10 @@ const forceTheme = async (page: Page, scheme: Scheme): Promise<void> => {
   await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [THEME_STORAGE_KEY, scheme] as const)
 }
 
-/** Loads `/` and waits until the theme has actually been applied (settled attribute). */
+/** Loads the one-page preview and waits until the theme has actually been applied (settled attribute). */
 const gotoHomeWithTheme = async (page: Page, scheme: Scheme): Promise<void> => {
   await forceTheme(page, scheme)
-  await page.goto('/')
+  await page.goto('/preview')
   await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
 }
 
@@ -151,7 +151,7 @@ const awaitRevealSettled = async (page: Page): Promise<void> => {
   })
 }
 
-test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
+test.describe('accessibility: one-page preview (WCAG 2.1 AA)', () => {
   for (const scheme of SCHEMES) {
     test(`whole page in ${scheme} theme, after the entrance has settled`, async ({ page }) => {
       await gotoHomeWithTheme(page, scheme)
@@ -178,44 +178,44 @@ test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
         passNodes.some((html) => html.includes(hero.cta.primary)),
         'axe did not measure the hero primary CTA',
       ).toBe(true)
-      const gradientNodes = (results.incomplete.find((item) => item.id === 'color-contrast')?.nodes ?? []).filter(
-        (node) => (node.html ?? '').includes('Hero-module'),
-      )
-      test.info().annotations.push({
-        type: 'axe-incomplete-color-contrast',
-        description: `${scheme}: ${String(gradientNodes.length)} hero node(s) unmeasurable by axe (background gradient) — covered by the painted-pixel test`,
-      })
-      expect(gradientNodes.length, 'the hero text nodes axe cannot measure').toBeGreaterThanOrEqual(6)
+      const incompleteNodes = results.incomplete.find((item) => item.id === 'color-contrast')?.nodes ?? []
       /*
        * Membership of the set is proven on the real elements, never on axe's `html` snippet: axe
        * truncates that snippet far before a long paragraph's own text (the subtitle's opening tag
-       * alone eats the budget), so a text needle like `hero.subtitle.slice(0, 24)` cannot match it
-       * and a class-name match would not prove the copy. Each reported node also carries its
-       * `target` selector — resolved here against the live page (last part wins, through shadow
-       * roots if there were any), and the needles are matched on the resolved element's
-       * `textContent`. Stronger than a snippet check: every reported node has to resolve to a real
-       * element, and the needles have to be its real text.
+       * alone eats the budget), so a text needle like `hero.subtitle.slice(0, 24)` cannot match it,
+       * and a class-name match would not prove the copy — nor even survive the build: CSS-module
+       * class names are build-generated hashes, not a stable contract, so the set is matched
+       * structurally. Each reported node carries its `target` selector — resolved here against the
+       * live page (last part wins, through shadow roots if there were any) and kept when the
+       * element sits inside the hero section, the `<section>` that owns the page's single `h1`;
+       * the needles are matched on the resolved element's `textContent`. Stronger than a snippet
+       * check: every reported node has to resolve to a real element, and the needles have to be
+       * its real text.
        */
-      const gradientTexts = await page.evaluate(
-        (targets) =>
-          targets.map((parts) => {
+      const resolved = await page.evaluate(
+        (targets) => {
+          const heroSection = document.querySelector('main h1')?.closest('section') ?? null
+          return targets.map((parts) => {
             let root: ParentNode = document
             let last: Element | null = null
             for (const part of parts) {
               const selector = typeof part === 'string' ? part : part.join('')
               const found: Element | null = root.querySelector(selector)
-              if (found === null) return ''
+              if (found === null) return null
               last = found
               root = found.shadowRoot ?? found
             }
-            return last === null ? '' : (last.textContent ?? '')
-          }),
-        gradientNodes.map((node) => node.target),
+            return last !== null && heroSection !== null && heroSection.contains(last) ? (last.textContent ?? '') : null
+          })
+        },
+        incompleteNodes.map((node) => node.target),
       )
-      expect(
-        gradientTexts.filter((text) => text !== '').length,
-        'every hero node axe reports as unmeasurable resolves to a real element',
-      ).toBe(gradientNodes.length)
+      const gradientTexts = resolved.filter((text): text is string => text !== null)
+      test.info().annotations.push({
+        type: 'axe-incomplete-color-contrast',
+        description: `${scheme}: ${String(gradientTexts.length)} hero node(s) unmeasurable by axe (background gradient) — covered by the painted-pixel test`,
+      })
+      expect(gradientTexts.length, 'the hero text nodes axe cannot measure').toBeGreaterThanOrEqual(6)
       for (const needle of [hero.title.line1, hero.subtitle.slice(0, 24), hero.cta.secondary]) {
         expect(
           gradientTexts.some((text) => text.includes(needle)),
@@ -229,7 +229,7 @@ test.describe('accessibility: home page (WCAG 2.1 AA)', () => {
     test(`whole page in ${scheme} theme, reduced motion`, async ({ page }) => {
       await forceTheme(page, scheme)
       await page.emulateMedia({ reducedMotion: 'reduce' })
-      await page.goto('/')
+      await page.goto('/preview')
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await expect(page.getByRole('main')).toBeVisible()
       await awaitFonts(page)

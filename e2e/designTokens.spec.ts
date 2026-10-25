@@ -16,7 +16,13 @@ import { HERO_CTA_ID, SECTION_IDS } from '../lib/anchors'
  * instead that the loaded faces back the two families the package declares.
  */
 
-type AuditParams = { theme: 'dark' | 'light'; thirdParty: string[]; heroCtaId: string; methodId: string }
+type AuditParams = {
+  theme: 'dark' | 'light'
+  thirdParty: string[]
+  heroCtaId: string
+  methodId: string
+  offerSectionId: string
+}
 /**
  * Typography box of a rendered Button: the type step and weight, the padding and height of the size
  * scale, the face the label is painted in and its line-height as a ratio. The face and the ratio pin
@@ -57,6 +63,7 @@ const auditInPage = ({
   thirdParty,
   heroCtaId,
   methodId,
+  offerSectionId,
 }: AuditParams): AuditResult & { thirdParty: string[] } => {
   // The probe wrapper carries this color so tokens that are not colors (invalid at
   // computed-value time) resolve to it instead of leaking an inherited real color.
@@ -194,6 +201,7 @@ const auditInPage = ({
   // 3. Audit the key elements.
   const heroTexts = Array.from(document.querySelectorAll('main section p'))
   const heroLinks = Array.from(document.querySelectorAll('main section a'))
+  const offerCards = Array.from(document.querySelectorAll(`#${offerSectionId} article`))
   const elements: Record<string, Element | null> = {
     body: document.body,
     header: document.querySelector('header'),
@@ -214,6 +222,26 @@ const auditInPage = ({
     heroIndicator: heroLinks.at(-1) ?? null,
     heroBadge: document.querySelector('main section a span[aria-hidden="true"]'),
     heroContent: document.getElementById(heroCtaId)?.closest('div')?.parentElement ?? null,
+    // Offers (#11): the section, its visually hidden h2, the header row, then both cards down to
+    // every level that paints — kicker, detail affordance, h3, body text, audience pill, overlay
+    // button. One card of each tone: brand violet first, warning amber second.
+    offerSection: document.getElementById(offerSectionId),
+    offerHeading: document.querySelector(`#${offerSectionId} h2.sr-only`),
+    offerHeaderRow: document.querySelector(`#${offerSectionId} h2 + div`),
+    offerEyebrow: document.querySelector(`#${offerSectionId} h2 + div > p`),
+    offerHint: document.querySelector(`#${offerSectionId} h2 + div > p + p`),
+    offerGrid: document.querySelector(`#${offerSectionId} > div > div:last-child`),
+    offerCard1: offerCards[0] ?? null,
+    offerKicker1: offerCards[0]?.querySelector('span') ?? null,
+    offerDetail1: offerCards[0]?.querySelector('span + span') ?? null,
+    offerTitle1: offerCards[0]?.querySelector('h3') ?? null,
+    offerText1: offerCards[0]?.querySelector('p') ?? null,
+    offerPill1: offerCards[0]?.querySelector('li') ?? null,
+    offerAction1: offerCards[0]?.querySelector('button') ?? null,
+    offerCard2: offerCards[1] ?? null,
+    offerKicker2: offerCards[1]?.querySelector('span') ?? null,
+    offerTitle2: offerCards[1]?.querySelector('h3') ?? null,
+    offerPill2: offerCards[1]?.querySelector('li') ?? null,
   }
 
   const mismatches: string[] = []
@@ -332,7 +360,7 @@ for (const theme of ['dark', 'light'] as const) {
       const url = new URL(req.url())
       if (url.hostname !== 'localhost' && !url.hostname.startsWith('127.')) external.push(req.url())
     })
-    await page.goto('/')
+    await page.goto('/preview')
     await expect(page.locator('header')).toBeVisible()
     await page.evaluate(() => document.fonts.ready)
     const result = await page.evaluate(auditInPage, {
@@ -340,6 +368,7 @@ for (const theme of ['dark', 'light'] as const) {
       thirdParty: external,
       heroCtaId: HERO_CTA_ID,
       methodId: SECTION_IDS.method,
+      offerSectionId: SECTION_IDS.offers,
     } satisfies AuditParams)
 
     // Sanity: the audit is meaningless if it collected no tokens.

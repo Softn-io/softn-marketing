@@ -5,6 +5,7 @@ export const offers = {
   eyebrow: nav.offers,
   hint: 'Sélectionnez une carte pour voir comment je peux vous aider.',
   detailLink: 'Détail',
+  sheetCloseLabel: 'Fermer la fiche',
   srTitle: 'Deux façons de travailler ensemble : créer et automatiser',
   create: {
     kicker: '01 — Créer',
@@ -60,6 +61,7 @@ export const offers = {
       title: "Vos tâches répétitives, confiées à l'IA",
       intro:
         'E-mails, relances, devis, saisies : ces tâches prennent du temps et se répètent. Je commence par étudier votre façon de travailler, puis je conçois et je mets en place des automatisations adaptées à vos outils, en vous laissant la décision. Les agents IA interviennent là où ils vous font gagner du temps, avec des garde-fous.',
+      gainsLabel: "Ce que comprend l'accompagnement",
       items: [
         {
           title: 'Étude de vos processus et repérage des automatisations possibles',
@@ -78,12 +80,14 @@ export const offers = {
           text: "Vous apprenez à lire, relancer et arrêter chaque automatisation, avec une documentation courte et un point de suivi pour ajuster. Si vous préférez ne pas les gérer vous-même, le suivi peut m'être confié.",
         },
       ],
+      phasesLabel: "Déroulement de l'accompagnement",
       phases: [
         'Observation : ce que vous faites vraiment, à la main',
         'Liste priorisée : temps gagné estimé, ordre de priorité',
         'Mise en place workflow par workflow, testés avec vous',
         "Transfert : vous pilotez si vous êtes à l'aise, je reste disponible en cas de besoin, ou je continue d'assurer le suivi si vous le préférez",
       ],
+      whoLabel: 'Pour qui',
       who: 'Indépendants, petites équipes et structures sans compétences techniques, ainsi que les équipes de développement qui souhaitent encadrer leur usage des agents IA.',
       cta: {
         primary: common.cta.book,

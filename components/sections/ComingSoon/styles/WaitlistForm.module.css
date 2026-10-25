@@ -1,0 +1,138 @@
+/*
+ * Waitlist form. Colors, radii, spacing and type come from --softn-* tokens; the input and button
+ * composite colour pairs have no Tailwind utility, so they are read here as custom properties, in
+ * this component's own stylesheet. The visible focus ring is an outline, not a colour change alone.
+ */
+
+.waitlist {
+  inline-size: 100%;
+  max-inline-size: var(--softn-container-md);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+  inline-size: 100%;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--softn-space-3);
+}
+
+.input {
+  flex: 1 1 var(--softn-container-3xs);
+  min-inline-size: 0;
+  block-size: var(--softn-size-lg);
+  padding-inline: var(--softn-space-5);
+  border: 1px solid var(--softn-input-border-default);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-input-background);
+  color: var(--softn-input-text);
+  font-family: inherit;
+  font-size: var(--softn-font-size-body-md);
+  line-height: var(--softn-font-line-height-body-md);
+  transition: border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.input::placeholder {
+  color: var(--softn-input-placeholder);
+}
+
+.input:hover {
+  border-color: var(--softn-input-border-strong);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--softn-input-border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--softn-input-focus-ring);
+}
+
+.input-error {
+  border-color: var(--softn-input-border-error);
+}
+
+.submit {
+  flex: 1 1 auto;
+}
+
+.submit:disabled {
+  background-color: var(--softn-button-disabled-background-default);
+  color: var(--softn-button-disabled-text-default);
+  cursor: not-allowed;
+}
+
+.error,
+.reassurance,
+.privacy {
+  padding-inline: var(--softn-space-5);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  text-wrap: pretty;
+}
+
+.error {
+  color: var(--softn-input-error-text);
+}
+
+.reassurance,
+.privacy {
+  color: var(--softn-color-tertiary);
+}
+
+.privacy {
+  font-size: var(--softn-font-size-label);
+  line-height: var(--softn-font-line-height-label);
+}
+
+/* Keeps the honeypot out of the layout and out of the accessibility tree without display: none,
+   which some bots detect. The input is also removed from the tab order in the markup. */
+.honeypot {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.success {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--softn-space-3);
+  min-block-size: var(--softn-size-lg);
+  color: var(--softn-color);
+  font-size: var(--softn-font-size-body-md);
+  line-height: var(--softn-font-line-height-body-md);
+}
+
+/* Emphasis on the submitted address uses a Softn weight token, not the browser default. */
+.success strong {
+  font-weight: var(--softn-font-weight-title-sm);
+}
+
+.success-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--softn-size-xs);
+  block-size: var(--softn-size-xs);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-brand-background);
+  color: var(--softn-brand-glow);
+}
+
+.success-icon svg {
+  inline-size: var(--softn-icon-size-sm);
+  block-size: var(--softn-icon-size-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input {
+    transition: none;
+  }
+}

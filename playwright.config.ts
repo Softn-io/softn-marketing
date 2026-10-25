@@ -28,5 +28,17 @@ export default defineConfig({
     url: `http://localhost:${PORT}`,
     reuseExistingServer: false,
     timeout: 240_000,
+    env: {
+      ENABLE_PREVIEW_ROUTE: 'true',
+      // The Server Action calls the provider server-side, where page.route cannot intercept:
+      // blanking every provider key (process.env wins over env files; lib/env treats '' as
+      // unset) so no run can ever reach Baserow or Airtable.
+      BASEROW_API_URL: '',
+      BASEROW_TOKEN: '',
+      BASEROW_WAITLIST_TABLE_ID: '',
+      AIRTABLE_TOKEN: '',
+      AIRTABLE_BASE_ID: '',
+      AIRTABLE_WAITLIST_TABLE_ID: '',
+    },
   },
 })
