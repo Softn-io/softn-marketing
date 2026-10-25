@@ -4,6 +4,7 @@ import { Check } from 'lucide-react'
 import { useActionState, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@components/ui/Button'
 import { interpolate } from '@/lib/interpolate'
+import { interpolateSegments } from '@/lib/text/interpolateSegments'
 import { comingSoon } from '@/locales/fr/comingSoon'
 import { WAITLIST_FIELDS, WAITLIST_MIN_DELAY_MS, type WaitlistAction, type WaitlistResult } from '@/schemas/waitlist'
 import styles from './styles/WaitlistForm.module.css'
@@ -70,6 +71,7 @@ export const WaitlistForm = ({ action }: WaitlistFormProps) => {
 
   const isSent = (trapped || state?.ok === true) && email.trim() !== ''
   const successMessage = isSent ? interpolate(form.success, { email: email.trim() }) : ''
+  const successSegments = isSent ? interpolateSegments(form.success, { email: email.trim() }) : []
   const announcement = pending ? form.submitBusy : (errorMessage ?? successMessage)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
@@ -108,7 +110,11 @@ export const WaitlistForm = ({ action }: WaitlistFormProps) => {
           <span aria-hidden="true" className={styles['success-icon']}>
             <Check />
           </span>
-          {successMessage}
+          <span>
+            {successSegments.map((segment, index) =>
+              segment.kind === 'placeholder' ? <strong key={index}>{segment.value}</strong> : segment.value,
+            )}
+          </span>
         </p>
       ) : (
         <form action={formAction} onSubmit={handleSubmit} noValidate aria-busy={pending} className={styles.form}>

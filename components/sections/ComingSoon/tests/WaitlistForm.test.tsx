@@ -85,7 +85,28 @@ describe('WaitlistForm', () => {
     expect(formData?.get('email')).toBe('mel@example.fr')
     const success = interpolate(form.success, { email: 'mel@example.fr' })
     await waitFor(() => expect(screen.getAllByText(success).length).toBeGreaterThan(0))
+
+    const bold = screen.getByText('mel@example.fr', { selector: 'strong' })
+    expect(bold.textContent).toBe('mel@example.fr')
+    expect(bold.closest('p')?.textContent).toBe(success)
+    expect(screen.getByRole('status').textContent).toBe(success)
     expect(screen.queryByRole('button', { name: form.submit })).toBeNull()
+  })
+
+  it('renders a markup-like address as text instead of HTML', async () => {
+    const formElement = renderForm()
+    const address = '<b>x</b>@example.fr'
+    fireEvent.change(emailInput(), { target: { value: address } })
+    now += 2500
+
+    submit(formElement)
+
+    await waitFor(() => expect(action).toHaveBeenCalledTimes(1))
+    const bold = screen.getByText(address, { selector: 'strong' })
+    expect(bold.textContent).toBe(address)
+    expect(bold.querySelector('b')).toBeNull()
+    expect(bold.closest('p')?.textContent).toBe(interpolate(form.success, { email: address }))
+    expect(document.querySelector('b')).toBeNull()
   })
 
   it('shows the success state without a network call when the honeypot is filled', async () => {

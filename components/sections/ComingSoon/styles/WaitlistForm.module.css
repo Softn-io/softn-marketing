@@ -110,6 +110,11 @@
   line-height: var(--softn-font-line-height-body-md);
 }
 
+/* Emphasis on the submitted address uses a Softn weight token, not the browser default. */
+.success strong {
+  font-weight: var(--softn-font-weight-title-sm);
+}
+
 .success-icon {
   display: grid;
   flex: none;

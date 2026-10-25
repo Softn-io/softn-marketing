@@ -13,7 +13,7 @@ export const comingSoon = {
     errorEmpty: 'Indiquez votre adresse e-mail.',
     errorInvalid: "Cette adresse e-mail n'est pas valide.",
     errorServer: "L'inscription n'a pas abouti. Réessayez dans un instant.",
-    success: "C'est noté. Je vous écris à {email} au lancement.",
+    success: "C'est noté. Je vous écrirai à {email} lors du lancement.",
     privacyNotice: 'Adresse utilisée uniquement pour cet e-mail de lancement. Suppression possible sur simple demande.',
     honeypotLabel: 'Ne pas remplir ce champ',
   },
