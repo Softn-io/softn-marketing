@@ -1,0 +1,336 @@
+/*
+ * Agent section shell. Colors, spacing, radii, type, z-index, motion and opacity come from
+ * --softn-* tokens. The design values the scale does not publish stay here, named for what they are:
+ * the one-viewport overlap, the glow geometry and blur, the ambient animation durations, the two
+ * dot travel distances and the send-button hover shift.
+ */
+
+.section {
+  position: relative;
+  /*
+   * Paints over the method timeline the section overlaps: the card layer is the lowest stack above
+   * the page and still below the sticky site header (--softn-z-sticky).
+   */
+  z-index: var(--softn-z-card);
+  overflow: hidden;
+  /* The design covers the last viewport of the method section, whose timeline ends with a spacer. */
+  margin-block-start: -100vh;
+  border-start-start-radius: var(--softn-radius-xl);
+  border-start-end-radius: var(--softn-radius-xl);
+  background-color: var(--softn-background);
+  /*
+   * Top shadow of the design (0 -24px 60px -30px at 28% black): no upward shadow token exists, so
+   * the geometry stays fixed here and only the colour comes from a token.
+   */
+  box-shadow: 0 -24px 60px -30px color-mix(in oklab, var(--softn-color-black) 28%, transparent);
+  padding-block: clamp(var(--softn-space-12), 8vw, var(--softn-space-24));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.content {
+  position: relative;
+}
+
+/* Decorative radial glow of the design, bled off the top-right corner of the section. */
+.glow {
+  position: absolute;
+  inset-block-start: -240px;
+  inset-inline-end: -180px;
+  inline-size: 620px;
+  block-size: 620px;
+  border-radius: var(--softn-radius-pill);
+  background: radial-gradient(
+    circle,
+    color-mix(in oklab, var(--softn-brand-vivid) 90%, transparent) 0%,
+    color-mix(in oklab, var(--softn-brand-vivid) 46%, transparent) 26%,
+    color-mix(in oklab, var(--softn-brand-vivid) 18%, transparent) 46%,
+    color-mix(in oklab, var(--softn-brand-vivid) 5%, transparent) 66%,
+    transparent 84%
+  );
+  filter: blur(48px);
+  opacity: var(--softn-opacity-15);
+  animation: agent-glow 14s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.title {
+  margin-block-start: var(--softn-space-4);
+  max-inline-size: 24ch;
+}
+
+.conversation {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3vw, var(--softn-space-8));
+  margin-block-start: clamp(var(--softn-space-8), 4.5vw, var(--softn-space-12));
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3vw, var(--softn-space-8));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* One speaker's run of consecutive messages: the speaker line sits once above the run. */
+.messageGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+}
+
+/* The run itself, spaced like the messages of a conversation rather than like a block of text. */
+.groupMessages {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3vw, var(--softn-space-8));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.speaker {
+  color: var(--softn-brand-foreground);
+}
+
+.messageText {
+  margin: 0;
+  max-inline-size: 44ch;
+  white-space: pre-line;
+  text-wrap: pretty;
+}
+
+/* Status dot of the eyebrow: the design's slow pulse, on the success colour. */
+.statusDot {
+  flex: none;
+  inline-size: var(--softn-size-dotIndicator);
+  block-size: var(--softn-size-dotIndicator);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-success);
+  animation: agent-status 2.4s var(--softn-easing-out) infinite;
+}
+
+.typing {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-2);
+}
+
+.typingDot {
+  inline-size: var(--softn-size-dotIndicator);
+  block-size: var(--softn-size-dotIndicator);
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-brand-glow);
+  animation: agent-typing 1.1s infinite;
+}
+
+/* The design staggers the three dots; the two later dots trail by 150ms and 300ms. */
+.typingDot-delay-1 {
+  animation-delay: 150ms;
+}
+
+.typingDot-delay-2 {
+  animation-delay: 300ms;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  /* Row gap is the wrapping rhythm: the tighter space-2 made wrapped chips look glued together. */
+  gap: var(--softn-space-4) var(--softn-space-6);
+  margin: 0;
+  margin-block-start: clamp(var(--softn-space-6), 4vw, var(--softn-space-10));
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: 0 0 var(--softn-space-1);
+  border: 0;
+  border-bottom: 1px solid var(--softn-border-default);
+  background: transparent;
+  color: var(--softn-color-secondary);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.chip:hover {
+  border-bottom-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+/*
+ * Booking chip: the single call to action among the questions. Brand foreground is the only brand
+ * colour that stays above 4.5:1 on the section background in both themes (violet400 on dark,
+ * violet700 on light); brand vivid draws the underline, and the small-title weight is the lightest
+ * step above the body weight the question chips use.
+ */
+.chip-booking {
+  border-bottom-color: var(--softn-brand-vivid);
+  color: var(--softn-brand-foreground);
+  font-weight: var(--softn-font-weight-title-sm);
+}
+
+/* Hover strengthens the underline and lifts the label to full-strength text. */
+.chip-booking:hover {
+  border-bottom-color: var(--softn-brand-foreground);
+  color: var(--softn-color);
+}
+
+.composer {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-3);
+  margin-block-start: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+  padding-block-end: var(--softn-space-3);
+  border-bottom: 1px solid var(--softn-input-border-default);
+  transition: border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+/*
+ * Focus of the composer reads on its underline instead of a ring: the input is borderless and
+ * underlined, so a ring around it is heavier than the field it marks. The focus colour is the
+ * input's own focus border token, above 3:1 against the section background in both themes.
+ */
+.composer:focus-within {
+  border-bottom-color: var(--softn-input-border-focus);
+}
+
+.input {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: var(--softn-space-1);
+  border: 0;
+  background: transparent;
+  color: var(--softn-input-text);
+  font-size: var(--softn-font-size-body-lg);
+  line-height: var(--softn-font-line-height-body-lg);
+}
+
+/* The composer underline is the only focus indicator of the input: no ring, whatever the focus state. */
+.input:focus,
+.input:focus-visible,
+.input:active {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--softn-input-placeholder);
+}
+
+/*
+ * Scope note under the composer, as the design places it: small body type on the closest package
+ * step (body-sm, 14px/1.7, against the design's 13px/1.6) and tertiary text, which keeps 6.0:1 dark
+ * and 6.1:1 light on the section background.
+ */
+.scopeNote {
+  margin: 0;
+  margin-block-start: var(--softn-space-4);
+  max-inline-size: 60ch;
+}
+
+/*
+ * The send button's boundary carries the control on its own, so it needs the 3:1 WCAG 1.4.11 asks
+ * for a UI component: the active border token is opaque violet500 dark / violet700 light, 4.6:1 and
+ * 6.5:1 on the section background, where the default border token only reaches ~1.2:1.
+ */
+.send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--softn-size-md);
+  block-size: var(--softn-size-md);
+  border: 1px solid var(--softn-border-active);
+  border-radius: var(--softn-radius-pill);
+  background: transparent;
+  color: var(--softn-color-secondary);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
+    transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* Hover strengthens the boundary and the arrow to the brand foreground (7.1:1 dark, 6.5:1 light). */
+.send:hover {
+  border-color: var(--softn-brand-foreground);
+  color: var(--softn-brand-foreground);
+  /* The design slides the arrow a few pixels towards the message area on hover. */
+  transform: translateX(3px);
+}
+
+.send svg {
+  inline-size: var(--softn-icon-size-sm);
+  block-size: var(--softn-icon-size-sm);
+}
+
+.chip:focus-visible,
+.send:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@keyframes agent-glow {
+  0%,
+  100% {
+    opacity: var(--softn-opacity-25);
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: var(--softn-opacity-45);
+    transform: scale(1.08);
+  }
+}
+
+@keyframes agent-status {
+  0%,
+  100% {
+    opacity: var(--softn-opacity-45);
+  }
+
+  50% {
+    opacity: var(--softn-opacity-100);
+  }
+}
+
+@keyframes agent-typing {
+  0%,
+  60%,
+  100% {
+    opacity: var(--softn-opacity-35);
+    transform: translateY(0);
+  }
+
+  30% {
+    opacity: var(--softn-opacity-100);
+    transform: translateY(-4px);
+  }
+}
+
+/* Reduced motion: no ambient animation, no typing bounce, no hover shift. */
+@media (prefers-reduced-motion: reduce) {
+  .glow,
+  .statusDot,
+  .typingDot {
+    animation: none;
+  }
+
+  .chip,
+  .send,
+  .composer {
+    transition: none;
+  }
+
+  .send:hover {
+    transform: none;
+  }
+}

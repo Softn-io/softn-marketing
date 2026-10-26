@@ -156,7 +156,12 @@ const contrastRatio = (page: Page, foreground: string, background: string): Prom
  * captions stay visible at every stage of the scroll, and the pins hold while scrolling on.
  */
 const expectStickyStacking = async (page: Page): Promise<void> => {
-  await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' })
+  // Reduced motion keeps this test about LAYOUT ONLY: the pin offsets, not motion. With motion
+  // allowed, the agent section's entrance parallax (#15) intentionally translates and scales the
+  // whole timeline while it enters the viewport, which moves every pinned block; that interplay
+  // is covered by agentSection.spec.ts. Under `prefers-reduced-motion: reduce` the parallax
+  // writes nothing and the blocks pin at their stylesheet offsets.
+  await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
   await page.goto('/preview')
   await expect(timeline(page)).toBeVisible()
   await page.evaluate(() => document.fonts.ready)

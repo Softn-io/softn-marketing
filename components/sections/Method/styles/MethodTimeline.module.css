@@ -19,6 +19,14 @@
    */
   --method-header-clearance: calc(var(--softn-space-10) + var(--softn-space-8));
 
+  /*
+   * The agent section's entrance script writes the transform and opacity; the origin keeps the
+   * shrink anchored at the top of the timeline, and `will-change` promotes the element once.
+   * Under reduced motion no property is written, so both declarations stay inert.
+   */
+  transform-origin: 50% 0;
+  will-change: transform, opacity;
+
   padding-block-start: clamp(var(--softn-space-8), 6vw, var(--softn-space-16));
   padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
 }

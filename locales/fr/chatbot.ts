@@ -37,6 +37,7 @@ export const chatbot = {
     services: 'Que faites-vous exactement ?',
     book: 'Prendre rendez-vous',
   },
+  suggestionsLabel: 'Questions suggérées',
   answers: {
     process:
       "Le projet démarre par un premier échange pour comprendre vos besoins. Le travail est ensuite découpé en étapes courtes, chacune relue et validée avant d'être livrée. Vous suivez l'avancement et vous donnez votre avis tout au long du projet.",

@@ -2,6 +2,7 @@ import { SECTION_IDS } from '@/lib/anchors'
 import { method } from '@/locales/fr/method'
 import { MethodDiagram } from './MethodDiagram'
 import { MethodTimeline } from './MethodTimeline'
+import { MethodTimelineParallax } from './MethodTimelineParallax'
 import styles from './styles/Method.module.css'
 
 /** Id of the heading that names the section, also used by the diagram's surrounding copy. */
@@ -26,5 +27,6 @@ export const Method = () => (
     </div>
     <MethodDiagram />
     <MethodTimeline />
+    <MethodTimelineParallax />
   </section>
 )
