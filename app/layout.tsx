@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { JsonLd } from '@components/layout/JsonLd'
 import { plusJakartaSans, zalandoSans } from './fonts'
 import { metadataContent } from '@/locales/fr/metadata'
 import { SITE_URL } from '@/lib/site'
@@ -7,21 +8,25 @@ import './globals.css'
 
 const { home } = metadataContent
 
+/**
+ * Default metadata for every route. Deliberately no `alternates.canonical` and no `openGraph.url`:
+ * a page that does not set its own would otherwise declare `/` as canonical. Each indexable page
+ * sets its own canonical URL.
+ */
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: home.title,
   description: home.description,
-  alternates: { canonical: '/' },
   robots: { index: true, follow: true },
   openGraph: {
     type: 'website',
-    url: '/',
     title: home.openGraph.title,
     description: home.openGraph.description,
     locale: home.openGraph.locale,
   },
 }
 
+/** Root layout: French document shell, self-hosted fonts, theme init and the site-wide JSON-LD. */
 const RootLayout = ({ children }: LayoutProps<'/'>) => {
   return (
     <html
@@ -32,7 +37,10 @@ const RootLayout = ({ children }: LayoutProps<'/'>) => {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        <JsonLd />
+        {children}
+      </body>
     </html>
   )
 }
