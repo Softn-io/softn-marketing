@@ -80,16 +80,18 @@ const injectSections = async (page: Page) => {
 }
 
 /**
- * Waits until the document's height stops changing from one frame to the next. Sections can grow
- * once they hydrate — the method diagram arms its tall pinned track (`data-motion` adds 250vh/180vh
- * to the page) — and a scroll performed against the server-rendered layout would silently land
- * somewhere else once that growth shifts the content below it. Capped so a page that keeps
- * mutating cannot hang the suite.
+ * Waits until the document's height stops changing from one frame to the next. Two late mutations
+ * move the content: the method diagram grows the page when it hydrates (its `data-motion` pinned
+ * track adds 250vh/180vh), and the self-hosted fonts swap in after load — the fallback metrics
+ * differ by over 1000px of document height, so a scroll measured before the swap lands somewhere
+ * else once it shifts the content below it. `document.fonts.ready` gates the polling. Capped so a
+ * page that keeps mutating cannot hang the suite.
  */
 const awaitStableDocumentHeight = async (page: Page): Promise<void> => {
   await page.evaluate(async () => {
+    await document.fonts.ready
     let last = -1
-    for (let attempt = 0; attempt < 60; attempt += 1) {
+    for (let attempt = 0; attempt < 240; attempt += 1) {
       const height = document.documentElement.scrollHeight
       if (height === last) return
       last = height
@@ -290,6 +292,9 @@ test.describe('header: desktop', () => {
     page.on('pageerror', (error) => errors.push(error.message))
     await injectSections(page)
     await page.goto('/preview')
+    // The self-hosted fonts swap after load and move every text block: measure the hero CTA
+    // against the settled layout (awaitStableDocumentHeight gates the same swap elsewhere).
+    await page.evaluate(() => document.fonts.ready)
     // The header CTA is only clickable once the hero CTA has scrolled out of view (ScrollRevealCta).
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
     await page.evaluate((id) => {
