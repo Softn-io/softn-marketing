@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
 import { Header } from '@components/layout/Header'
+import { Agent } from '@components/sections/Agent'
 import { Hero } from '@components/sections/Hero'
 import { Method } from '@components/sections/Method'
 import { Offers } from '@components/sections/Offers'
@@ -41,6 +42,7 @@ const Preview = async () => {
         <Hero />
         <Offers />
         <Method />
+        <Agent />
       </main>
     </>
   )
