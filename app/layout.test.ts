@@ -16,18 +16,18 @@ describe('root layout metadata', () => {
     expect(metadata.description).toBe(metadataContent.home.description)
   })
 
-  it('sets OpenGraph, canonical, robots and base URL', async () => {
+  it('sets OpenGraph, robots and base URL without a canonical URL inherited by other pages', async () => {
     const { metadata } = await import('./layout')
 
     expect(String(metadata.metadataBase)).toBe(`${SITE_URL}/`)
-    expect(metadata.alternates?.canonical).toBe('/')
     expect(metadata.robots).toEqual({ index: true, follow: true })
+    expect(metadata.alternates).toBeUndefined()
     expect(metadata.openGraph).toMatchObject({
       type: 'website',
-      url: '/',
       title: metadataContent.home.openGraph.title,
       description: metadataContent.home.openGraph.description,
       locale: metadataContent.home.openGraph.locale,
     })
+    expect(metadata.openGraph).not.toHaveProperty('url')
   })
 })

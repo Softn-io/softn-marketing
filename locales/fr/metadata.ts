@@ -1,4 +1,4 @@
-/** SEO metadata copy for the home page and the legal pages. */
+/** SEO metadata copy for the home page, the legal pages and the JSON-LD structured data. */
 export const metadataContent = {
   home: {
     title: 'Softn.io | Automatisation et agents IA pour TPE et PME',
@@ -24,6 +24,19 @@ export const metadataContent = {
   },
   preview: {
     title: 'Aperçu | Softn.io',
+  },
+  structuredData: {
+    professionalService: {
+      name: 'Softn.io',
+      description:
+        'Automatisations et agents IA au sein de vos sites et applications, là où ils vous font gagner du temps.',
+      areaServed: 'France',
+      serviceType: [
+        'Création de sites web et de web apps',
+        'Automatisation des tâches répétitives',
+        "Mise en place d'agents IA",
+      ],
+    },
   },
   legal: {
     mentions: {
