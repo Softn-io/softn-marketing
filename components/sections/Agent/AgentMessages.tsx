@@ -1,4 +1,9 @@
-import { AGENT_WELCOME_MESSAGES, agentSpeakerLabel, groupMessagesBySpeaker, withAssistantName } from './data/agentMessages'
+import {
+  AGENT_WELCOME_MESSAGES,
+  agentSpeakerLabel,
+  groupMessagesBySpeaker,
+  withAssistantName,
+} from './data/agentMessages'
 import styles from './styles/Agent.module.css'
 
 /**
