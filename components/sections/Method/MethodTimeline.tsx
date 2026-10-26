@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react'
 import { method } from '@/locales/fr/method'
 import { stepCaption } from './data/methodTimeline'
+import { METHOD_TIMELINE_ID } from './data/timelineParallax'
 import styles from './styles/MethodTimeline.module.css'
 
 /**
@@ -25,10 +26,11 @@ const stepStyle = (index: number): MethodStepStyle => ({ '--method-step-index': 
  *
  * Every string comes from `locales/fr/method.ts`: the caption line is the locale's counter template
  * filled with the step's number and closed by the step label. The parallax the design applies to
- * this block belongs to the next section's scroll choreography and is not implemented here.
+ * this block is driven by the agent section's entrance: `MethodTimelineParallax` finds the element
+ * through `METHOD_TIMELINE_ID`.
  */
 export const MethodTimeline = () => (
-  <ol className={`${styles.timeline} mx-auto max-w-6xl`}>
+  <ol id={METHOD_TIMELINE_ID} className={`${styles.timeline} mx-auto max-w-6xl`}>
     {method.steps.map((step, index) => (
       <li key={`${index}-${step.label}`} className={styles.step} style={stepStyle(index)}>
         <p className={`${styles.caption} text-caption text-foreground-tertiary uppercase`}>
