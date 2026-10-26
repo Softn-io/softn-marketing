@@ -11,9 +11,7 @@ const { professionalService } = metadataContent.structuredData
 
 const renderJsonLdScript = (): HTMLScriptElement => {
   const { container } = render(<JsonLd />)
-  const script = container.querySelector<HTMLScriptElement>(
-    'script[type="application/ld+json"]',
-  )
+  const script = container.querySelector<HTMLScriptElement>('script[type="application/ld+json"]')
   if (!script) throw new Error('the JSON-LD script tag is missing')
   return script
 }
@@ -22,9 +20,7 @@ describe('JsonLd', () => {
   it('renders exactly one application/ld+json script', () => {
     const { container } = render(<JsonLd />)
 
-    expect(
-      container.querySelectorAll('script[type="application/ld+json"]'),
-    ).toHaveLength(1)
+    expect(container.querySelectorAll('script[type="application/ld+json"]')).toHaveLength(1)
   })
 
   it('carries exactly the approved brand-only ProfessionalService fields', () => {
