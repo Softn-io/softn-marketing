@@ -102,10 +102,13 @@ describe('WaitlistForm', () => {
     submit(formElement)
 
     await waitFor(() => expect(action).toHaveBeenCalledTimes(1))
+    const success = interpolate(form.success, { email: address })
+    await waitFor(() => expect(screen.getAllByText(success).length).toBeGreaterThan(0))
+
     const bold = screen.getByText(address, { selector: 'strong' })
     expect(bold.textContent).toBe(address)
     expect(bold.querySelector('b')).toBeNull()
-    expect(bold.closest('p')?.textContent).toBe(interpolate(form.success, { email: address }))
+    expect(bold.closest('p')?.textContent).toBe(success)
     expect(document.querySelector('b')).toBeNull()
   })
 
