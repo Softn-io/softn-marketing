@@ -126,30 +126,42 @@ describe('requestChatCompletion', () => {
   })
 
   it('bounds a hanging attempt by the overall budget, without retrying it', async () => {
-    fetchMock.mockImplementation(
-      (_url, init) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener('abort', () => {
-            const error = new Error('aborted')
-            error.name = 'AbortError'
-            reject(error)
-          })
-        }),
-    )
-
-    const started = Date.now()
-    const result = await requestChatCompletion({
-      ...request,
-      timeoutMs: 5_000,
-      retryDelayMs: 400,
-      totalBudgetMs: 40,
+    vi.useFakeTimers()
+    const hanging = new AbortController()
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockImplementation((milliseconds) => {
+      setTimeout(() => hanging.abort(), milliseconds)
+      return hanging.signal
     })
-    const elapsed = Date.now() - started
+    try {
+      fetchMock.mockImplementation(
+        (_url, init) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener('abort', () => {
+              const error = new Error('aborted')
+              error.name = 'AbortError'
+              reject(error)
+            })
+          }),
+      )
 
-    expect(result).toEqual({ ok: false, error: 'timeout' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(elapsed).toBeGreaterThanOrEqual(30)
-    expect(elapsed).toBeLessThan(1_000)
+      const pending = requestChatCompletion({
+        ...request,
+        timeoutMs: 5_000,
+        retryDelayMs: 400,
+        totalBudgetMs: 40,
+      })
+      // The per-attempt timeout is clamped to the remaining budget: the abort is due at the
+      // overall deadline, not at the asked 5 s.
+      expect(timeoutSpy).toHaveBeenCalledWith(40)
+      await vi.advanceTimersByTimeAsync(40)
+      const result = await pending
+
+      expect(result).toEqual({ ok: false, error: 'timeout' })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      timeoutSpy.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('answers timeout without any call when the overall budget is already spent', async () => {
@@ -160,22 +172,32 @@ describe('requestChatCompletion', () => {
   })
 
   it('shortens the retry delay to the remaining budget instead of overshooting it', async () => {
-    fetchMock.mockResolvedValue(new Response('upstream', { status: 503 }))
+    vi.useFakeTimers()
+    try {
+      fetchMock.mockResolvedValue(new Response('upstream', { status: 503 }))
 
-    const started = Date.now()
-    const result = await requestChatCompletion({
-      ...request,
-      timeoutMs: 5_000,
-      retryDelayMs: 400,
-      totalBudgetMs: 40,
-    })
-    const elapsed = Date.now() - started
+      const pending = requestChatCompletion({
+        ...request,
+        timeoutMs: 5_000,
+        retryDelayMs: 400,
+        totalBudgetMs: 40,
+      })
+      // The 503 is retryable, so exactly one backoff timer is scheduled, clamped to the
+      // remaining budget instead of the asked 400 ms.
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      expect(vi.getTimerCount()).toBe(1)
 
-    // The delay is clamped to the ~40 ms left, so the wait stays far below the asked 400 ms,
-    // and the deadline then leaves no time for a second attempt.
-    expect(result).toEqual({ ok: false, error: 'timeout' })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(elapsed).toBeLessThan(300)
+      // The clamped backoff is due exactly at the overall deadline: advancing the full budget
+      // completes the flow, and no time is left for a second attempt.
+      await vi.advanceTimersByTimeAsync(40)
+      const result = await pending
+
+      expect(result).toEqual({ ok: false, error: 'timeout' })
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('does not start a retry once the overall budget is spent', async () => {
