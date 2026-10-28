@@ -59,15 +59,14 @@ describe('Agent', () => {
     )
   })
 
-  it('shows the typing indicator with the locale accessible label and decorative dots', () => {
+  it('names the conversation as one polite live region', () => {
     render(<Agent />)
-    const typing = screen.getByRole('img', { name: filled(chatbot.typing.ariaLabel) })
-    const dots = typing.querySelectorAll('span[aria-hidden="true"]')
-    expect(dots).toHaveLength(3)
-    for (const dot of dots) expect(dot.textContent).toBe('')
+    const list = screen.getByRole('list', { name: filled(chatbot.panel.ariaLabel) })
+    expect(list.getAttribute('aria-live')).toBe('polite')
+    expect(list.getAttribute('aria-relevant')).toBe('additions text')
   })
 
-  it('renders every suggested question as a focusable button that never submits', () => {
+  it('renders every suggested question as a focusable button', () => {
     render(<Agent />)
     const chips = screen.getByRole('list', { name: chatbot.suggestionsLabel })
     expect(chips.tagName).toBe('UL')
@@ -79,6 +78,7 @@ describe('Agent', () => {
       expect(button.getAttribute('type')).toBe('button')
       expect(button.textContent).toBe(suggestions[index])
       expect(button.tabIndex).toBe(0)
+      expect((button as HTMLButtonElement).disabled).toBe(false)
     })
   })
 
@@ -98,29 +98,39 @@ describe('Agent', () => {
     )
   })
 
-  it('labels the question input and keeps the send button out of the submit path', () => {
+  it('labels the question input and submits it through a real form', () => {
     render(<Agent />)
     const input = screen.getByLabelText(agent.inputLabel)
     expect(input.tagName).toBe('INPUT')
     expect(input.getAttribute('placeholder')).toBe(agent.inputPlaceholder)
     expect(input.getAttribute('type')).toBe('text')
 
+    const form = input.closest('form')
+    expect(form, 'the composer is a form, so Enter and the button share one submit path').not.toBeNull()
+
     const send = screen.getByRole('button', { name: agent.sendLabel })
-    expect(send.getAttribute('type')).toBe('button')
-    expect(screen.queryByRole('form')).toBeNull()
+    expect(send.getAttribute('type')).toBe('submit')
+    expect((send as HTMLButtonElement).disabled, 'an empty question cannot be sent').toBe(true)
   })
 
-  it('renders the scope note under the composer and links it to the input as its description', () => {
+  it('renders the scope and privacy notes under the composer as the input description', () => {
     render(<Agent />)
     const input = screen.getByLabelText(agent.inputLabel)
-    const noteId = input.getAttribute('aria-describedby')
-    expect(noteId, 'the input is described by the scope note').toBeTruthy()
+    const describedBy = input.getAttribute('aria-describedby')
+    expect(describedBy, 'the input is described by its notes').toBeTruthy()
 
-    const note = noteId === null ? null : document.getElementById(noteId)
-    expect(note?.tagName).toBe('P')
-    expect(note?.textContent).toBe(filled(agent.scopeNote))
-    if (note === null) return
-    expect(input.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const ids = (describedBy ?? '').split(' ')
+    const notes = ids.map((id) => document.getElementById(id))
+    const texts = notes.map((note) => note?.textContent)
+    expect(texts).toContain(filled(agent.scopeNote))
+    expect(texts).toContain(chatbot.input.privacyNote)
+
+    for (const note of notes) {
+      expect(note).not.toBeNull()
+      if (note === null) continue
+      expect(note.tagName).toBe('P')
+      expect(input.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
   })
 
   it('holds no copy of its own: every rendered text comes from the locales', () => {
@@ -133,6 +143,7 @@ describe('Agent', () => {
       agent.scopeNote,
       chatbot.welcome.first,
       chatbot.welcome.prompt,
+      chatbot.input.privacyNote,
       ...Object.values(chatbot.suggestions),
     ].map(filled)
 

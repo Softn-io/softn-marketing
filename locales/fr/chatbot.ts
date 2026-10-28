@@ -24,6 +24,9 @@ export const chatbot = {
     label: 'Votre question',
     placeholder: 'Écrivez votre question…',
     send: 'Envoyer',
+    tooLong: 'Votre question est un peu longue : {max} caractères au maximum.',
+    privacyNote:
+      "Merci de ne pas saisir de données personnelles. Vos questions sont traitées par un service d'IA pour générer la réponse ; Softn.io ne les conserve pas.",
   },
   typing: {
     ariaLabel: "{assistantName} est en train d'écrire",
@@ -38,6 +41,17 @@ export const chatbot = {
     book: 'Prendre rendez-vous',
   },
   suggestionsLabel: 'Questions suggérées',
+  /**
+   * Inline label of the `{contactPageLink}` link in `fallback` and `error.llm`: lowercase, because
+   * the words read inside the sentence and the link replaces them in place.
+   */
+  contactPageLinkLabel: 'page de contact',
+  fallback:
+    "Cette question dépasse ce que je peux traiter ici. Vous pouvez la reformuler autour des applications, des agents IA, de l'automatisation ou de la méthode, réserver votre échange Spark offert, ou écrire via la {contactPageLink}.",
+  thinking: {
+    ariaLabel: '{assistantName} prépare sa réponse',
+    message: 'Je prépare votre réponse…',
+  },
   answers: {
     process:
       "Le projet démarre par un premier échange pour comprendre vos besoins. Le travail est ensuite découpé en étapes courtes, chacune relue et validée avant d'être livrée. Vous suivez l'avancement et vous donnez votre avis tout au long du projet.",
@@ -58,8 +72,6 @@ export const chatbot = {
       'Oui, ce qui est réalisé pour vous vous appartient. Les modalités précises, dont le moment du transfert, sont fixées dans le devis.',
     human:
       "Non, je suis un assistant virtuel fonctionnant avec l'intelligence artificielle. Si vous réservez un échange Spark, votre demande sera lue avant le rendez-vous.",
-    fallback:
-      "Je ne peux répondre qu'aux questions sur les services de Softn.io : méthode, délais, tarifs, types de projets. Pour tout autre sujet, le plus simple est de réserver votre échange Spark ou d'utiliser le formulaire de contact : {contactPageLink}. Souhaitez-vous réserver votre échange ?",
   },
   booking: {
     intro:
@@ -136,6 +148,9 @@ export const chatbot = {
     generic: "Un incident s'est produit. Votre demande n'a pas été envoyée. Vous pouvez réessayer dans un instant.",
     retry: 'Réessayer',
     network: 'La connexion semble interrompue. Vérifiez-la, puis réessayez.',
+    llm: "Je n'arrive pas à répondre pour le moment. Vous pouvez réessayer dans un instant, ou écrire via la {contactPageLink}.",
+    llmRetry: 'Réessayer',
+    rateLimit: 'Les questions arrivent un peu vite. Laissez-moi un instant, puis réessayez.',
     booking:
       "La réservation n'a pas abouti et aucune donnée n'a été conservée. Vous pouvez réessayer, ou utiliser le formulaire de contact : {contactPageLink}. [À CONFIRMER PAR chatbot-dev : vrai seulement si aucune écriture Airtable n'a eu lieu.]",
     slotTaken: "Ce créneau n'est plus disponible. Veuillez en choisir un autre, s'il vous plaît.",

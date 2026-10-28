@@ -15,7 +15,7 @@ export const agent = {
   cancelBooking: 'Annuler la prise de rendez-vous',
   restart: 'Recommencer',
   scopeNote:
-    '{assistantName} répond aux questions sur les services et la méthode de Softn.io. Hors de ce périmètre, {assistantName} propose de réserver un échange.',
+    "{assistantName} répond à vos questions sur les applications, les agents IA, l'automatisation, la méthode de Softn.io et l'échange Spark. Pour tout autre sujet, la page de contact reste ouverte.",
 } as const
 
 export type Agent = typeof agent

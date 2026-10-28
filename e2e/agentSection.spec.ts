@@ -6,8 +6,8 @@
  * `playwright.config.ts`):
  *
  * - The section renders after the Method section in document order, with its single h2, the two
- *   static welcome messages grouped under one speaker line, the typing indicator, the
- *   suggested-question chips, the labelled input and the send button.
+ *   static welcome messages grouped under one speaker line, the suggested-question chips, the
+ *   labelled input in its form and the submit button.
  * - The heading order stays h1 → h2 (no h3 inside the section) and the section is a region named
  *   by its heading.
  * - Keyboard: the input, the send button and the chips take focus, in DOM order. The input's
@@ -29,6 +29,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { SECTION_IDS } from '../lib/anchors'
 import { agent } from '../locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '../locales/fr/chatbot'
+import { contact } from '../locales/fr/contact'
 
 const AGENT_ID = SECTION_IDS.agent
 const METHOD_ID = SECTION_IDS.method
@@ -132,7 +133,6 @@ type AgentStyles = {
   composer: { borderBottomColor: string }
   input: { color: string; fontSize: number; placeholderColor: string }
   send: { width: number; height: number; borderRadius: number; color: string; borderColor: string }
-  typingDot: { width: number; backgroundColor: string }
 }
 
 const readAgentStyles = (page: Page): Promise<AgentStyles> =>
@@ -154,10 +154,9 @@ const readAgentStyles = (page: Page): Promise<AgentStyles> =>
     const bookingChip = section.querySelector<HTMLElement>('ul li button[data-suggestion="book"]')!
     const input = section.querySelector<HTMLElement>('input')!
     const composer = input.parentElement as HTMLElement
-    const send = section.querySelector<HTMLElement>('input + button')!
-    const typingDot = section.querySelector<HTMLElement>('[role="img"] span')!
+    const send = section.querySelector<HTMLElement>('form button[type="submit"]')!
     const scopeNoteId = input.getAttribute('aria-describedby')
-    const scopeNote = scopeNoteId === null ? null : document.getElementById(scopeNoteId)
+    const scopeNote = scopeNoteId === null ? null : document.getElementById(scopeNoteId.split(' ')[0] ?? '')
     const inputStyle = getComputedStyle(input)
     return {
       section: {
@@ -223,10 +222,6 @@ const readAgentStyles = (page: Page): Promise<AgentStyles> =>
         color: getComputedStyle(send).color,
         borderColor: getComputedStyle(send).borderColor,
       },
-      typingDot: {
-        width: px(getComputedStyle(typingDot).width),
-        backgroundColor: getComputedStyle(typingDot).backgroundColor,
-      },
     }
   }, AGENT_ID)
 
@@ -263,7 +258,7 @@ test.describe('agent shell: rendering and order', () => {
           speakerLabels: agentSectionElement.querySelectorAll('ol li > p').length,
           chips: agentSectionElement.querySelectorAll('ul li button').length,
           input: agentSectionElement.querySelectorAll('input').length,
-          send: agentSectionElement.querySelectorAll('input + button[type="button"]').length,
+          send: agentSectionElement.querySelectorAll('form button[type="submit"]').length,
           forms: agentSectionElement.querySelectorAll('form').length,
         }
       },
@@ -276,8 +271,8 @@ test.describe('agent shell: rendering and order', () => {
     expect(order.speakerLabels, 'one speaker line above the run').toBe(1)
     expect(order.chips, 'one chip per suggestion').toBe(Object.values(chatbot.suggestions).length)
     expect(order.input, 'one question input').toBe(1)
-    expect(order.send, 'one type=button send').toBe(1)
-    expect(order.forms, 'no form: the shell does not submit').toBe(0)
+    expect(order.send, 'one submit button').toBe(1)
+    expect(order.forms, 'one form: Enter and the button share the submit path').toBe(1)
 
     const h2 = agentSection(page).getByRole('heading', { level: 2 })
     await expect(h2).toHaveText(filled(agent.title))
@@ -286,8 +281,8 @@ test.describe('agent shell: rendering and order', () => {
     await expect(page.getByText(filled(agent.speaker.assistant), { exact: true })).toHaveCount(1)
     await expect(page.getByText(filled(agent.speaker.assistant))).toHaveText(filled(agent.speaker.assistant))
 
-    // The typing indicator is an image role with its accessible label.
-    await expect(page.getByRole('img', { name: filled(chatbot.typing.ariaLabel) })).toBeVisible()
+    // No waiting state before a question: the typing indicator only appears while an answer is in flight.
+    await expect(page.getByRole('img', { name: filled(chatbot.typing.ariaLabel) })).toHaveCount(0)
 
     // The chips are one labelled group.
     const chips = page.getByRole('list', { name: chatbot.suggestionsLabel })
@@ -339,6 +334,8 @@ test.describe('agent shell: keyboard and focus', () => {
     await page.goto('/preview')
     await expect(agentSection(page)).toBeVisible()
     const input = page.getByRole('textbox', { name: agent.inputLabel })
+    // The send button is disabled on an empty field, so give it a question before the tab walk.
+    await input.fill('Une question')
     await input.focus()
 
     // The input shows no ring: its focus indicator is the composer underline. (Chromium reports
@@ -473,6 +470,98 @@ test.describe('agent shell: contrast', () => {
     await expectContrast(page)
   })
 
+  test('renders the error as a plain message line without a surface, at AA contrast in both themes', async ({
+    page,
+  }) => {
+    await page.route('**/api/assistant', (route) =>
+      route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'unavailable' }),
+      }),
+    )
+
+    for (const colorScheme of ['dark', 'light'] as const) {
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme })
+      await page.goto('/preview')
+      await expect(agentSection(page)).toBeVisible()
+
+      const input = page.getByRole('textbox', { name: agent.inputLabel })
+      await input.fill('Une question')
+      await page.getByRole('button', { name: agent.sendLabel }).click()
+
+      const alert = agentSection(page).getByRole('alert')
+      await expect(alert).toBeVisible()
+      const error = await alert.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const text = element.querySelector('p')!
+        return {
+          backgroundColor: style.backgroundColor,
+          // Tailwind preflight sets `border-style: solid` on every element: the width is the signal.
+          borderTopWidth: style.borderTopWidth,
+          borderRadius: style.borderTopLeftRadius,
+          paddingTop: style.paddingTop,
+          textColor: getComputedStyle(text).color,
+        }
+      })
+      expect(error.backgroundColor, `the error has no surface of its own (${colorScheme})`).toBe('rgba(0, 0, 0, 0)')
+      expect(error.borderTopWidth, `the error keeps no frame (${colorScheme})`).toBe('0px')
+      expect(error.borderRadius, `the error keeps no box radius (${colorScheme})`).toBe('0px')
+      expect(error.paddingTop, `the error keeps no box padding (${colorScheme})`).toBe('0px')
+      expect(
+        await sameColor(page, error.textColor, await tokenValue(page, '--softn-error')),
+        `the error text is --softn-error (${colorScheme})`,
+      ).toBe(true)
+      const background = (await readAgentStyles(page)).section.backgroundColor
+      expect(
+        await contrastRatio(page, error.textColor, background),
+        `error text contrast (${colorScheme})`,
+      ).toBeGreaterThanOrEqual(4.5)
+
+      // The contact-page link keeps the message's own type step and the secondary foreground.
+      const link = alert.getByRole('link', { name: chatbot.contactPageLinkLabel })
+      await expect(link).toBeVisible()
+      const linkStyle = await link.evaluate((element) => {
+        const style = getComputedStyle(element)
+        const paragraph = element.closest('p')!
+        return {
+          color: style.color,
+          fontSize: style.fontSize,
+          paragraphFontSize: getComputedStyle(paragraph).fontSize,
+          textDecorationLine: style.textDecorationLine,
+        }
+      })
+      expect(linkStyle.fontSize, `the link keeps the message font size (${colorScheme})`).toBe(
+        linkStyle.paragraphFontSize,
+      )
+      expect(
+        await sameColor(page, linkStyle.color, await tokenValue(page, '--softn-color-secondary')),
+        `the link uses --softn-color-secondary (${colorScheme})`,
+      ).toBe(true)
+      expect(linkStyle.textDecorationLine, `the link stays underlined (${colorScheme})`).toContain('underline')
+      expect(
+        await contrastRatio(page, linkStyle.color, background),
+        `contact link contrast (${colorScheme})`,
+      ).toBeGreaterThanOrEqual(4.5)
+
+      // Shift+Tab from the retry keeps the keyboard focus ring of the shared focus rule.
+      const retry = alert.getByRole('button', { name: chatbot.error.llmRetry })
+      await expect(retry).toBeVisible()
+      await retry.focus()
+      await page.keyboard.press('Shift+Tab')
+      await expect(link).toBeFocused()
+      const linkOutline = await link.evaluate((element) => {
+        const style = getComputedStyle(element)
+        return { width: style.outlineWidth, style: style.outlineStyle, offset: style.outlineOffset }
+      })
+      expect(linkOutline, `the link keeps its focus ring (${colorScheme})`).toEqual({
+        width: '2px',
+        style: 'solid',
+        offset: '2px',
+      })
+    }
+  })
+
   test('passes an axe scan scoped to the section, on desktop and mobile', async ({ page }) => {
     for (const viewport of [
       { width: 1280, height: 800 },
@@ -576,11 +665,16 @@ test.describe('agent shell: scope note', () => {
     await expect(agentSection(page)).toBeVisible()
 
     const input = page.getByRole('textbox', { name: agent.inputLabel })
-    const noteId = await input.getAttribute('aria-describedby')
-    expect(noteId, 'the input is described by the scope note').toBeTruthy()
-    const note = page.locator(`#${noteId}`)
+    const describedBy = await input.getAttribute('aria-describedby')
+    const ids = (describedBy ?? '').split(' ').filter(Boolean)
+    expect(ids, 'the input is described by its scope and privacy notes').toEqual(
+      expect.arrayContaining(['agent-scope-note', 'agent-privacy-note']),
+    )
+
+    const note = page.locator('#agent-scope-note')
     await expect(note).toBeVisible()
     await expect(note).toHaveText(filled(agent.scopeNote))
+    await expect(page.locator('#agent-privacy-note')).toHaveText(chatbot.input.privacyNote)
 
     // The note renders after the composer, under it, in DOM order.
     const order = await page.evaluate(
@@ -593,7 +687,7 @@ test.describe('agent shell: scope note', () => {
           noteFollowsComposer: (composer.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
         }
       },
-      [AGENT_ID, noteId] as [string, string],
+      [AGENT_ID, 'agent-scope-note'] as [string, string],
     )
     expect(order.noteFollowsComposer, 'the scope note renders after the composer').toBe(true)
   })
@@ -609,24 +703,21 @@ test.describe('agent shell: reduced motion', () => {
     await page.goto('/preview')
     await expect(agentSection(page)).toBeVisible()
 
-    // The status dot, the glow and the typing dots hold no ambient animation.
+    // The status dot and the glow hold no ambient animation.
     const animations = await page.evaluate((sectionId) => {
       const section = document.getElementById(sectionId)
       if (section === null) throw new Error('agent section missing')
       const statusDot = section.querySelector('p > span')
       const glow = section.querySelector(':scope > div[aria-hidden="true"]')
-      const typingDot = section.querySelector('[role="img"] span')
       const animationName = (element: Element | null) =>
         element === null ? null : getComputedStyle(element).animationName
       return {
         statusDot: animationName(statusDot),
         glow: animationName(glow),
-        typingDot: animationName(typingDot),
       }
     }, AGENT_ID)
     expect(animations.glow, 'the glow animation is off under reduced motion').toBe('none')
     expect(animations.statusDot, 'the status dot animation is off under reduced motion').toBe('none')
-    expect(animations.typingDot, 'the typing dots animation is off under reduced motion').toBe('none')
 
     // The hover shift is also off: the arrow stays in place.
     const send = page.getByRole('button', { name: agent.sendLabel })
@@ -634,6 +725,125 @@ test.describe('agent shell: reduced motion', () => {
     await expect
       .poll(async () => send.evaluate((element) => getComputedStyle(element).transform), { timeout: 2_000 })
       .toBe('none')
+  })
+})
+
+test.describe('agent conversation', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('asks the chosen question, shows the waiting state, then renders the grounded answer', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    await page.route('**/api/assistant', async (route) => {
+      await gate
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: 'Une réponse ancrée.' }),
+      })
+    })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    const requestPromise = page.waitForRequest('**/api/assistant')
+    await agentSection(page).getByRole('button', { name: chatbot.suggestions.process }).click()
+
+    const request = await requestPromise
+    expect(request.postDataJSON()).toEqual({ question: chatbot.suggestions.process, history: [] })
+
+    // Waiting state: dots with their accessible label, the visible thinking sentence, disabled chips.
+    const typing = page.getByRole('img', { name: filled(chatbot.typing.ariaLabel) })
+    await expect(typing).toBeVisible()
+    await expect(page.getByText(filled(chatbot.thinking.message))).toBeVisible()
+    await expect(agentSection(page).getByRole('button', { name: chatbot.suggestions.book })).toBeDisabled()
+    const dotAnimation = await typing
+      .locator('span')
+      .first()
+      .evaluate((element) => getComputedStyle(element).animationName)
+    expect(dotAnimation, 'the typing bounce is off under reduced motion').toBe('none')
+
+    release()
+    await expect(page.getByText('Une réponse ancrée.')).toBeVisible()
+    await expect(typing).toHaveCount(0)
+    await expect(agentSection(page).getByRole('button', { name: chatbot.suggestions.book })).toBeEnabled()
+  })
+
+  test('shows the generic error with a retry that re-sends the same question', async ({ page }) => {
+    let calls = 0
+    await page.route('**/api/assistant', async (route) => {
+      calls += 1
+      if (calls === 1) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'unavailable' }),
+        })
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: 'Réponse après reprise.' }),
+      })
+    })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    const input = page.getByRole('textbox', { name: agent.inputLabel })
+    await input.fill('Une question')
+    await page.getByRole('button', { name: agent.sendLabel }).click()
+
+    const alert = agentSection(page).getByRole('alert')
+    await expect(alert).toBeVisible()
+    await expect(alert).toContainText(chatbot.error.llm.replace('{contactPageLink}', chatbot.contactPageLinkLabel))
+    await expect(alert).not.toContainText(`${chatbot.contactPageLinkLabel} :`)
+    const link = alert.getByRole('link', { name: chatbot.contactPageLinkLabel })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAccessibleName(chatbot.contactPageLinkLabel)
+    await expect(link).toHaveAttribute('href', contact.link.href)
+    // The link replaces the {contactPageLink} placeholder in place: the label may appear exactly
+    // once in the sentence, never repeated after the link.
+    const errorText = await alert.innerText()
+    expect(
+      errorText.split(chatbot.contactPageLinkLabel).length - 1,
+      'the contact label appears exactly once in the error message',
+    ).toBe(1)
+
+    await page.getByRole('button', { name: chatbot.error.llmRetry }).click()
+    await expect(page.getByText('Réponse après reprise.')).toBeVisible()
+    await expect(page.getByText('Une question', { exact: true })).toHaveCount(1)
+  })
+
+  test('renders the fallback with the contact-page link', async ({ page }) => {
+    await page.route('**/api/assistant', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: chatbot.fallback }),
+      })
+    })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    await agentSection(page).getByRole('button', { name: chatbot.suggestions.process }).click()
+    const link = agentSection(page).getByRole('link', { name: chatbot.contactPageLinkLabel })
+    await expect(link).toBeVisible()
+    await expect(link).toHaveAccessibleName(chatbot.contactPageLinkLabel)
+    await expect(link).toHaveAttribute('href', contact.link.href)
+    await expect(agentSection(page)).not.toContainText(`${chatbot.contactPageLinkLabel} :`)
+    await expect(agentSection(page)).not.toContainText('{contactPageLink}')
+    // The label replaces the placeholder in place inside the fallback message itself: exactly one
+    // occurrence in that message, so no label is repeated after the link.
+    const fallbackMessage = agentSection(page).locator('ol li ol li').last()
+    await expect(fallbackMessage).toBeVisible()
+    const fallbackText = await fallbackMessage.innerText()
+    expect(
+      fallbackText.split(chatbot.contactPageLinkLabel).length - 1,
+      'the contact label appears exactly once in the fallback message',
+    ).toBe(1)
   })
 })
 
@@ -777,11 +987,12 @@ test.describe('agent shell, mobile', () => {
 test.describe('agent shell: token fidelity (4a-1)', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('uses only package token values on the key elements', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' })
-    await page.goto('/preview')
-    await expect(agentSection(page)).toBeVisible()
-    await page.evaluate(() => document.fonts.ready)
+  /**
+   * Full 4a-1 assertion set, run once per theme: every computed value read on the key elements is
+   * a value of a `@softnio-labs/tokens` token (token-relative colors plus membership in the
+   * package value lists read from its source files above).
+   */
+  const expectPackageTokenValues = async (page: Page): Promise<void> => {
     const styles = await readAgentStyles(page)
 
     // Fonts: the package declares `ZalandoSans`/`PlusJakartaSans`; the site self-hosts the same
@@ -809,7 +1020,6 @@ test.describe('agent shell: token fidelity (4a-1)', () => {
     expect(PACKAGE_SIZES, 'send button is --softn-size-md').toContain(styles.send.width)
     expect(styles.send.height).toBe(styles.send.width)
     expect(styles.statusDot.width, 'status dot is --softn-size-dotIndicator').toBe(5)
-    expect(PACKAGE_SIZES).toContain(styles.typingDot.width)
     expect(PACKAGE_SPACES, 'section top padding resolves to a space token at 1280px').toContain(
       Math.round(styles.section.paddingTop),
     )
@@ -892,5 +1102,109 @@ test.describe('agent shell: token fidelity (4a-1)', () => {
       await sameColor(page, styles.composer.borderBottomColor, await tokenValue(page, '--softn-input-border-default')),
       'the resting composer underline is --softn-input-border-default',
     ).toBe(true)
+  }
+
+  test('uses only package token values on the key elements, in the dark theme', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'dark' })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    await expectPackageTokenValues(page)
+  })
+
+  test('uses only package token values on the key elements, in the light theme', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'no-preference', colorScheme: 'light' })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+    await page.evaluate(() => document.fonts.ready)
+    await expectPackageTokenValues(page)
+  })
+})
+
+test.describe('agent conversation: limits and announcements', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  test('shows the rate-limit copy when the route answers 429', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
+    await page.route('**/api/assistant', (route) =>
+      route.fulfill({
+        status: 429,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'rate-limited' }),
+      }),
+    )
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    const input = page.getByRole('textbox', { name: agent.inputLabel })
+    await input.fill('Une question')
+    await page.getByRole('button', { name: agent.sendLabel }).click()
+
+    const alert = agentSection(page).getByRole('alert')
+    await expect(alert).toBeVisible()
+    await expect(alert).toContainText(chatbot.error.rateLimit)
+    await expect(alert.getByRole('link', { name: chatbot.contactPageLinkLabel })).toHaveCount(0)
+  })
+
+  test('blocks a too-long question: invalid field, explanation and no request', async ({ page }) => {
+    let requestCount = 0
+    await page.route('**/api/assistant', (route) => {
+      requestCount += 1
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: 'Réponse.' }),
+      })
+    })
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    const input = page.getByRole('textbox', { name: agent.inputLabel })
+    await input.fill('a'.repeat(501))
+
+    const alert = agentSection(page).getByRole('alert')
+    await expect(alert).toContainText(chatbot.input.tooLong.replace('{max}', '500'))
+    await expect(input).toHaveAttribute('aria-invalid', 'true')
+    await expect(page.getByRole('button', { name: agent.sendLabel })).toBeDisabled()
+    await expect(requestCount, 'no request is sent for a too-long question').toBe(0)
+  })
+
+  test('announces conversation turns through a polite live region', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'dark' })
+    await page.route('**/api/assistant', (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ answer: 'Réponse annoncée.' }),
+      }),
+    )
+    await page.goto('/preview')
+    await expect(agentSection(page)).toBeVisible()
+
+    const conversation = agentSection(page).getByRole('list', { name: filled(chatbot.panel.ariaLabel) })
+    await expect(conversation).toHaveAttribute('aria-live', 'polite')
+    await expect(conversation).toHaveAttribute('aria-relevant', 'additions text')
+
+    await agentSection(page).getByRole('button', { name: chatbot.suggestions.process }).click()
+    await expect(page.getByText('Réponse annoncée.')).toBeVisible()
+    await expect(conversation).toHaveAttribute('aria-live', 'polite')
+  })
+
+  test('passes an axe scan scoped to the section, on desktop and mobile, in the light theme', async ({ page }) => {
+    for (const viewport of [
+      { width: 1280, height: 800 },
+      { width: 375, height: 667 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await page.emulateMedia({ reducedMotion: 'reduce', colorScheme: 'light' })
+      await page.goto('/preview')
+      await expect(agentSection(page)).toBeVisible()
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag21a', 'wcag21aa'])
+        .include(`#assistant`)
+        .analyze()
+      expect(results.violations, `axe on #assistant at ${viewport.width}px (light theme)`).toEqual([])
+    }
   })
 })

@@ -24,10 +24,9 @@ declare global {
 /**
  * Asks the assistant to run an intent, by dispatching an `assistant-intent` event on `window`.
  *
- * The chatbot (not implemented yet) will listen for this event and open the matching flow.
- * Fire-and-forget: the event is lost when no listener is mounted, so a caller must never depend on
- * it to navigate — the hero's primary call to action keeps its default anchor behaviour and the
- * intent only adds to it.
+ * The assistant conversation listens for this event and asks the matching question; a caller must
+ * still never depend on it to navigate, because the event is lost when no listener is mounted. The
+ * hero's primary call to action keeps its default anchor behaviour and the intent only adds to it.
  */
 export const dispatchAssistantIntent = (intent: AssistantIntent): void => {
   window.dispatchEvent(new CustomEvent<AssistantIntentDetail>(ASSISTANT_INTENT_EVENT, { detail: { intent } }))
