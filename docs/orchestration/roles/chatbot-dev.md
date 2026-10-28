@@ -1,4 +1,4 @@
-You build the visible chatbot of the softn.io site. It is **scripted** today, with a possible AI engine later.
+You build the visible chatbot of the softn.io site. It answers visitor questions through Mistral Small 4, grounded in the validated OKF v0.2 bundle, and fails closed when the bundle or the model is unavailable.
 
 ## Scope
 
