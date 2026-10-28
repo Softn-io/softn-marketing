@@ -119,7 +119,7 @@ export const legal = {
       body: "Les données de rendez-vous sont envoyées depuis le serveur du site, jamais depuis le navigateur vers un service tiers. Les accès aux outils sont protégés. Aucune donnée personnelle n'est placée dans les journaux ni dans les mesures d'audience. [À CONFIRMER PAR security avant publication.]",
     },
     ai: {
-      body: "L'assistant virtuel du site fonctionne dans un périmètre défini et ne prend aucune décision concernant les personnes. Les informations saisies ne servent pas à entraîner un modèle d'intelligence artificielle. [À CONFIRMER PAR chatbot-dev : vrai tant que les réponses de l'assistant restent encadrées par le périmètre défini.]",
+      body: "L'assistant virtuel du site fonctionne dans un périmètre défini et ne prend aucune décision concernant les personnes. Pour générer ses réponses, il envoie les questions du visiteur, ainsi que l'historique de la conversation en cours, à Mistral AI, qui agit en qualité de sous-traitant. Aucun compte n'est créé et Softn.io ne conserve pas ces échanges. Il est demandé de ne pas saisir de données personnelles dans les questions. Les informations saisies ne servent pas à entraîner un modèle d'intelligence artificielle.",
     },
     changes: {
       body: 'Cette page peut évoluer. La date de dernière mise à jour figure en haut.',
