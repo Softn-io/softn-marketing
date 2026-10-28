@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { maxDuration } from '@/app/api/assistant/route'
-import { MISTRAL_CHAT_COMPLETIONS_URL, MISTRAL_MODEL, MISTRAL_TOTAL_BUDGET_MS, requestChatCompletion } from './mistral'
+import {
+  buildPromptCacheKey,
+  MISTRAL_CHAT_COMPLETIONS_URL,
+  MISTRAL_MODEL,
+  MISTRAL_TOTAL_BUDGET_MS,
+  requestChatCompletion,
+} from './mistral'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -50,12 +56,92 @@ describe('requestChatCompletion', () => {
       ],
       temperature: 0.2,
       max_tokens: 600,
+      prompt_cache_key: buildPromptCacheKey('Règles.'),
     })
   })
 
   it('pins Mistral Small 4 v26.03 and not the moving alias', () => {
     expect(MISTRAL_MODEL).toBe('mistral-small-2603')
     expect(MISTRAL_MODEL).not.toContain('latest')
+  })
+
+  it('calls the EU regional endpoint', async () => {
+    fetchMock.mockResolvedValue(completion('Une réponse.'))
+
+    await requestChatCompletion(request)
+
+    expect(MISTRAL_CHAT_COMPLETIONS_URL).toBe('https://api.eu.mistral.ai/v1/chat/completions')
+    expect(fetchMock.mock.calls[0]?.[0]).toBe(MISTRAL_CHAT_COMPLETIONS_URL)
+  })
+
+  it('sends a prompt cache key derived from the system prompt', async () => {
+    fetchMock.mockResolvedValue(completion('Une réponse.'))
+
+    await requestChatCompletion(request)
+
+    const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))
+    expect(body.prompt_cache_key).toBe(buildPromptCacheKey('Règles.'))
+    expect(body.prompt_cache_key).toMatch(/^softn-assistant-[0-9a-f]{16}$/)
+  })
+
+  it('keeps one key across different questions and histories of the same bundle', async () => {
+    fetchMock.mockResolvedValue(completion('Une réponse.'))
+
+    await requestChatCompletion({
+      systemPrompt: 'Règles.',
+      messages: [
+        { role: 'user', content: 'Première question' },
+        { role: 'assistant', content: 'Première réponse' },
+        { role: 'user', content: 'Deuxième question' },
+      ],
+    })
+    await requestChatCompletion({
+      systemPrompt: 'Règles.',
+      messages: [{ role: 'user', content: 'Tout autre sujet' }],
+    })
+
+    const keys = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).prompt_cache_key)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
+  })
+
+  it('changes the key when the system prompt changes', async () => {
+    fetchMock.mockResolvedValue(completion('Une réponse.'))
+
+    await requestChatCompletion(request)
+    await requestChatCompletion({ ...request, systemPrompt: 'Règles mises à jour.' })
+
+    const keys = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).prompt_cache_key)
+    expect(keys[0]).not.toBe(keys[1])
+  })
+
+  it('builds the key without any visitor text', async () => {
+    fetchMock.mockResolvedValue(completion('Une réponse.'))
+
+    await requestChatCompletion({
+      ...request,
+      messages: [
+        { role: 'assistant', content: 'Historique secret 99 rue Cachée' },
+        { role: 'user', content: 'Mon adresse est 12 rue Sensible' },
+      ],
+    })
+
+    const key = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)).prompt_cache_key
+    expect(key).toBe(buildPromptCacheKey('Règles.'))
+    expect(key).not.toContain('rue Sensible')
+    expect(key).not.toContain('rue Cachée')
+  })
+
+  it('reuses the same key on the retry', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('upstream', { status: 503 }))
+      .mockResolvedValueOnce(completion('Après reprise.'))
+
+    await requestChatCompletion(request)
+
+    const keys = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).prompt_cache_key)
+    expect(keys).toHaveLength(2)
+    expect(keys[0]).toBe(keys[1])
   })
 
   it('answers not-configured without a network call when the key is unset', async () => {
@@ -83,7 +169,27 @@ describe('requestChatCompletion', () => {
 
     const result = await requestChatCompletion(request)
 
-    expect(result).toEqual({ ok: false, error: 'rate-limited' })
+    expect(result).toEqual({ ok: false, error: 'rate-limited', status: 429 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('carries the HTTP status of a non-retryable upstream failure', async () => {
+    fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }))
+
+    const result = await requestChatCompletion(request)
+
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 401 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('carries the status of the last attempt when the retry also fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('upstream', { status: 503 }))
+      .mockResolvedValueOnce(new Response('upstream', { status: 502 }))
+
+    const result = await requestChatCompletion(request)
+
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 502 })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
@@ -92,7 +198,7 @@ describe('requestChatCompletion', () => {
 
     const result = await requestChatCompletion(request)
 
-    expect(result).toEqual({ ok: false, error: 'upstream' })
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 400 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 

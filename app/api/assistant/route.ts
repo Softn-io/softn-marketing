@@ -1,5 +1,5 @@
 import { buildAssistantSystemPrompt } from '@/lib/assistant/systemPrompt'
-import { requestChatCompletion } from '@/lib/assistant/mistral'
+import { requestChatCompletion, type MistralFailure } from '@/lib/assistant/mistral'
 import { getOkfBundle } from '@/lib/assistant/okf'
 import { resolveAssistantAnswer } from '@/lib/assistant/answer'
 import { AssistantRequestSchema, type AssistantErrorCode } from '@/schemas/assistant'
@@ -35,6 +35,21 @@ const json = (body: unknown, status: number): Response =>
   })
 
 const errorResponse = (error: AssistantErrorCode, status: number): Response => json({ error }, status)
+
+/** Diagnostic detail of a model failure: the code, plus the upstream status when a response answered. */
+const mistralFailureDetail = (failure: MistralFailure): string =>
+  failure.status === undefined ? failure.error : `${failure.error} status=${failure.status}`
+
+/**
+ * Writes the single diagnostic line of a 503.
+ *
+ * The detail holds the failure stage and code only (bundle code and file, or model code and
+ * upstream status): never the question, the history, the prompt, the upstream body, the key or
+ * the caller's IP.
+ */
+const logUnavailable = (detail: string): void => {
+  console.error(`[assistant] unavailable: ${detail}`)
+}
 
 /** Raw client IP, as set by the hosting proxy; never logged. */
 const clientIp = (request: Request): string => {
@@ -77,9 +92,9 @@ const isRateLimited = (ip: string): boolean => {
  *
  * Request order: same-origin check, JSON content type, per-IP rate limit, Zod validation, bundle
  * load, then the Mistral call. Every failure returns a generic code (never the question, the
- * answer or an upstream body) and nothing is logged. The bundle and the API key are checked
- * before any network call: a missing key or a non-conformant bundle answers the generic error,
- * never an ungrounded answer.
+ * answer or an upstream body); a 503 also writes one diagnostic line with its stage and code. The
+ * bundle and the API key are checked before any network call: a missing key or a non-conformant
+ * bundle answers the generic error, never an ungrounded answer.
  *
  * @param request Incoming `POST` with `{ question, history }` as JSON.
  * @returns `{ answer }` on success, or `{ error }` with 400, 403, 415, 429 or 503.
@@ -103,13 +118,19 @@ export const POST = async (request: Request): Promise<Response> => {
   if (!parsed.success) return errorResponse('invalid', 400)
 
   const bundle = getOkfBundle()
-  if (!bundle.ok) return errorResponse('unavailable', 503)
+  if (!bundle.ok) {
+    logUnavailable(`bundle ${bundle.error.code} ${bundle.error.file}`)
+    return errorResponse('unavailable', 503)
+  }
 
   const completion = await requestChatCompletion({
     systemPrompt: buildAssistantSystemPrompt(bundle.data.grounding),
     messages: [...parsed.data.history, { role: 'user', content: parsed.data.question }],
   })
-  if (!completion.ok) return errorResponse('unavailable', 503)
+  if (!completion.ok) {
+    logUnavailable(`mistral ${mistralFailureDetail(completion)}`)
+    return errorResponse('unavailable', 503)
+  }
 
   return json({ answer: resolveAssistantAnswer(completion.data) }, 200)
 }
