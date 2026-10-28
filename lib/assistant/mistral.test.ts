@@ -83,7 +83,27 @@ describe('requestChatCompletion', () => {
 
     const result = await requestChatCompletion(request)
 
-    expect(result).toEqual({ ok: false, error: 'rate-limited' })
+    expect(result).toEqual({ ok: false, error: 'rate-limited', status: 429 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('carries the HTTP status of a non-retryable upstream failure', async () => {
+    fetchMock.mockResolvedValue(new Response('unauthorized', { status: 401 }))
+
+    const result = await requestChatCompletion(request)
+
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 401 })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('carries the status of the last attempt when the retry also fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('upstream', { status: 503 }))
+      .mockResolvedValueOnce(new Response('upstream', { status: 502 }))
+
+    const result = await requestChatCompletion(request)
+
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 502 })
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
@@ -92,7 +112,7 @@ describe('requestChatCompletion', () => {
 
     const result = await requestChatCompletion(request)
 
-    expect(result).toEqual({ ok: false, error: 'upstream' })
+    expect(result).toEqual({ ok: false, error: 'upstream', status: 400 })
     expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 

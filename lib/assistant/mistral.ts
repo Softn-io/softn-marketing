@@ -1,6 +1,5 @@
 import { z } from 'zod'
 import { readEnv } from '@/lib/env'
-import type { Result } from './result'
 
 /** Chat completions endpoint of the Mistral AI API (https://docs.mistral.ai/api/endpoint/chat). */
 export const MISTRAL_CHAT_COMPLETIONS_URL = 'https://api.mistral.ai/v1/chat/completions'
@@ -40,8 +39,19 @@ export type MistralRequest = {
 /** Non-personal failure codes, mapped by the Route Handler to one generic answer. */
 export type MistralError = 'not-configured' | 'timeout' | 'rate-limited' | 'upstream' | 'invalid-response'
 
-/** Outcome of a chat completion: the answer text, or a failure code. */
-export type MistralResult = Result<string, MistralError>
+/**
+ * Failure of one chat completion: the code, plus the HTTP status of the last attempt when the
+ * failure came from an HTTP response. Nothing else of the response is kept.
+ */
+export type MistralFailure = {
+  readonly ok: false
+  readonly error: MistralError
+  /** Status of the last HTTP response, absent when the failure never reached one. */
+  readonly status?: number
+}
+
+/** Outcome of a chat completion: the answer text, or a failure. */
+export type MistralResult = { readonly ok: true; readonly data: string } | MistralFailure
 
 /** Upper bound on one completion attempt: the route must answer before the visitor gives up. */
 const MISTRAL_TIMEOUT_MS = 15_000
@@ -72,10 +82,16 @@ const ChatCompletionResponseSchema = z.object({
     .min(1),
 })
 
-/** One attempt: the answer, or a failure plus whether retrying can help. */
+/** One attempt: the answer, or a failure plus whether retrying can help and the HTTP status if any. */
 type Attempt =
   | { readonly ok: true; readonly content: string }
-  | { readonly ok: false; readonly error: MistralError; readonly retry: boolean }
+  | { readonly ok: false; readonly error: MistralError; readonly retry: boolean; readonly status?: number }
+
+/** Copies the failure code and, when the attempt got an HTTP response, its status. */
+const toFailure = (attempt: Extract<Attempt, { ok: false }>): MistralFailure =>
+  attempt.status === undefined
+    ? { ok: false, error: attempt.error }
+    : { ok: false, error: attempt.error, status: attempt.status }
 
 const delay = (milliseconds: number): Promise<void> =>
   new Promise((resolve) => {
@@ -113,9 +129,9 @@ const sendChatCompletion = async (apiKey: string, request: MistralRequest, timeo
       signal: AbortSignal.timeout(timeoutMs),
     })
 
-    if (response.status === 429) return { ok: false, error: 'rate-limited', retry: true }
-    if (response.status >= 500) return { ok: false, error: 'upstream', retry: true }
-    if (!response.ok) return { ok: false, error: 'upstream', retry: false }
+    if (response.status === 429) return { ok: false, error: 'rate-limited', retry: true, status: response.status }
+    if (response.status >= 500) return { ok: false, error: 'upstream', retry: true, status: response.status }
+    if (!response.ok) return { ok: false, error: 'upstream', retry: false, status: response.status }
 
     let payload: unknown
     try {
@@ -147,7 +163,7 @@ const sendChatCompletion = async (apiKey: string, request: MistralRequest, timeo
  * {@link MistralResult} error code.
  *
  * @param request System prompt and bounded conversation turns.
- * @returns The answer text, or a failure code.
+ * @returns The answer text, or a failure carrying the last attempt's HTTP status when it got one.
  */
 export const requestChatCompletion = async (request: MistralRequest): Promise<MistralResult> => {
   let environment: ReturnType<typeof readEnv>
@@ -170,7 +186,7 @@ export const requestChatCompletion = async (request: MistralRequest): Promise<Mi
 
   const first = await sendChatCompletion(apiKey, request, firstTimeout)
   if (first.ok) return { ok: true, data: first.content }
-  if (!first.retry) return { ok: false, error: first.error }
+  if (!first.retry) return toFailure(first)
 
   const beforeRetry = remainingBudget(deadline)
   if (beforeRetry <= 0) return { ok: false, error: 'timeout' }
@@ -182,5 +198,5 @@ export const requestChatCompletion = async (request: MistralRequest): Promise<Mi
   if (secondTimeout <= 0) return { ok: false, error: 'timeout' }
 
   const second = await sendChatCompletion(apiKey, request, secondTimeout)
-  return second.ok ? { ok: true, data: second.content } : { ok: false, error: second.error }
+  return second.ok ? { ok: true, data: second.content } : toFailure(second)
 }

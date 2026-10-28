@@ -1,10 +1,12 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { requestChatCompletion } from '@/lib/assistant/mistral'
 import { POST } from './route'
 
 vi.mock('@/lib/assistant/mistral', () => ({ requestChatCompletion: vi.fn() }))
 
 const completionMock = vi.mocked(requestChatCompletion)
+
+let errorSpy: MockInstance
 
 const request = (
   body: unknown,
@@ -22,11 +24,13 @@ const request = (
 const validBody = { question: 'Comment se passe un projet ?', history: [] }
 
 beforeEach(() => {
+  errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   completionMock.mockReset()
   completionMock.mockResolvedValue({ ok: true, data: 'Une réponse ancrée.' })
 })
 
 afterEach(() => {
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
 
@@ -36,6 +40,7 @@ describe('POST /api/assistant', () => {
     expect(response.status).toBe(403)
     expect(await response.json()).toEqual({ error: 'invalid' })
     expect(completionMock).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('refuses a cross-origin request', async () => {
@@ -44,12 +49,14 @@ describe('POST /api/assistant', () => {
     )
     expect(response.status).toBe(403)
     expect(completionMock).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('refuses a body that is not JSON', async () => {
     const response = await POST(request('question=test', { origin: 'http://localhost', 'content-type': 'text/plain' }))
     expect(response.status).toBe(415)
     expect(completionMock).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('refuses malformed JSON and an invalid body without calling Mistral', async () => {
@@ -58,6 +65,7 @@ describe('POST /api/assistant', () => {
     expect((await POST(request('{', headers))).status).toBe(400)
     expect((await POST(request({ question: '   ' }, headers))).status).toBe(400)
     expect(completionMock).not.toHaveBeenCalled()
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('answers from the grounded bundle and sends the bounded history plus the question', async () => {
@@ -84,15 +92,83 @@ describe('POST /api/assistant', () => {
     ])
     expect(call?.systemPrompt).toContain('Concept : softn')
     expect(call?.systemPrompt).toContain('[[FALLBACK]]')
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
-  it('fails closed with a generic error when Mistral is unavailable', async () => {
+  it('fails closed with a generic error and one log line when Mistral is unavailable', async () => {
     completionMock.mockResolvedValue({ ok: false, error: 'upstream' })
 
     const response = await POST(request(validBody))
 
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: 'unavailable' })
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy.mock.calls[0]).toEqual(['[assistant] unavailable: mistral upstream'])
+  })
+
+  it('logs the upstream HTTP status of a non-retryable 4xx', async () => {
+    completionMock.mockResolvedValue({ ok: false, error: 'upstream', status: 401 })
+
+    const response = await POST(
+      request(validBody, {
+        origin: 'http://localhost',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.21',
+      }),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: 'unavailable' })
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy.mock.calls[0]).toEqual(['[assistant] unavailable: mistral upstream status=401'])
+  })
+
+  it('logs one line for a missing API key', async () => {
+    completionMock.mockResolvedValue({ ok: false, error: 'not-configured' })
+
+    const response = await POST(
+      request(validBody, {
+        origin: 'http://localhost',
+        'content-type': 'application/json',
+        'x-forwarded-for': '198.51.100.22',
+      }),
+    )
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toEqual({ error: 'unavailable' })
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    expect(errorSpy.mock.calls[0]).toEqual(['[assistant] unavailable: mistral not-configured'])
+  })
+
+  it('logs the stage and code but never the question, the history, the key or the IP', async () => {
+    vi.stubEnv('MISTRAL_API_KEY', 'sk-live-secret-value')
+    completionMock.mockResolvedValue({ ok: false, error: 'upstream', status: 401 })
+
+    await POST(
+      request(
+        {
+          question: 'Mon adresse est 12 rue Sensible',
+          history: [
+            { role: 'user', content: 'Mon historique secret est 99 rue Cachée' },
+            { role: 'assistant', content: 'Réponse confidentielle' },
+          ],
+        },
+        {
+          origin: 'http://localhost',
+          'content-type': 'application/json',
+          'x-forwarded-for': '203.0.113.77',
+        },
+      ),
+    )
+
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const line = String(errorSpy.mock.calls[0]?.[0])
+    expect(line).toContain('mistral upstream status=401')
+    expect(line).not.toContain('rue Sensible')
+    expect(line).not.toContain('99 rue Cachée')
+    expect(line).not.toContain('Réponse confidentielle')
+    expect(line).not.toContain('sk-live-secret-value')
+    expect(line).not.toContain('203.0.113.77')
   })
 
   it('rate-limits one IP after ten questions in the window', async () => {
@@ -110,6 +186,7 @@ describe('POST /api/assistant', () => {
     expect(limited.status).toBe(429)
     expect(await limited.json()).toEqual({ error: 'rate-limited' })
     expect(completionMock).toHaveBeenCalledTimes(10)
+    expect(errorSpy).not.toHaveBeenCalled()
   })
 
   it('never echoes the question, the answer or an upstream detail in an error', async () => {
