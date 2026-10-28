@@ -1,8 +1,12 @@
+import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { readEnv } from '@/lib/env'
 
-/** Chat completions endpoint of the Mistral AI API (https://docs.mistral.ai/api/endpoint/chat). */
-export const MISTRAL_CHAT_COMPLETIONS_URL = 'https://api.mistral.ai/v1/chat/completions'
+/**
+ * EU regional chat completions endpoint of the Mistral AI API, so inference runs in Mistral's
+ * data centres in the EU and EFTA countries (https://docs.mistral.ai/api/endpoint/chat).
+ */
+export const MISTRAL_CHAT_COMPLETIONS_URL = 'https://api.eu.mistral.ai/v1/chat/completions'
 
 /**
  * API model id of Mistral Small 4, version v26.03
@@ -10,6 +14,29 @@ export const MISTRAL_CHAT_COMPLETIONS_URL = 'https://api.mistral.ai/v1/chat/comp
  * `mistral-small-latest` alias, so a model swap on Mistral's side cannot change the answers.
  */
 export const MISTRAL_MODEL = 'mistral-small-2603'
+
+/** Namespaces the assistant's cached prefix inside the Mistral account sharing the API key. */
+const PROMPT_CACHE_KEY_PREFIX = 'softn-assistant-'
+
+/** Hex characters of the prompt digest kept in the key: enough to tell prompt versions apart. */
+const PROMPT_CACHE_KEY_HASH_LENGTH = 16
+
+/**
+ * Builds the `prompt_cache_key` of a system prompt.
+ *
+ * Every request sends the same long prefix: the answer rules followed by the whole OKF bundle.
+ * The key is a digest of that prefix, so it stays identical for every visitor and every serverless
+ * instance while the bundle is unchanged, and changes as soon as the rules or the bundle change.
+ * It is derived from the prompt only, never from the visitor, the question or the history.
+ *
+ * @param systemPrompt System prompt sent as the first message of every request.
+ * @returns Stable cache key, prefixed for the assistant.
+ */
+export const buildPromptCacheKey = (systemPrompt: string): string =>
+  `${PROMPT_CACHE_KEY_PREFIX}${createHash('sha256')
+    .update(systemPrompt)
+    .digest('hex')
+    .slice(0, PROMPT_CACHE_KEY_HASH_LENGTH)}`
 
 /** One turn sent to the model. */
 export type MistralChatMessage = {
@@ -124,6 +151,7 @@ const sendChatCompletion = async (apiKey: string, request: MistralRequest, timeo
         messages: [{ role: 'system', content: request.systemPrompt }, ...request.messages],
         temperature: MISTRAL_TEMPERATURE,
         max_tokens: MISTRAL_MAX_TOKENS,
+        prompt_cache_key: buildPromptCacheKey(request.systemPrompt),
       }),
       cache: 'no-store',
       signal: AbortSignal.timeout(timeoutMs),
