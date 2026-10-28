@@ -4,3 +4,4 @@
 .orchestration/
 docs/design
 next-env.d.ts
+.env.local

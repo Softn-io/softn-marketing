@@ -115,7 +115,62 @@
 .typing {
   display: flex;
   align-items: center;
+  gap: var(--softn-space-3);
+}
+
+.typing > div {
+  display: flex;
+  align-items: center;
   gap: var(--softn-space-2);
+}
+
+.typingText {
+  margin: 0;
+}
+
+/*
+ * Inline link inside an assistant message (fallback, unavailable answer). It keeps the message's own
+ * font size (no separate type step)
+ */
+.messageLink {
+  color: var(--softn-color-secondary);
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+/*
+ * Recoverable failure: generic code only, with one retry that re-sends the failed question. The
+ * failure reads as a plain message line like the other assistant messages: no surface, border or
+ * padding of its own. --softn-error keeps 6.99:1 dark and 6.13:1 light on --softn-background.
+ */
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--softn-space-3);
+}
+
+.errorText {
+  margin: 0;
+  max-inline-size: 60ch;
+  color: var(--softn-error);
+}
+
+.retry {
+  padding: 0 0 var(--softn-space-1);
+  border: 0;
+  border-bottom: 1px solid currentcolor;
+  background: transparent;
+  color: var(--softn-error);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition: border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.retry:hover {
+  border-bottom-color: transparent;
 }
 
 .typingDot {
@@ -167,6 +222,13 @@
   color: var(--softn-color);
 }
 
+.chip:disabled,
+.chip:disabled:hover {
+  border-bottom-color: var(--softn-border-default);
+  color: var(--softn-color-tertiary);
+  cursor: not-allowed;
+}
+
 /*
  * Booking chip: the single call to action among the questions. Brand foreground is the only brand
  * colour that stays above 4.5:1 on the section background in both themes (violet400 on dark,
@@ -185,6 +247,10 @@
   color: var(--softn-color);
 }
 
+.form {
+  margin: 0;
+}
+
 .composer {
   display: flex;
   align-items: center;
@@ -193,6 +259,11 @@
   padding-block-end: var(--softn-space-3);
   border-bottom: 1px solid var(--softn-input-border-default);
   transition: border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+/* The too-long question marks the composer underline with the input error token. */
+.composer-invalid {
+  border-bottom-color: var(--softn-input-border-error);
 }
 
 /*
@@ -237,6 +308,20 @@
   max-inline-size: 60ch;
 }
 
+/* Privacy note sits between the composer and the scope note, closest to the field it describes. */
+.privacyNote {
+  margin: 0;
+  margin-block-start: var(--softn-space-3);
+  max-inline-size: 60ch;
+}
+
+/* Too-long error, announced by its own alert and linked to the input by aria-describedby. */
+.fieldError {
+  margin: 0;
+  margin-block-start: var(--softn-space-2);
+  color: var(--softn-input-error-text);
+}
+
 /*
  * The send button's boundary carries the control on its own, so it needs the 3:1 WCAG 1.4.11 asks
  * for a UI component: the active border token is opaque violet500 dark / violet700 light, 4.6:1 and
@@ -267,13 +352,24 @@
   transform: translateX(3px);
 }
 
+/* Disabled send: the control stays legible but no longer reads as an available action. */
+.send:disabled,
+.send:disabled:hover {
+  border-color: var(--softn-border-active);
+  color: var(--softn-color-tertiary);
+  cursor: not-allowed;
+  transform: none;
+}
+
 .send svg {
   inline-size: var(--softn-icon-size-sm);
   block-size: var(--softn-icon-size-sm);
 }
 
 .chip:focus-visible,
-.send:focus-visible {
+.send:focus-visible,
+.retry:focus-visible,
+.messageLink:focus-visible {
   outline: 2px solid var(--softn-border-active);
   outline-offset: 2px;
 }
@@ -326,7 +422,8 @@
 
   .chip,
   .send,
-  .composer {
+  .composer,
+  .retry {
     transition: none;
   }
 

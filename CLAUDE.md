@@ -58,16 +58,19 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 
 ## Chatbot
 
-- Scripted (Q&A), booking via Fillout, data sent to Airtable server-side.
+- Answers visitor questions through **Mistral Small 4** (`mistral-small-2603`, pinned), grounded in the validated **OKF v0.2** bundle in `locales/fr/okf/`. Server-side only: `lib/assistant/` (loader, system prompt, Mistral fetch client), `app/api/assistant/route.ts`, `schemas/assistant.ts` (Zod). Shared with the client: `schemas/assistantLimits.ts`, a Zod-free module for the bounds and the response guards (keeps Zod out of the browser bundle and the CSP).
+- **Fail closed**: a missing key, a non-conformant bundle or an unavailable model answers the generic `chatbot.error.llm` copy, never an ungrounded answer. The fallback and error wording live in `locales/fr/chatbot.ts`; the model only returns the `[[FALLBACK]]` marker, which the route swaps for that copy.
+- No SDK and no new dependency: plain `fetch`, model id pinned in `lib/assistant/mistral.ts`. `MISTRAL_API_KEY` is optional, server-only, never `NEXT_PUBLIC_`.
 - Assistant with a **first name** (single constant in `locales/fr/chatbot.ts`).
 - The **first message** discloses that it is a virtual assistant (transparency: AI Act art. 50, and good practice).
-- Explicit consent **before** any personal data is collected.
+- Explicit consent **before** any personal data is collected. The composer asks visitors not to enter personal data; questions and the current history go to Mistral AI (processor row in `docs/rgpd/processors.md`), and nothing is kept by Softn.io.
+- Booking via Fillout and the server-side data sync remain the next step; the booking chip and the `assistant-intent` event already ask the booking question.
 
 ## Security and GDPR
 
 - Cookie banner kept. No third party before consent.
 - The Airtable token and every secret stay server-side. Env vars validated in `lib/env.ts`.
-- Every processor (Airtable, Fillout, Google Calendar, Vercel, Umami) is listed in `docs/rgpd/processors.md`: role, data, hosting, DPA, transfer safeguard outside the EU.
+- Every processor (Airtable, Baserow, Fillout, Google Calendar, Mistral AI, Vercel, Umami) is listed in `docs/rgpd/processors.md`: role, data, hosting, DPA, transfer safeguard outside the EU.
 - Legal pages: legal notice (mentions légales), privacy policy, cookie policy.
 - No personal data in logs or analytics events.
 

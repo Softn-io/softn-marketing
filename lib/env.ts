@@ -33,6 +33,10 @@ const baserowApiUrl = z.preprocess(
  * must work without them, and the Baserow helper reports a server error when
  * they are unset. They stay server-side and must never be prefixed with
  * `NEXT_PUBLIC_`.
+ *
+ * `MISTRAL_API_KEY` is optional for the same reason: without it the assistant
+ * route answers with its generic error instead of calling Mistral AI. It is a
+ * server-only secret and must never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -40,6 +44,7 @@ const EnvSchema = z.object({
   BASEROW_API_URL: baserowApiUrl,
   BASEROW_TOKEN: optionalString,
   BASEROW_WAITLIST_TABLE_ID: optionalString,
+  MISTRAL_API_KEY: optionalString,
 })
 
 export type Env = z.infer<typeof EnvSchema>

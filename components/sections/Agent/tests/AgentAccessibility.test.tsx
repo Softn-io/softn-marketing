@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { agent } from '@/locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '@/locales/fr/chatbot'
 import { Agent } from '../Agent'
 
 /*
- * Accessibility contract of the shell that unit tests can carry: the section is a region named
+ * Accessibility contract of the section that unit tests can carry: the section is a region named
  * by its heading, only the real controls take focus, and every decorative element is hidden from
  * assistive technology. Focus outlines, contrast and heading order need a real browser and live
  * in `e2e/agentSection.spec.ts`.
@@ -29,6 +29,7 @@ describe('Agent accessibility', () => {
     input.focus()
     expect(document.activeElement).toBe(input)
 
+    fireEvent.change(input, { target: { value: 'Une question' } })
     const send = screen.getByRole('button', { name: agent.sendLabel })
     send.focus()
     expect(document.activeElement).toBe(send)
@@ -41,14 +42,18 @@ describe('Agent accessibility', () => {
   it('keeps every decorative element out of the accessibility tree and the tab order', () => {
     const { container } = render(<Agent />)
     const hidden = container.querySelectorAll('[aria-hidden="true"]')
-    expect(hidden.length).toBeGreaterThanOrEqual(6) // glow, status dot, three typing dots, send icon
+    expect(hidden.length).toBeGreaterThanOrEqual(3) // glow, status dot, send icon
     for (const element of hidden) {
       expect(element.matches('span, div, svg'), 'decorations are spans, divs or icons, not controls').toBe(true)
       expect(element.getAttribute('tabindex'), 'no decoration is focusable').toBeNull()
     }
+  })
 
-    const typing = screen.getByRole('img', { name: filled(chatbot.typing.ariaLabel) })
-    expect(typing.getAttribute('tabindex')).toBeNull()
+  it('names the message list and each speaker run', () => {
+    render(<Agent />)
+    const conversation = screen.getByRole('list', { name: filled(chatbot.panel.ariaLabel) })
+    const speakerRun = within(conversation).getByRole('list', { name: filled(agent.speaker.assistant) })
+    expect(within(speakerRun).getAllByRole('listitem')).toHaveLength(2)
   })
 
   it('carries no heading below the section h2', () => {

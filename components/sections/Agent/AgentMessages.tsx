@@ -1,31 +1,37 @@
-import {
-  AGENT_WELCOME_MESSAGES,
-  agentSpeakerLabel,
-  groupMessagesBySpeaker,
-  withAssistantName,
-} from './data/agentMessages'
+import { chatbot } from '@/locales/fr/chatbot'
+import { AgentMessageText } from './AgentMessageText'
+import { agentSpeakerLabel, groupMessagesBySpeaker, withAssistantName, type AgentMessage } from './data/agentMessages'
 import styles from './styles/Agent.module.css'
 
+/** Props of {@link AgentMessages}. */
+export type AgentMessagesProps = {
+  /** Messages in render order, welcome messages first. */
+  messages: readonly AgentMessage[]
+}
+
 /**
- * Static conversation area of the shell: the assistant's welcome messages, grouped by speaker so the
- * speaker line renders once above its run of consecutive messages.
+ * Conversation area: every message grouped by speaker, so a speaker line renders once above its run
+ * of consecutive messages.
  *
- * Groups are an ordered list and each group holds an ordered list of its own messages, so the future
- * conversation can append messages in order and announce them as a log. A group is named by its
- * speaker label, which keeps every message attributable to its speaker for assistive technology. No
- * interaction and no live region yet: the content never changes in the shell.
+ * The list is a polite live region: an answer that arrives is announced without interrupting the
+ * visitor, and every message stays attributable to its speaker. The list name comes from the locale.
  */
-export const AgentMessages = () => (
-  <ol className={styles.messages}>
-    {groupMessagesBySpeaker(AGENT_WELCOME_MESSAGES).map((group, index) => {
+export const AgentMessages = ({ messages }: AgentMessagesProps) => (
+  <ol
+    className={styles.messages}
+    aria-label={withAssistantName(chatbot.panel.ariaLabel)}
+    aria-live="polite"
+    aria-relevant="additions text"
+  >
+    {groupMessagesBySpeaker(messages).map((group, groupIndex) => {
       const speaker = agentSpeakerLabel(group.speaker)
       return (
-        <li key={`${group.speaker}-${index}`} className={styles.messageGroup}>
+        <li key={`${group.speaker}-${groupIndex}`} className={styles.messageGroup}>
           <p className={`${styles.speaker} text-caption uppercase`}>{speaker}</p>
           <ol className={styles.groupMessages} aria-label={speaker}>
-            {group.templates.map((template) => (
-              <li key={template} className={`${styles.messageText} text-body-md text-foreground`}>
-                {withAssistantName(template)}
+            {group.templates.map((template, messageIndex) => (
+              <li key={messageIndex} className={`${styles.messageText} text-body-md text-foreground`}>
+                <AgentMessageText template={template} contactLinkLabel={chatbot.contactPageLinkLabel} />
               </li>
             ))}
           </ol>
