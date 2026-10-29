@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createBaserowRow } from '@/lib/baserow'
-import { WAITLIST_FIELDS, WAITLIST_MIN_DELAY_MS, WAITLIST_SOURCE } from '@/schemas/waitlist'
+import { WAITLIST_FIELDS, WAITLIST_MIN_DELAY_MS, WAITLIST_SOURCE } from '@/schemas/waitlistLimits'
 import { joinWaitlist } from './joinWaitlist'
 
 vi.mock('@/lib/baserow', () => ({

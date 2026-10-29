@@ -1,20 +1,11 @@
+/*
+ * Server-only Zod schema of the waitlist Server Action. It exports the schema and its inferred type
+ * and nothing else: the constants and plain types shared with the client live in `waitlistLimits`,
+ * and client code imports that module directly. Importing this one instead would ship Zod to the
+ * browser, whose JIT probe calls `Function("")` and trips the production CSP.
+ */
 import { z } from 'zod'
-
-/** Form field names of the waitlist submission, shared by the client form and the Server Action. */
-export const WAITLIST_FIELDS = {
-  email: 'email',
-  honeypot: 'reference',
-  renderedAt: 'renderedAt',
-} as const
-
-/** Value stored in the Baserow `Source` field for every coming-soon waitlist record. */
-export const WAITLIST_SOURCE = 'coming-soon'
-
-/** Minimum delay between the form render and its submission, in milliseconds. */
-export const WAITLIST_MIN_DELAY_MS = 2000
-
-/** Longest e-mail the form accepts; RFC 5321 caps a full address at 254 characters. */
-export const WAITLIST_EMAIL_MAX_LENGTH = 254
+import { WAITLIST_EMAIL_MAX_LENGTH } from './waitlistLimits'
 
 /**
  * Waitlist form input, validated on the server before any Baserow write.
@@ -30,12 +21,3 @@ export const WaitlistSubmissionSchema = z.object({
 })
 
 export type WaitlistSubmission = z.infer<typeof WaitlistSubmissionSchema>
-
-/**
- * Outcome of the waitlist Server Action. Never carries the submitted e-mail or a Baserow error
- * body: the client only needs to know which message to show.
- */
-export type WaitlistResult = { ok: true } | { ok: false; error: 'invalid' | 'server' }
-
-/** Signature of the waitlist Server Action, compatible with React's `useActionState`. */
-export type WaitlistAction = (previous: WaitlistResult | null, formData: FormData) => Promise<WaitlistResult>

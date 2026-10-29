@@ -6,22 +6,16 @@ import { Button } from '@components/ui/Button'
 import { interpolate } from '@/lib/interpolate'
 import { interpolateSegments } from '@/lib/text/interpolateSegments'
 import { comingSoon } from '@/locales/fr/comingSoon'
-import { WAITLIST_FIELDS, WAITLIST_MIN_DELAY_MS, type WaitlistAction, type WaitlistResult } from '@/schemas/waitlist'
+import {
+  getWaitlistEmailError,
+  WAITLIST_FIELDS,
+  WAITLIST_MIN_DELAY_MS,
+  type WaitlistAction,
+  type WaitlistResult,
+} from '@/schemas/waitlistLimits'
 import styles from './styles/WaitlistForm.module.css'
 
 const { form } = comingSoon
-
-/** Same shape the server-side Zod schema accepts; the server stays the source of truth. */
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
-type FieldError = 'empty' | 'invalid'
-
-const validateEmail = (value: string): FieldError | null => {
-  const trimmed = value.trim()
-  if (trimmed === '') return 'empty'
-  if (!EMAIL_PATTERN.test(trimmed)) return 'invalid'
-  return null
-}
 
 type WaitlistFormProps = {
   /** Server Action joining the waitlist, passed by the server component so this island stays server-import free. */
@@ -58,7 +52,7 @@ export const WaitlistForm = ({ action }: WaitlistFormProps) => {
     startedAt.current = Date.now()
   }, [])
 
-  const fieldError = showFieldError ? validateEmail(email) : null
+  const fieldError = showFieldError ? getWaitlistEmailError(email) : null
   const serverError = state?.ok === false ? state.error : null
   const errorMessage =
     fieldError === 'empty'
@@ -75,7 +69,7 @@ export const WaitlistForm = ({ action }: WaitlistFormProps) => {
   const announcement = pending ? form.submitBusy : (errorMessage ?? successMessage)
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>): void => {
-    if (validateEmail(email) !== null) {
+    if (getWaitlistEmailError(email) !== null) {
       event.preventDefault()
       setShowFieldError(true)
       return

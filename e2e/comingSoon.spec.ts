@@ -49,7 +49,7 @@ import { SITE_URL } from '../lib/site'
 import { comingSoon } from '../locales/fr/comingSoon'
 import { nav } from '../locales/fr/hero'
 import { metadataContent } from '../locales/fr/metadata'
-import { WAITLIST_MIN_DELAY_MS } from '../schemas/waitlist'
+import { WAITLIST_MIN_DELAY_MS } from '../schemas/waitlistLimits'
 
 /** localStorage key the inline theme script reads; same contract as `lib/theme`. */
 const THEME_STORAGE_KEY = 'softn-theme'

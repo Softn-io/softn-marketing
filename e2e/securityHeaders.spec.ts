@@ -59,4 +59,36 @@ test.describe('security headers', () => {
     expect(violations).toEqual([])
     expect([...origins]).toEqual([new URL(page.url()).origin])
   })
+
+  test('the coming-soon home page loads with zero securitypolicyviolation and no console error', async ({ page }) => {
+    /*
+     * Zod v4 probes its JIT support with `Function("")` at module init, which the production CSP
+     * (`script-src` without `unsafe-eval`) refuses on the home page. The listener is
+     * installed by `addInitScript`, which runs before any page script, so a violation fired during
+     * module init is captured instead of being missed by a listener attached after the load. The
+     * webServer of `playwright.config.ts` always serves a production build, where the CSP is
+     * strict: a dev server would add `'unsafe-eval'` and could never reproduce the defect.
+     */
+    await page.addInitScript(`
+      window.__cspViolations = [];
+      document.addEventListener('securitypolicyviolation', (event) => {
+        window.__cspViolations.push(
+          event.effectiveDirective + ' blocked ' + event.blockedURI +
+            ' at ' + (event.sourceFile || '(inline)') + ':' + String(event.lineNumber),
+        );
+      });
+    `)
+
+    const consoleErrors: string[] = []
+    page.on('console', (message) => {
+      if (message.type() === 'error') consoleErrors.push(message.text())
+    })
+    page.on('pageerror', (error) => consoleErrors.push(String(error)))
+
+    await page.goto('/', { waitUntil: 'networkidle' })
+
+    const violations = await page.evaluate(() => (window as { __cspViolations?: string[] }).__cspViolations ?? [])
+    expect(violations, 'CSP violations fired on the home page').toEqual([])
+    expect(consoleErrors, 'console errors on the home page').toEqual([])
+  })
 })
