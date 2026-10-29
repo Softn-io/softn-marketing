@@ -2,13 +2,8 @@
 
 import { createBaserowRow } from '@/lib/baserow'
 import { readEnv } from '@/lib/env'
-import {
-  WAITLIST_FIELDS,
-  WAITLIST_MIN_DELAY_MS,
-  WAITLIST_SOURCE,
-  WaitlistSubmissionSchema,
-  type WaitlistResult,
-} from '@/schemas/waitlist'
+import { WaitlistSubmissionSchema } from '@/schemas/waitlist'
+import { WAITLIST_FIELDS, WAITLIST_MIN_DELAY_MS, WAITLIST_SOURCE, type WaitlistResult } from '@/schemas/waitlistLimits'
 
 /** Reads a text field from untrusted form data: a missing or file value becomes an empty string. */
 const readField = (formData: FormData, name: string): string => {

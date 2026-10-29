@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { interpolate } from '@/lib/interpolate'
 import { comingSoon } from '@/locales/fr/comingSoon'
-import type { WaitlistAction } from '@/schemas/waitlist'
+import type { WaitlistAction } from '@/schemas/waitlistLimits'
 import { WaitlistForm } from '../WaitlistForm'
 
 const { form } = comingSoon

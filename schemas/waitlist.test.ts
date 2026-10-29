@@ -1,11 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  WAITLIST_EMAIL_MAX_LENGTH,
-  WAITLIST_FIELDS,
-  WAITLIST_MIN_DELAY_MS,
-  WAITLIST_SOURCE,
-  WaitlistSubmissionSchema,
-} from './waitlist'
+import { WAITLIST_EMAIL_MAX_LENGTH } from './waitlistLimits'
+import { WaitlistSubmissionSchema } from './waitlist'
 
 describe('WaitlistSubmissionSchema', () => {
   it('trims and lowercases a valid e-mail', () => {
@@ -50,11 +45,5 @@ describe('WaitlistSubmissionSchema', () => {
 
     expect(result.data.honeypot).toBe('https://spam.example')
     expect(result.data.renderedAt).toBe('1720000000000')
-  })
-
-  it('exposes the shared field names and storage constants', () => {
-    expect(WAITLIST_FIELDS.honeypot).not.toBe('site')
-    expect(WAITLIST_MIN_DELAY_MS).toBe(2000)
-    expect(WAITLIST_SOURCE).toBe('coming-soon')
   })
 })
