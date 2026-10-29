@@ -26,6 +26,20 @@ const baserowApiUrl = z.preprocess(
 )
 
 /**
+ * Upstash Redis REST base URL, the durable store of the assistant rate limit. Only https is
+ * accepted because the token travels to that host, and the value is normalised (canonical URL, no
+ * trailing slash) so the helper can append its path. Unset by default: development and test then
+ * use the in-memory window, production fails closed. It comes from the server environment only.
+ */
+const upstashRedisRestUrl = z.preprocess(
+  blankToUndefined,
+  z
+    .url({ protocol: /^https$/, normalize: true, error: 'UPSTASH_REDIS_REST_URL must be an https URL' })
+    .transform((value) => value.replace(/\/+$/, ''))
+    .optional(),
+)
+
+/**
  * Server-side environment schema, validated at every `readEnv` call. Every
  * consumer goes through this module — never `process.env` directly.
  *
@@ -37,6 +51,12 @@ const baserowApiUrl = z.preprocess(
  * `MISTRAL_API_KEY` is optional for the same reason: without it the assistant
  * route answers with its generic error instead of calling Mistral AI. It is a
  * server-only secret and must never be prefixed with `NEXT_PUBLIC_`.
+ *
+ * `UPSTASH_REDIS_REST_URL` and `UPSTASH_REDIS_REST_TOKEN` are the shared
+ * rate-limit store of the assistant route. Both optional: unset, development
+ * and test keep the in-memory window while production fails closed. The token
+ * doubles as the HMAC key of the stored client IP. Both stay server-side and
+ * must never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -45,6 +65,8 @@ const EnvSchema = z.object({
   BASEROW_TOKEN: optionalString,
   BASEROW_WAITLIST_TABLE_ID: optionalString,
   MISTRAL_API_KEY: optionalString,
+  UPSTASH_REDIS_REST_URL: upstashRedisRestUrl,
+  UPSTASH_REDIS_REST_TOKEN: optionalString,
 })
 
 export type Env = z.infer<typeof EnvSchema>
