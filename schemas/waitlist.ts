@@ -1,12 +1,11 @@
 /*
- * Server-only Zod schema of the waitlist Server Action. Client code imports `waitlistLimits` instead:
- * importing this module would ship Zod to the browser, whose JIT probe calls `Function("")` and
- * trips the production CSP.
+ * Server-only Zod schema of the waitlist Server Action. It exports the schema and its inferred type
+ * and nothing else: the constants and plain types shared with the client live in `waitlistLimits`,
+ * and client code imports that module directly. Importing this one instead would ship Zod to the
+ * browser, whose JIT probe calls `Function("")` and trips the production CSP.
  */
 import { z } from 'zod'
 import { WAITLIST_EMAIL_MAX_LENGTH } from './waitlistLimits'
-
-export * from './waitlistLimits'
 
 /**
  * Waitlist form input, validated on the server before any Baserow write.
