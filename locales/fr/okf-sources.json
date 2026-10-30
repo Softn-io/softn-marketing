@@ -1,0 +1,40 @@
+{
+  "sources": {
+    "agent.ts": {
+      "sha256": "6dd2293fb1d540775f3500cc033c722e1f7ad0c1f7e4bed20beae9952810bc2a",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "chatbot.ts": {
+      "sha256": "a652329ee3c066f0ef5fd8e6841526d71506a07cef2c27d192ed6edfb70e3b36",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "contact.ts": {
+      "sha256": "ec31b59d61d5eebfe564dcfe357d0274f090af5cd5f2382c2fc57636577ec722",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "faq.ts": {
+      "sha256": "f349a1f628d0d48f593ba5275219dcdc419869e9f1a78af72f887e038843c56c",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "hero.ts": {
+      "sha256": "86bcc1cf18150287d9352bab9ded4bc62fcd4eb977256ee3b739b5759f957e3b",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "legal.ts": {
+      "sha256": "f20e03b1a1d7003f06b0013ba804760bd80ee8d9c5a5cb782a85fb1e191cc5d1",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "method.ts": {
+      "sha256": "0a09a602e9fb429ecf3525e27decced7d2dc5c27c07106dfdab4c2d5d70212a4",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "offers.ts": {
+      "sha256": "a5530e136eb85c6ff03609ca7e5210f4fefc881e7fbdd54d277bdae279692454",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    },
+    "thisSite.ts": {
+      "sha256": "0a8dac29c53a1c400748b57cbf0547b1353fd2f4cc5f961af30ff172809b4469",
+      "reviewedAt": "2026-10-28T01:42:38+01:00"
+    }
+  }
+}
