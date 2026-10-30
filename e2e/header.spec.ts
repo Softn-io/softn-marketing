@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
-import { HERO_CTA_ID } from '../lib/anchors'
+import { HERO_CTA_ID, type SectionId } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
 import { hero, nav } from '../locales/fr/hero'
@@ -15,12 +15,13 @@ const LOGO = nav.logo.ariaLabel
 const HERO_PRIMARY = hero.cta.primary
 const HERO_SECONDARY = hero.cta.secondary
 const HERO_INDICATOR = interpolate(hero.agentPrompt, { assistantName: ASSISTANT_NAME })
+const AGENT_NAME = interpolate(nav.items.agent, { assistantName: ASSISTANT_NAME })
 
 const NAV_LINKS = [
   { label: nav.items.offers, aria: nav.itemsAria.offers, id: 'services' },
   { label: nav.items.method, aria: nav.itemsAria.method, id: 'methode' },
   {
-    label: interpolate(nav.items.agent, { assistantName: ASSISTANT_NAME }),
+    label: AGENT_NAME,
     aria: interpolate(nav.itemsAria.agent, { assistantName: ASSISTANT_NAME }),
     id: 'assistant',
   },
@@ -80,24 +81,53 @@ const injectSections = async (page: Page) => {
 }
 
 /**
- * Waits until the document's height stops changing from one frame to the next. Two late mutations
- * move the content: the method diagram grows the page when it hydrates (its `data-motion` pinned
- * track adds 250vh/180vh), and the self-hosted fonts swap in after load — the fallback metrics
- * differ by over 1000px of document height, so a scroll measured before the swap lands somewhere
- * else once it shifts the content below it. `document.fonts.ready` gates the polling. Capped so a
- * page that keeps mutating cannot hang the suite.
+ * Distance between a section's top edge and the reading band's top edge (`scroll-padding-top`), in
+ * pixels: zero when the section starts exactly where the reader reads from.
  */
-const awaitStableDocumentHeight = async (page: Page): Promise<void> => {
-  await page.evaluate(async () => {
-    await document.fonts.ready
-    let last = -1
-    for (let attempt = 0; attempt < 240; attempt += 1) {
-      const height = document.documentElement.scrollHeight
-      if (height === last) return
-      last = height
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-    }
-  })
+const sectionOffset = (page: Page, id: SectionId): Promise<number> =>
+  page.evaluate((sectionId) => {
+    const section = document.getElementById(sectionId)
+    if (section === null) throw new Error(`section ${sectionId} missing`)
+    const padding = Number.parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop)
+    return section.getBoundingClientRect().top - padding
+  }, id)
+
+/**
+ * Waits until a section really sits at the reading band. The browser applies a fragment in the URL,
+ * and every scroll the suite writes, against the layout of that moment: the method diagram's pinned
+ * track adds 250vh to the page when it hydrates and the self-hosted fonts swap in after load, so a
+ * measurement taken before those shifts lands somewhere else. Polling the section's own box is what
+ * makes the wait independent of them.
+ */
+const expectAtReadingBand = async (page: Page, id: SectionId): Promise<void> => {
+  await expect
+    .poll(async () => Math.abs(await sectionOffset(page, id)), {
+      message: `#${id} must sit at the reading band, not where the pre-hydration layout put it`,
+    })
+    .toBeLessThanOrEqual(2)
+}
+
+/**
+ * Scrolls the reader to a section the way the visitor would — a wheel gesture, not a programmatic
+ * jump — and waits for the navigation to highlight it. The scroll is retried for the same reason
+ * `expectAtReadingBand` waits: the page grows under the reader. The wait is on the highlighted link
+ * itself, the product's own state, never on a timer.
+ */
+const scrollToSection = async (page: Page, id: SectionId): Promise<void> => {
+  const viewport = page.viewportSize() ?? { width: 1280, height: 800 }
+  await page.mouse.move(viewport.width / 2, viewport.height / 2)
+  await expect
+    .poll(
+      async () => {
+        const delta = Math.round(await sectionOffset(page, id))
+        if (Math.abs(delta) > 2) await page.mouse.wheel(0, delta)
+        return page.evaluate(
+          () => document.querySelector("header nav a[aria-current='location']")?.getAttribute('href') ?? null,
+        )
+      },
+      { message: `the reading position must reach #${id} and be highlighted` },
+    )
+    .toBe(`#${id}`)
 }
 
 /**
@@ -293,7 +323,7 @@ test.describe('header: desktop', () => {
     await injectSections(page)
     await page.goto('/preview')
     // The self-hosted fonts swap after load and move every text block: measure the hero CTA
-    // against the settled layout (awaitStableDocumentHeight gates the same swap elsewhere).
+    // against the settled layout (the same swap moves the sections the scroll-spy reads).
     await page.evaluate(() => document.fonts.ready)
     // The header CTA is only clickable once the hero CTA has scrolled out of view (ScrollRevealCta).
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
@@ -323,14 +353,34 @@ test.describe('header: desktop', () => {
     await injectSections(page)
     await page.goto('/preview')
     const nav = page.getByRole('navigation', { name: MAIN_NAV })
-    // Scroll against the layout the sections have settled into, not the server-rendered one: the
-    // method diagram grows the page when it hydrates (see awaitStableDocumentHeight).
-    await awaitStableDocumentHeight(page)
-    await page.evaluate(() => document.getElementById('coulisses')?.scrollIntoView())
+    // The scroll is written against the settled layout and the wait is on the highlighted link, so a
+    // page that grew mid-scroll (the method diagram hydrating) is retried rather than sampled.
+    await scrollToSection(page, 'coulisses')
     await expect(nav.getByRole('link', { name: BACKSTAGE_NAME })).toHaveAttribute('aria-current', 'location')
+    await expect(nav.locator('[aria-current]')).toHaveCount(1)
     await page.evaluate(() => window.scrollTo(0, 0))
     await expect(nav.locator('[aria-current]')).toHaveCount(0)
   })
+
+  for (const reducedMotion of ['no-preference', 'reduce'] as const) {
+    test(`a fragment in the URL marks its section active and brings the reader to it (${reducedMotion})`, async ({
+      page,
+    }) => {
+      await injectSections(page)
+      await page.emulateMedia({ reducedMotion })
+      await page.goto('/preview#assistant')
+      const nav = page.getByRole('navigation', { name: MAIN_NAV })
+      await expect(nav.getByRole('link', { name: AGENT_NAME })).toHaveAttribute('aria-current', 'location')
+      await expect(nav.locator('[aria-current]')).toHaveCount(1)
+      // The browser applied the fragment against the pre-hydration layout; the reader must still end
+      // up on the section the link asked for, not 250vh short of it.
+      await expectAtReadingBand(page, 'assistant')
+      // And from there the spy follows the reader like it does without a fragment.
+      await scrollToSection(page, 'coulisses')
+      await expect(nav.getByRole('link', { name: BACKSTAGE_NAME })).toHaveAttribute('aria-current', 'location')
+      await expect(nav.locator('[aria-current]')).toHaveCount(1)
+    })
+  }
 })
 
 test.describe('header: single CTA label per breakpoint', () => {
@@ -1046,6 +1096,33 @@ test.describe('header: no horizontal overflow', () => {
 
 test.describe('header: mobile drawer', () => {
   test.use({ viewport: BELOW_LG })
+
+  test('a fragment in the URL lands on its section and marks it in the drawer', async ({ page }) => {
+    await injectSections(page)
+    await page.goto('/preview#assistant')
+    // The fragment contract is the same below lg: the reader lands on the section it asked for, and
+    // the header marks it — the desktop navigation is hidden here, so the link is picked by CSS.
+    await expectAtReadingBand(page, 'assistant')
+    await expect(page.locator("header nav a[href='#assistant']")).toHaveAttribute('aria-current', 'location')
+    await burger(page).click()
+    await expect(drawer(page)).toBeVisible()
+    // The drawer is the navigation below lg, and it renders in a portal mounted on open: it must
+    // expose the same current location as the header navigation. The drawers nudge the reader's
+    // position when they open (the focus move inside a portal at the end of the body), so the
+    // comparison is read live instead of pinning the section landed on above.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const current = (root: ParentNode) =>
+              root.querySelector("a[aria-current='location']")?.getAttribute('href') ?? null
+            const headerLink = current(document.querySelector('header nav') ?? document)
+            return headerLink !== null && current(document.querySelector("[role='dialog']") ?? document) === headerLink
+          }),
+        { message: 'the drawer must expose the same current location as the header navigation' },
+      )
+      .toBe(true)
+  })
 
   test('burger replaces the nav below lg and toggles aria-expanded', async ({ page }) => {
     await page.goto('/preview')
