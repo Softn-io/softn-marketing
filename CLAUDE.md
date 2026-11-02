@@ -17,7 +17,7 @@ The rules in `.claude/rules/` (typescript, nextjs, context7) load on their own: 
 - Design tokens: **`@softnio-labs/tokens`** (public npm, published from Mel's Nx monorepo), single source, with a generated Tailwind mapping; never a local copy. Dark and light modes — **dark is the brand default** (Softn is dark-first), light activates on explicit system preference or explicit user choice; `data-theme` overrides both
 - Zod at boundaries · Vitest (unit) · Playwright (E2E and visual) · Lighthouse CI
 - Vercel (deployment) · GitHub Actions (CI)
-- Analytics: **Umami**, loaded after consent · Booking: **Fillout Scheduling** (Google Calendar) · Leads: **Airtable**, server-side only
+- Analytics: **Umami**, loaded after consent · Booking: **Google Calendar API** (direct, server-side: `freebusy` + `events.insert` with a Google Meet link) · Leads: **Baserow**, server-side only
 - FR today, EN possible later: no hardcoded text in components
 
 ## Commands
@@ -29,7 +29,7 @@ Target scripts, to be created at project init (do not invent other names):
 
 - `app/` **only** routes, layout, special files and `api/` (Route Handlers). No route-private folders (`_components/`, `_hooks/`, `_actions/`) under `app/`: route-specific code lives in the shared folders below. No route groups until a second route family exists (legal pages vs home)
 - `components/ui/` custom primitives (Button, Card…) · `components/layout/` page chrome (Header, Footer) · `components/sections/` real page sections only (hero, offers, method, FAQ…) · `components/chatbot/`; `components/forms/` added when the first form lands. **One folder per component** (`components/ui/ThemeToggle/`) holding the component, its CSS Module and all its unit tests (`ThemeToggle.test.tsx`, plus tests of the helper scripts it owns). Small primitives stay flat. A composite component (`components/layout/Header/`) keeps its entry (`index.ts`, `Header.tsx`) and its sub-components at the folder root, puts non-component code in `hooks/`, `context/`, `data/` and `styles/`, and its unit tests in `tests/`. Anything reused by a second component is promoted to a shared folder (`lib/`, `hooks/`)
-- `lib/` integrations (env, airtable, fillout, consent, analytics) and pure helpers, site constants, nav config; once helpers pile up, group them in role-named subfolders (e.g. `lib/text/`). No `utils/`, `helpers/` or `config/` folder
+- `lib/` integrations (env, baserow, booking, google, consent, analytics) and pure helpers, site constants, nav config; once helpers pile up, group them in role-named subfolders (e.g. `lib/text/`). No `utils/`, `helpers/` or `config/` folder
 - `schemas/` Zod schemas at boundaries (added with the first one) · `hooks/` hooks shared across components (added when needed) · `actions/` shared Server Actions (added with the first one) · `types/` ambient and shared types
 - `locales/fr/` typed copy (single source of content)
 - `e2e/` Playwright · `docs/` documentation, SEO brief, GDPR. Unit tests are colocated next to the code they cover (in the component's own `tests/` subfolder for composite components); no root `tests/` folder, no `src/`
@@ -47,7 +47,7 @@ Target scripts, to be created at project init (do not invent other names):
 
 ## Dependencies
 
-A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dependency request"** raised to `/ship`, which submits it to Mel (package + version, justification, alternatives including "no dependency", size, license, advisories, personal data). Anticipated candidates, to be validated: `@softnio-labs/tokens`, `zod`, `@fillout/react`, `vitest`, `@playwright/test`, `jsdom`, `@testing-library/react` (with its peer `@testing-library/dom`), `lucide-react` (icons), `@lhci/cli`, `next-intl` (later).
+A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dependency request"** raised to `/ship`, which submits it to Mel (package + version, justification, alternatives including "no dependency", size, license, advisories, personal data). Anticipated candidates, to be validated: `@softnio-labs/tokens`, `zod`, `vitest`, `@playwright/test`, `jsdom`, `@testing-library/react` (with its peer `@testing-library/dom`), `lucide-react` (icons), `@lhci/cli`, `next-intl` (later).
 
 ## Content
 
@@ -64,13 +64,13 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 - Assistant with a **first name** (single constant in `locales/fr/chatbot.ts`).
 - The **first message** discloses that it is a virtual assistant (transparency: AI Act art. 50, and good practice).
 - Explicit consent **before** any personal data is collected. The composer asks visitors not to enter personal data; questions and the current history go to Mistral AI (processor row in `docs/rgpd/processors.md`), and nothing is kept by Softn.io.
-- Booking via Fillout and the server-side data sync remain the next step; the booking chip and the `assistant-intent` event already ask the booking question.
+- Booking: the reservation flow of the Agent section (`components/sections/Agent/`, lazy-loaded) collects consent, need, slot, identity, goes through `app/api/booking/` (slots + booking), and books directly in **Google Calendar**; the lead is stored in **Baserow** with `createBaserowRow`. Rules live in `lib/booking/rules.ts`, the slot computation in `lib/booking/availability.ts`, the Google client in `lib/google/`. No service-account key is stored: the server authenticates **keyless**, presenting the deployment's Vercel OIDC token (the `x-vercel-oidc-token` request header, `VERCEL_OIDC_TOKEN` in development) to Google Workload Identity Federation, which signs a short-lived assertion for the service account that impersonates the Workspace owner in `GOOGLE_CALENDAR_OWNER` (`GCP_PROJECT_NUMBER`, `GCP_WORKLOAD_IDENTITY_POOL_ID`, `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID`). The events go to the calendar in `GOOGLE_CALENDAR_ID`, a dedicated secondary calendar whose id is its address; free/busy reads that calendar **and** the owner's own calendar, so a busy owner is never booked over. The consent instant is stamped by the server on receipt. Slot re-checked before the event; nothing is stored if the re-check or the calendar fails.
 
 ## Security and GDPR
 
 - Cookie banner kept. No third party before consent.
-- The Airtable token and every secret stay server-side. Env vars validated in `lib/env.ts`.
-- Every processor (Airtable, Baserow, Fillout, Google Calendar, Mistral AI, Vercel, Umami) is listed in `docs/rgpd/processors.md`: role, data, hosting, DPA, transfer safeguard outside the EU.
+- The Baserow token and every secret stay server-side, and the Google booking connection is keyless. Env vars validated in `lib/env.ts`.
+- Every processor (Baserow, Google Calendar, Google Meet, Mistral AI, Upstash, Vercel, Umami) is listed in `docs/rgpd/processors.md`: role, data, hosting, DPA, transfer safeguard outside the EU.
 - Legal pages: legal notice (mentions légales), privacy policy, cookie policy.
 - No personal data in logs or analytics events.
 
@@ -80,7 +80,7 @@ A hook blocks `pnpm add` and equivalents. Every dependency goes through a **"Dep
 | ---------------- | --------------------------------------------------------------------- |
 | `nextjs-dev`     | Next.js / Tailwind implementation, custom components, design fidelity |
 | `content-seo`    | Proposes and reviews copy (SEO, tone) — writes only in `docs/`        |
-| `chatbot-dev`    | Chatbot, Fillout booking, Airtable sync, consent                      |
+| `chatbot-dev`    | Chatbot, Google Calendar booking, Baserow lead sync, consent          |
 | `qa`             | Tests, accessibility, visual fidelity, Lighthouse budgets             |
 | `security-audit` | Security and GDPR review — read-only                                  |
 | `git-pr`         | Commits, branches, PRs — never merges                                 |
