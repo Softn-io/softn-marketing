@@ -12,7 +12,13 @@
    * the page and still below the sticky site header (--softn-z-sticky).
    */
   z-index: var(--softn-z-card);
-  overflow: hidden;
+  /*
+   * `clip`, not `hidden`: both cut the glow that bleeds off the corner, but `hidden` left the section
+   * a scroll container, and the browser's own reveal of a focused control scrolled it sideways by a
+   * few dozen pixels — which is what hid the left edge of the reservation flow. A clipped box has no
+   * scroll offset to move, so only the flow's own scroll moves the page.
+   */
+  overflow: clip;
   /* The design covers the last viewport of the method section, whose timeline ends with a spacer. */
   margin-block-start: -100vh;
   border-start-start-radius: var(--softn-radius-xl);
@@ -133,15 +139,20 @@
  * font size (no separate type step)
  */
 .messageLink {
-  color: var(--softn-color-secondary);
+  color: currentColor;
   text-decoration: underline;
-  text-underline-offset: 0.2em;
+  text-underline-offset: 0.4em;
+}
+.messageLink:hover {
+  color: alpha(from currentColor / 80%);
 }
 
 /*
  * Recoverable failure: generic code only, with one retry that re-sends the failed question. The
  * failure reads as a plain message line like the other assistant messages: no surface, border or
- * padding of its own. --softn-error keeps 6.99:1 dark and 6.13:1 light on --softn-background.
+ * padding of its own. Measured on the rendered section, its decorative glow included, the message
+ * link this block colours keeps 5.98:1 dark and 4.75:1 light on the section background: above AA in
+ * both themes, and the reason the colour stays --softn-error rather than a lighter tint.
  */
 .error {
   display: flex;
@@ -154,6 +165,22 @@
   margin: 0;
   max-inline-size: 60ch;
   color: var(--softn-error);
+}
+
+/*
+ * Notice shown after a flow the visitor ended or refused: it reads as one assistant line, so it
+ * needs no surface of its own, and it is a status region rather than a conversation message because
+ * nothing was asked of the assistant.
+ */
+.notice {
+  margin: 0;
+  max-inline-size: 60ch;
+}
+
+/* Placeholder while the lazy-loaded reservation flow is fetched: one line, no layout jump. */
+.bookingLoading {
+  margin: 0;
+  margin-block-start: clamp(var(--softn-space-8), 4.5vw, var(--softn-space-12));
 }
 
 .retry {
@@ -226,7 +253,7 @@
 .chip:disabled:hover {
   border-bottom-color: var(--softn-border-default);
   color: var(--softn-color-tertiary);
-  cursor: not-allowed;
+  cursor: default;
 }
 
 /*

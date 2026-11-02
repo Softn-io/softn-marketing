@@ -92,12 +92,10 @@ export const legal = {
     processors: {
       intro:
         'Softn.io fait appel à des prestataires (sous-traitants) pour faire fonctionner le site. Ils traitent les données pour son compte :',
-      airtable:
-        'Airtable : enregistrement des demandes de rendez-vous. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
-      fillout:
-        'Fillout : réservation du créneau. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
+      baserow:
+        "Baserow : enregistrement des demandes de rendez-vous. Service hébergé en Allemagne (Union européenne), par une société établie aux Pays-Bas. Aucun transfert hors de l'Union européenne.",
       google:
-        'Google Calendar : agenda des rendez-vous, via Fillout. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
+        "Google Calendar : agenda des rendez-vous et envoi de l'invitation. Données hébergées dans l'Union européenne (paramètre de localisation des données de Google Workspace) ; transferts encadrés par des clauses contractuelles types. Lien Google Meet : hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].",
       vercel:
         'Vercel : hébergement du site et journaux techniques. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
       umami:
@@ -154,7 +152,7 @@ export const legal = {
       body: "Avec le consentement du visiteur, le site utilise Umami pour compter les visites et comprendre quelles parties du site sont consultées. Rien n'est chargé avant ce consentement. [À CONFIRMER PAR MEL : version d'Umami, cookies éventuellement déposés.]",
     },
     thirdParty: {
-      body: "La réservation d'un créneau repose sur un service tiers (Fillout, avec Google Calendar), chargé uniquement après consentement, au moment de la réservation. En cas de refus, ce service n'est pas chargé et la réservation ne peut pas être finalisée.",
+      body: "La réservation d'un échange se fait directement dans l'assistant : aucun service tiers n'est chargé dans votre navigateur pour cela. Les informations transitent par le serveur du site, et les prestataires concernés sont listés dans la politique de confidentialité.",
     },
     choice: {
       body: "Lors de la première visite, un bandeau propose d'accepter ou de refuser les cookies non nécessaires. Refuser est aussi simple qu'accepter. Le choix peut être modifié à tout moment avec le lien « Gérer mes cookies », en bas de chaque page.",
@@ -172,7 +170,7 @@ export type Legal = typeof legal
 export const cookieBanner = {
   ariaLabel: 'Choix des cookies',
   title: 'Choix des cookies',
-  body: "Ce site mesure son audience uniquement avec votre accord, afin de s'améliorer. La réservation d'un échange fait aussi appel à un service tiers. Aucun cookie non nécessaire n'est déposé avant votre consentement.",
+  body: "Ce site mesure son audience uniquement avec votre accord, afin de s'améliorer. Aucun cookie non nécessaire n'est déposé avant votre consentement.",
   accept: 'Tout accepter',
   decline: 'Tout refuser',
   customize: 'Personnaliser',

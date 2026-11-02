@@ -5,7 +5,11 @@ description: Un assistant virtuel fonctionnant avec l'IA, pas une personne, qui 
 tags: [assistant, IA, périmètre, transparence, données personnelles]
 status: stable
 generated: { by: content-seo/claude-sonnet-5-5, at: 2026-10-28T00:53:29+01:00 }
-verified: [{ by: "human:mel", at: "2026-10-28T01:42:38+01:00" }]
+verified:
+  - { by: "human:mel", at: "2026-10-28T01:42:38+01:00" }
+  - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
+  - { by: "human:mel", at: "2026-11-01T02:05:22+01:00" }
+  - { by: "human:mel", at: "2026-11-01T04:17:47+01:00" }
 sources:
   - { id: chatbot, resource: ../chatbot.ts, title: Textes de l'assistant }
   - { id: agent, resource: ../agent.ts, title: Section de l'assistant }

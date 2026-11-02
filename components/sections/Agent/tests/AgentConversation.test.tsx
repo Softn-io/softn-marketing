@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS } from '@/lib/assistant/intent'
 import { interpolate } from '@/lib/interpolate'
@@ -8,6 +8,14 @@ import { agent } from '@/locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '@/locales/fr/chatbot'
 import { contact } from '@/locales/fr/contact'
 import { Agent } from '../Agent'
+import {
+  answerBooking,
+  beforeContactLink,
+  callsTo,
+  plainSpaces,
+  plainSpacesContaining,
+  stubMotionPreference,
+} from './bookingTestUtils'
 
 const filled = (template: string): string => template.replaceAll('{assistantName}', ASSISTANT_NAME)
 
@@ -69,7 +77,7 @@ describe('Agent conversation', () => {
 
     await screen.findByText('Une réponse ancrée.')
     const conversation = screen.getByRole('list', { name: filled(chatbot.panel.ariaLabel) })
-    expect(within(conversation).getByText(question)).toBeTruthy()
+    expect(within(conversation).getByText(plainSpaces(question))).toBeTruthy()
     expect(screen.queryByRole('img', { name: filled(chatbot.typing.ariaLabel) })).toBeNull()
     expect((screen.getByRole('button', { name: chatbot.suggestions.process }) as HTMLButtonElement).disabled).toBe(
       false,
@@ -214,16 +222,144 @@ describe('Agent conversation', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('runs the booking question when the site dispatches the booking intent', async () => {
+  it('opens the reservation flow when the site dispatches the booking intent', async () => {
+    stubMotionPreference(true)
     fetchMock.mockResolvedValue(answerResponse('Pour réserver…'))
     render(<Agent />)
 
     fireEvent(window, new CustomEvent(ASSISTANT_INTENT_EVENT, { detail: { intent: ASSISTANT_INTENTS.booking } }))
 
-    await screen.findByText('Pour réserver…')
+    // The booking intent opens the reservation flow: the model is never asked a booking question.
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+    expect(await screen.findByText(chatbot.booking.intro)).toBeTruthy()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+/**
+ * Lets the flow's zero-delay reveals run: the reduced-motion preference stubbed below schedules each
+ * message as an immediate timer, so one turn of the event loop is all it takes.
+ */
+const settleFlow = async (): Promise<void> => {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
+describe('Agent conversation with the booking flow', () => {
+  /*
+   * These tests ride through the agent section, where the flow arrives as a lazy chunk: they stub the
+   * reduced-motion preference so the flow reveals its messages without pacing, and assert what the
+   * visitor sees around it. The flow's own rhythm is tested in `BookingFlow.test.tsx`.
+   */
+
+  beforeEach(() => {
+    stubMotionPreference(true)
+    answerBooking(fetchMock)
+  })
+
+  it('opens the reservation flow from the booking chip, without asking the model', async () => {
+    render(<Agent />)
+
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await settleFlow()
+
+    const region = await screen.findByRole('region', { name: chatbot.suggestions.book })
+    expect(within(region).getByText(chatbot.booking.intro)).toBeTruthy()
+    expect(callsTo(fetchMock, '/api/assistant')).toEqual([])
+    expect(callsTo(fetchMock, '/api/booking')).toEqual([])
+  })
+
+  it('returns to the conversation when the consent is refused, with nothing sent', async () => {
+    render(<Agent />)
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.decline }))
+
+    expect(screen.queryByRole('region', { name: chatbot.suggestions.book })).toBeNull()
+    expect(await screen.findByText(plainSpacesContaining(beforeContactLink(chatbot.consent.declined)))).toBeTruthy()
+    expect(callsTo(fetchMock, '/api/booking')).toEqual([])
+    expect(callsTo(fetchMock, '/api/booking/slots')).toEqual([])
+  })
+
+  it('returns to the conversation when the flow is abandoned, with nothing sent', async () => {
+    render(<Agent />)
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.booking.cancel }))
+
+    expect(screen.queryByRole('region', { name: chatbot.suggestions.book })).toBeNull()
+    expect(await screen.findByText(chatbot.booking.cancelled)).toBeTruthy()
+    expect(callsTo(fetchMock, '/api/booking')).toEqual([])
+  })
+
+  it('never lets a booking answer reach the model, including after the flow', async () => {
+    render(<Agent />)
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    fireEvent.change(await screen.findByLabelText(chatbot.booking.steps.need.field), {
+      target: { value: 'Automatiser mes devis' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+    await waitFor(() => expect(document.querySelectorAll('[data-booking-slot]').length).toBeGreaterThan(0))
+    fireEvent.click(document.querySelectorAll('[data-booking-slot]')[0] as HTMLElement)
+    fireEvent.change(await screen.findByLabelText(chatbot.booking.steps.firstName.field), {
+      target: { value: 'Marie' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+    fireEvent.change(await screen.findByLabelText(chatbot.booking.steps.lastName.field), {
+      target: { value: 'Dupont' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+    fireEvent.change(await screen.findByLabelText(chatbot.booking.steps.email.field), {
+      target: { value: 'marie@example.fr' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.booking.steps.skip }))
+    fireEvent.click(await screen.findByRole('button', { name: 'PME' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Marketing' }))
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.booking.recap.confirm }))
+    await screen.findByText(chatbot.booking.success.title)
+
+    fireEvent.click(screen.getByRole('button', { name: chatbot.booking.success.restart }))
+    const input = await screen.findByLabelText(agent.inputLabel)
+    fetchMock.mockResolvedValue(answerResponse('Une réponse du modèle.'))
+    fireEvent.change(input, { target: { value: 'Comment se passe un projet ?' } })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+
+    await waitFor(() => expect(callsTo(fetchMock, '/api/assistant')).toHaveLength(1))
+
+    const sent = JSON.stringify(callsTo(fetchMock, '/api/assistant'))
+    for (const answer of ['Automatiser mes devis', 'Marie', 'Dupont', 'marie@example.fr']) {
+      expect(sent).not.toContain(answer)
+    }
+    expect(callsTo(fetchMock, '/api/assistant')[0]?.body).toEqual({
+      question: 'Comment se passe un projet ?',
+      history: [],
+    })
+  })
+
+  it('keeps the booking transcript out of the assistant messages', async () => {
+    render(<Agent />)
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    await settleFlow()
+    fireEvent.change(await screen.findByLabelText(chatbot.booking.steps.need.field), {
+      target: { value: 'Automatiser mes devis' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: agent.sendLabel }))
+
+    await waitFor(() => expect(document.querySelectorAll('[data-booking-slot]').length).toBeGreaterThan(0))
+
     const conversation = screen.getByRole('list', { name: filled(chatbot.panel.ariaLabel) })
-    expect(within(conversation).getByText(chatbot.suggestions.book)).toBeTruthy()
-    const [, init] = fetchMock.mock.calls[0] ?? []
-    expect(JSON.parse(String(init?.body))).toMatchObject({ question: chatbot.suggestions.book })
+    expect(within(conversation).queryByText('Automatiser mes devis')).toBeNull()
+
+    const region = screen.getByRole('region', { name: chatbot.suggestions.book })
+    expect(within(region).getAllByText('Automatiser mes devis').length).toBeGreaterThan(0)
   })
 })

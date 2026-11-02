@@ -35,8 +35,8 @@ const DENIED_PERMISSIONS = [
 /**
  * Builds the Content-Security-Policy header value.
  *
- * No third-party origin is allowed: Umami and the Fillout embed widen the
- * policy in their own changes, once they are wired and consent-gated.
+ * No third-party origin is allowed: Umami widens the policy in its own
+ * change, once it is wired and consent-gated.
  *
  * Limitation: the policy is static (no nonce, so the pages stay CDN-cacheable).
  * Inline scripts are therefore allowed with `'unsafe-inline'`, which makes

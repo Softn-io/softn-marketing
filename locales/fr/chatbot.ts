@@ -6,7 +6,7 @@ export const chatbot = {
   welcome: {
     first:
       "Bonjour, je suis {assistantName}, l'assistant virtuel de Softn.io. Je suis une intelligence artificielle, pas une personne. Je peux répondre à vos questions sur les services et la méthode de Softn.io, et vous aider à réserver votre échange Spark.",
-    prompt: 'Que souhaitez-vous savoir ?',
+    prompt: 'Que souhaitez-vous savoir ?',
   },
   disclosure: {
     inline:
@@ -24,20 +24,20 @@ export const chatbot = {
     label: 'Votre question',
     placeholder: 'Écrivez votre question…',
     send: 'Envoyer',
-    tooLong: 'Votre question est un peu longue : {max} caractères au maximum.',
+    tooLong: 'Votre question est un peu longue : {max} caractères au maximum.',
     privacyNote:
-      "Merci de ne pas saisir de données personnelles. Vos questions sont traitées par un service d'IA pour générer la réponse ; Softn.io ne les conserve pas.",
+      "Merci de ne pas saisir de données personnelles. Vos questions sont traitées par un service d'IA pour générer la réponse ; Softn.io ne les conserve pas.",
   },
   typing: {
     ariaLabel: "{assistantName} est en train d'écrire",
   },
   suggestions: {
-    process: 'Comment se passe un projet ?',
-    review: 'Comment la qualité du travail est-elle contrôlée ?',
-    automation: "Qu'est-ce qui s'automatise ?",
-    efficiency: 'Comment gagner du temps au quotidien ?',
-    notTechnical: 'Faut-il être technique pour travailler avec vous ?',
-    services: 'Que faites-vous exactement ?',
+    process: 'Comment se passe un projet ?',
+    review: 'Comment la qualité du travail est-elle contrôlée ?',
+    automation: "Qu'est-ce qui s'automatise ?",
+    efficiency: 'Comment gagner du temps au quotidien ?',
+    notTechnical: 'Faut-il être technique pour travailler avec vous ?',
+    services: 'Que faites-vous exactement ?',
     book: 'Prendre rendez-vous',
   },
   suggestionsLabel: 'Questions suggérées',
@@ -64,7 +64,7 @@ export const chatbot = {
     notTechnical:
       "Non, aucune compétence technique n'est nécessaire. La partie technique est prise en charge, les explications restent simples, et un accompagnement est prévu jusqu'à la prise en main de votre outil.",
     services:
-      "Deux types de services. Créer : votre site ou votre web app, de la conception à la mise en ligne, et une application mobile si votre projet le demande. Automatiser : repérer vos tâches répétitives, mettre en place les automatisations avec vous, vous accompagner dans leur prise en main, et intégrer l'IA à vos processus métier là où elle vous est utile.",
+      "Deux types de services. Créer : votre site ou votre web app, de la conception à la mise en ligne, et une application mobile si votre projet le demande. Automatiser : repérer vos tâches répétitives, mettre en place les automatisations avec vous, vous accompagner dans leur prise en main, et intégrer l'IA à vos processus métier là où elle vous est utile.",
     delay:
       "Cela dépend de l'ampleur du projet, et aucune date n'est annoncée avant d'avoir compris votre besoin. Après le premier échange, vous recevez un plan d'action sous 3 jours, puis le projet avance par livraisons régulières plutôt qu'en une seule fois.",
     price: "Chaque projet est chiffré après l'échange, selon son ampleur. Le plan d'action, lui, est offert.",
@@ -75,73 +75,91 @@ export const chatbot = {
   },
   booking: {
     intro:
-      "Volontiers. L'échange Spark est offert et sans engagement. Je vais vous poser quelques questions rapides pour préparer la réservation.",
+      "Volontiers. L'échange Spark dure 30 minutes, il est offert et sans engagement. Je vous demande d'abord votre besoin et je vous propose des créneaux, puis quelques informations pour confirmer.",
     steps: {
-      firstName: {
-        question: 'Quel est votre prénom ?',
-        field: 'Prénom',
-      },
-      lastName: {
-        question: 'Et votre nom ?',
-        field: 'Nom',
-      },
-      email: {
-        question: "Quelle adresse e-mail pour l'invitation ?",
-        field: 'E-mail',
-        error: 'Veuillez fournir une adresse e-mail valide.',
-      },
-      phone: {
-        question: "Un numéro de téléphone, au cas où l'appel serait interrompu ? (facultatif)",
-        field: 'Téléphone',
-        error: 'Veuillez fournir un numéro de téléphone valide.',
-      },
-      structure: {
-        question: 'Quel type de structure représentez-vous ? (facultatif)',
-        field: 'Structure',
-        options: ['Indépendant', 'TPE', 'PME', 'Association', 'Autre'],
-      },
-      role: {
-        question: 'Quelle est votre fonction ? (facultatif)',
-        field: 'Fonction',
-        options: ['Dirigeant', 'Opérations', 'Marketing', 'Technique ou produit', 'Autre'],
-      },
       need: {
-        question: 'En une phrase, quel est votre besoin ?',
+        question: 'En une phrase, quel est votre besoin ?',
         field: 'Besoin',
         example: 'Automatiser mes devis',
       },
       slot: {
-        question: 'Quel créneau vous convient ?',
+        question: 'Parmi ces créneaux, lequel vous convient ?',
         field: 'Créneau',
+      },
+      firstName: {
+        question: 'Quel est votre prénom ?',
+        field: 'Prénom',
+      },
+      lastName: {
+        question: 'Et votre nom ?',
+        field: 'Nom',
+      },
+      email: {
+        question: "Quelle adresse e-mail pour recevoir l'invitation ?",
+        field: 'E-mail',
+        error: 'Veuillez fournir une adresse e-mail valide.',
+      },
+      phone: {
+        question: "Un numéro de téléphone, au cas où l'appel serait interrompu ? (facultatif)",
+        field: 'Téléphone',
+        error: 'Veuillez fournir un numéro de téléphone valide.',
+      },
+      structure: {
+        question: 'Quel type de structure représentez-vous ? (facultatif)',
+        field: 'Structure',
+        options: ['Indépendant', 'TPE', 'PME', 'Association', 'Autre'],
+      },
+      role: {
+        question: 'Quelle est votre fonction ? (facultatif)',
+        field: 'Fonction',
+        options: ['Dirigeant', 'Opérations', 'Marketing', 'Technique ou produit', 'Autre'],
       },
       skip: 'Passer cette question',
     },
+    identityIntro: 'Parfait. Il me manque quelques informations pour confirmer votre rendez-vous.',
     step: 'Question {current} sur {total}',
+    slots: {
+      loading: 'Je consulte les disponibilités…',
+      listLabel: 'Créneaux disponibles',
+      more: 'Voir plus de créneaux',
+      timezoneNote: 'Les horaires sont indiqués en heure de Paris.',
+      none: 'Je ne trouve aucun créneau disponible pour le moment. Vous pouvez écrire via la {contactPageLink}, et votre demande sera lue.',
+      unavailable:
+        "Je n'arrive pas à consulter les disponibilités pour le moment. Vous pouvez réessayer dans un instant, ou écrire via la {contactPageLink}.",
+    },
     recap: {
-      title: 'Récapitulatif avant envoi',
-      confirm: 'Confirmer et envoyer',
+      title: 'Récapitulatif avant confirmation',
+      confirm: 'Confirmer le rendez-vous',
       edit: 'Modifier une réponse',
+      editPrompt: 'Quelle réponse souhaitez-vous modifier ?',
     },
     cancel: 'Annuler la prise de rendez-vous',
     cancelled: "La prise de rendez-vous est annulée. Aucune donnée n'a été envoyée.",
     success: {
-      title: 'Demande enregistrée',
+      title: 'Rendez-vous confirmé',
       message:
-        "Merci {firstName}. Votre demande pour le créneau « {slot} » est enregistrée. Vous recevrez une invitation à l'adresse indiquée.",
+        'Merci {firstName}. Votre échange Spark est confirmé pour le créneau « {slot} ». Vous allez recevoir une invitation par e-mail ou directement dans votre agenda.',
       restart: 'Recommencer',
+    },
+    /** Wording of the calendar event, read by Mel and by the visitor in the invitation. */
+    event: {
+      title: 'Échange Spark — {firstName} {lastName} x Softn.io',
+      line: '{label} : {value}',
     },
   },
   consent: {
     message:
-      "Avant de poursuivre : pour réserver, j'ai besoin de votre prénom, de votre nom, de votre adresse e-mail et de quelques informations sur votre projet. Ces données sont transmises à Softn.io pour organiser l'échange et vous envoyer l'invitation. Vous pouvez demander leur suppression à tout moment. Le détail figure dans la politique de confidentialité.",
+      "Avant de poursuivre : pour réserver, j'ai besoin de votre prénom, de votre nom, de votre adresse e-mail et de quelques informations sur votre besoin. Elles servent à organiser l'échange. Elles ne sont jamais envoyées à l'assistant IA. Vous pouvez retirer votre accord ou demander leur suppression à tout moment via la {privacyPolicyLink}. En cliquant sur le bouton « Continuer », vous acceptez que vos informations soient utilisées pour organiser l'échange.",
     link: {
       label: 'Politique de confidentialité',
+      inlineLabel: 'politique de confidentialité',
       href: '/politique-de-confidentialite',
     },
-    accept: "J'accepte que mes informations soient utilisées pour organiser l'échange",
+    // 2. The accepted label is the one Mel validated in her review: short, explicit, still a click.
+    accept: 'Continuer',
     decline: 'Je préfère ne pas donner mes informations',
     declined:
-      "C'est entendu, aucune donnée n'est collectée. Vous pouvez poursuivre la conversation, ou contacter Softn.io via le formulaire de contact : {contactPageLink}.",
+      "C'est entendu, aucune donnée n'est collectée. Vous pouvez poursuivre la conversation, ou contacter Softn.io via le formulaire de contact : {contactPageLink}.",
     accepted: 'Merci. Nous pouvons commencer.',
   },
   error: {
@@ -152,14 +170,14 @@ export const chatbot = {
     llmRetry: 'Réessayer',
     rateLimit: 'Les questions arrivent un peu vite. Laissez-moi un instant, puis réessayez.',
     booking:
-      "La réservation n'a pas abouti et aucune donnée n'a été conservée. Vous pouvez réessayer, ou utiliser le formulaire de contact : {contactPageLink}. [À CONFIRMER PAR chatbot-dev : vrai seulement si aucune écriture Airtable n'a eu lieu.]",
+      "La réservation n'a pas abouti : aucun rendez-vous n'a été créé et aucune donnée n'a été conservée. Vous pouvez réessayer, ou écrire via la {contactPageLink}.",
     slotTaken: "Ce créneau n'est plus disponible. Veuillez en choisir un autre, s'il vous plaît.",
   },
   loading: {
     message: 'Un instant…',
   },
   dataRequest:
-    "Pour consulter, corriger ou supprimer vos données, suivez la procédure décrite dans la politique de confidentialité, ou utilisez le formulaire de contact : {contactPageLink}, en choisissant l'objet « {dataRequestSubject} ».",
+    "Pour consulter, corriger ou supprimer vos données, suivez la procédure décrite dans la politique de confidentialité, ou utilisez le formulaire de contact : {contactPageLink}, en choisissant l'objet « {dataRequestSubject} ».",
 } as const
 
 export type Chatbot = typeof chatbot

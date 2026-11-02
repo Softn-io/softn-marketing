@@ -30,15 +30,20 @@ export default defineConfig({
     timeout: 240_000,
     env: {
       ENABLE_PREVIEW_ROUTE: 'true',
-      // The Server Action calls the provider server-side, where page.route cannot intercept:
+      // The Route Handlers call their providers server-side, where page.route cannot intercept:
       // blanking every provider key (process.env wins over env files; lib/env treats '' as
-      // unset) so no run can ever reach Baserow or Airtable.
+      // unset) so no run can ever reach Google, Baserow or the model.
       BASEROW_API_URL: '',
       BASEROW_TOKEN: '',
       BASEROW_WAITLIST_TABLE_ID: '',
-      AIRTABLE_TOKEN: '',
-      AIRTABLE_BASE_ID: '',
-      AIRTABLE_WAITLIST_TABLE_ID: '',
+      BASEROW_LEADS_TABLE_ID: '',
+      GOOGLE_SERVICE_ACCOUNT_EMAIL: '',
+      GOOGLE_CALENDAR_ID: '',
+      GCP_PROJECT_NUMBER: '',
+      GCP_WORKLOAD_IDENTITY_POOL_ID: '',
+      GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: '',
+      VERCEL_OIDC_TOKEN: '',
+      MISTRAL_API_KEY: '',
     },
   },
 })

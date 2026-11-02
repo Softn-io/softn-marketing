@@ -1,0 +1,472 @@
+/*
+ * Booking flow inside the assistant section. Sibling of Agent.module.css: it styles the steps of the
+ * reservation, which the conversation module does not own.
+ *
+ * Every length comes from a --softn-space-* token, in the clamp rhythm of the section around it, so
+ * the flow breathes the same way on mobile and on desktop. The room is deliberate: Mel asked for a
+ * reservation that reads calmly, so steps, questions, chips, recap rows and actions are separated
+ * generously rather than packed.
+ */
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-8), 5vw, var(--softn-space-12));
+  margin: 0;
+  margin-block-start: clamp(var(--softn-space-8), 4.5vw, var(--softn-space-12));
+}
+
+/* Focus lands here at each step: the outline belongs to the field or chip that takes it, not here. */
+.flow:focus {
+  outline: none;
+}
+
+.transcript {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-6), 4vw, var(--softn-space-10));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+}
+
+.speaker {
+  margin: 0;
+  color: var(--softn-brand-foreground);
+}
+
+.lineText {
+  margin: 0;
+  max-inline-size: 44ch;
+  white-space: pre-line;
+  text-wrap: pretty;
+  /* A long unbreakable answer wraps instead of widening the flow on a narrow screen. */
+  overflow-wrap: anywhere;
+}
+
+/* One step: question controls, then the actions that move the flow forward. */
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+  margin: 0;
+}
+
+/* Progress line: the eyebrow stays readable, the rule takes the room that is left. */
+.progress {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-3) var(--softn-space-6);
+  flex-wrap: wrap;
+}
+
+.progressLabel {
+  margin: 0;
+  color: var(--softn-brand-foreground);
+}
+
+/* Field of one step: a visible label, then the underlined input of the composer. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-3), 2vw, var(--softn-space-5));
+}
+
+.label {
+  color: var(--softn-color-secondary);
+}
+
+.inputRow {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-3);
+  padding-block-end: var(--softn-space-3);
+  border-bottom: 1px solid var(--softn-input-border-default);
+  transition: border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.inputRow:focus-within {
+  border-bottom-color: var(--softn-input-border-focus);
+}
+
+.inputRow-invalid {
+  border-bottom-color: var(--softn-input-border-error);
+}
+
+.input {
+  flex: 1;
+  min-inline-size: 0;
+  padding-block: var(--softn-space-1);
+  border: 0;
+  background: transparent;
+  color: var(--softn-input-text);
+  font-size: var(--softn-font-size-body-lg);
+  line-height: var(--softn-font-line-height-body-lg);
+}
+
+/* The underline of the row is the focus indicator of the field, as in the composer. */
+.input:focus,
+.input:focus-visible,
+.input:active {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--softn-input-placeholder);
+}
+
+.fieldError {
+  margin: 0;
+  color: var(--softn-input-error-text);
+}
+
+/* Chips of a step: answers as buttons, wrapped with room between rows and columns. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--softn-space-4) var(--softn-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  padding: var(--softn-space-2) var(--softn-space-5);
+  border: 1px solid var(--softn-border-default);
+  border-radius: var(--softn-radius-pill);
+  background: transparent;
+  color: var(--softn-color-secondary);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition:
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
+    color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.chip:hover {
+  border-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+.chip:disabled,
+.chip:disabled:hover {
+  border-color: var(--softn-border-default);
+  color: var(--softn-color-tertiary);
+  cursor: not-allowed;
+}
+
+/* Slot chips carry the day and the hour: one type step above the answer chips. */
+.slotChip {
+  font-size: var(--softn-font-size-body-md);
+  line-height: var(--softn-font-line-height-body-md);
+}
+
+.timezoneNote {
+  margin: 0;
+  max-inline-size: 60ch;
+}
+
+/*
+ * Step actions: the forward control first, the way out last. They sit on one line and stay centred
+ * against each other wherever the row has room for both, and wrap to two flush-left lines on a
+ * narrow screen.
+ */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--softn-space-4) var(--softn-space-8);
+}
+
+/*
+ * Quiet controls line up on the centre of a row: `.quiet` used to carry `align-self: flex-start`,
+ * which overrode the row's `align-items: center` and left the accept button and the decline
+ * control on two different baselines. They keep a left edge inside a column instead — the flow
+ * itself and the steps — so the underline stays as wide as the text, never the whole column.
+ */
+.flow > .quiet,
+.step > .quiet {
+  align-self: flex-start;
+}
+
+/*
+ * The site's primary button carries no disabled colour pair: the flow dims the primitive to a token
+ * opacity and takes the pointer away, which reads as "not yet" without inventing a colour.
+ */
+.button-disabled,
+.button-disabled:hover {
+  opacity: var(--softn-opacity-45);
+  cursor: not-allowed;
+}
+
+/*
+ * Skip control of an optional text step: it sits in the field's row just before the send button, as a
+ * text control of its own width, never a full-width block, and never a bigger target than the row it
+ * shares.
+ */
+.skip-inline {
+  flex: none;
+  min-block-size: var(--softn-size-md);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--softn-color-tertiary);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.skip-inline:hover {
+  color: var(--softn-color);
+}
+
+/* The send control of a question step, same shape as the composer's. */
+.send {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--softn-size-md);
+  block-size: var(--softn-size-md);
+  border: 1px solid var(--softn-border-active);
+  border-radius: var(--softn-radius-pill);
+  background: transparent;
+  color: var(--softn-color-secondary);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.send:hover {
+  border-color: var(--softn-brand-foreground);
+  color: var(--softn-brand-foreground);
+}
+
+.send:disabled,
+.send:disabled:hover {
+  border-color: var(--softn-border-active);
+  color: var(--softn-color-tertiary);
+  cursor: not-allowed;
+}
+
+.send svg {
+  inline-size: var(--softn-icon-size-sm);
+  block-size: var(--softn-icon-size-sm);
+}
+
+/* Way out of the flow, and retries: quiet text controls, underlined. */
+.quiet {
+  padding: 0 0 var(--softn-space-1);
+  border: 0;
+  border-bottom: 1px solid var(--softn-border-subtle);
+  background: transparent;
+  color: var(--softn-color-tertiary);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-bottom-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.quiet:hover {
+  border-bottom-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+.status {
+  margin: 0;
+  color: var(--softn-color-secondary);
+}
+
+/* Failure of a step: the code is generic, the words come from the locale. */
+.error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: clamp(var(--softn-space-4), 2.5vw, var(--softn-space-6));
+  margin: 0;
+}
+
+.errorText {
+  margin: 0;
+  max-inline-size: 60ch;
+  color: var(--softn-error);
+}
+
+/* Recap: one row per answer, each with its own way back into its step. */
+.recap {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+  margin: 0;
+}
+
+.recapTitle {
+  margin: 0;
+}
+
+.recapList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One label column for every row: the label keeps a fixed token width, so the values of the recap
+ * start on the same vertical line whatever the length of the label above them. The row wraps when
+ * there is no room left, which is how the recap reads on a narrow screen: label, value, then the way
+ * back into the step, each on its own line and flush with the flow.
+ */
+.recapRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--softn-space-2) var(--softn-space-6);
+  padding-block-end: var(--softn-space-4);
+  border-bottom: 1px solid var(--softn-border-subtle);
+}
+
+.recapLabel {
+  flex: 0 0 var(--softn-space-30);
+  margin: 0;
+  color: var(--softn-color-tertiary);
+}
+
+.recapValue {
+  flex: 1 1 var(--softn-space-30);
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--softn-color);
+}
+
+/*
+ * The recap's actions: the single edit link and the confirm button share one row, centred against
+ * each other, and wrap to two flush-left lines when the row is too narrow for both.
+ */
+.recapActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--softn-space-4) var(--softn-space-8);
+}
+
+/*
+ * The edit link, on the action row: it matches the quiet links of the flow (underline as wide as its
+ * text) but keeps the 44 px target the row's height gives it.
+ */
+.quiet-action {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--softn-size-md);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--softn-color-tertiary);
+  font: inherit;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  cursor: pointer;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.quiet-action:hover {
+  color: var(--softn-color);
+}
+
+/*
+ * The chooser a click on the edit link opens: its prompt, then one chip per recap row. It keeps the
+ * gap of the recap column below md, where it renders between the table and the action row, and from
+ * md up, where it renders under the action row: the slot changes in the DOM, no style of its own.
+ */
+.recapChooser {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-4), 2.5vw, var(--softn-space-6));
+  margin: 0;
+}
+
+.recapPrompt {
+  margin: 0;
+  color: var(--softn-color-secondary);
+}
+
+/*
+ * The way to start again, on the success step: a control of its own width at the flow's left edge,
+ * never a full-width block, and tall enough to stay a comfortable target on a phone.
+ */
+.success > .quiet {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--softn-size-md);
+}
+
+/* Success block: title, message, then the way to start again. */
+.success {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+  margin: 0;
+}
+
+.successTitle {
+  margin: 0;
+  color: var(--softn-success);
+}
+
+/*
+ * Honeypot: a field no visitor sees. It stays in the document for the bots that fill every input,
+ * out of the tab order and out of the accessibility tree.
+ *
+ * It is hidden in place (one clipped pixel) rather than pushed off-screen: an element parked at a
+ * large negative offset still belongs to the page and shifts full-page screenshots, which is exactly
+ * how a clipped-looking capture can be produced from a layout that never overflows.
+ */
+.honeypot {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.chip:focus-visible,
+.send:focus-visible,
+.quiet:focus-visible,
+.quiet-action:focus-visible,
+.skip-inline:focus-visible,
+.step:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip,
+  .send,
+  .quiet,
+  .quiet-action,
+  .skip-inline,
+  .inputRow {
+    transition: none;
+  }
+}

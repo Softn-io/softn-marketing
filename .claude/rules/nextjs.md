@@ -80,7 +80,7 @@ Colors, radii, spacing, typography and z-index go through `--softn-*` CSS variab
 ## Components
 
 - **Server Components by default.** `"use client"` only for real interactivity (chatbot, cookie banner, mobile menu), as low in the tree as possible.
-- The chatbot and the Fillout embed are **lazy-loaded** (`next/dynamic`): they must not weigh on the initial load.
+- The chatbot and the reservation flow of the booking are **lazy-loaded** (`next/dynamic`): they must not weigh on the initial load.
 - Complex interactive widgets (dialog, menu, accordion…) use an **accessible headless primitive library**; which one is decided with Mel and added through a dependency request (candidates: Radix UI, Base UI). Never hand-roll focus trapping, ARIA or keyboard handling for them.
 - Simple elements (buttons, cards, sections) are plain components styled with Softn utilities.
 
@@ -100,7 +100,7 @@ Colors, radii, spacing, typography and z-index go through `--softn-*` CSS variab
 
 ## Third parties and consent
 
-- **No request to a third party before consent** (Umami, Fillout iframe, etc.), except strictly necessary resources.
+- **No request to a third party before consent** (Umami, etc.), except strictly necessary resources. The booking calls no third party from the browser: Google Calendar and Baserow are reached from the Route Handlers.
 - Every third party added is declared in `docs/rgpd/processors.md`.
 
 ## Performance

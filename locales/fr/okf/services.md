@@ -5,7 +5,11 @@ description: Applications et outils métier, agents IA et automatisation des tâ
 tags: [services, applications, web app, outils métier, agents IA, automatisation, site, application mobile]
 status: stable
 generated: { by: content-seo/claude-sonnet-5-5, at: 2026-10-28T00:53:29+01:00 }
-verified: [{ by: "human:mel", at: "2026-10-28T01:42:38+01:00" }]
+verified:
+  - { by: "human:mel", at: "2026-10-28T01:42:38+01:00" }
+  - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
+  - { by: "human:mel", at: "2026-11-01T02:05:22+01:00" }
+  - { by: "human:mel", at: "2026-11-01T04:17:47+01:00" }
 sources:
   - { id: offers, resource: ../offers.ts, title: Section des services }
   - { id: chatbot, resource: ../chatbot.ts, title: Réponses de l'assistant }

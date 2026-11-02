@@ -26,6 +26,8 @@ const SUGGESTIONS: readonly AgentSuggestion[] = [
 export type AgentSuggestionsProps = {
   /** Called with the chip label, which becomes the visitor's question. */
   onSelect: (label: string) => void
+  /** Called when the booking chip is picked: it opens the reservation flow instead of asking. */
+  onBook: () => void
   /** True while an answer is in flight: every chip is disabled. */
   disabled: boolean
 }
@@ -34,10 +36,11 @@ export type AgentSuggestionsProps = {
  * Suggested-question chips, named as one group by the locale.
  *
  * Each chip is a real button, reachable with the keyboard and named by its locale label. Selecting
- * one asks that exact question, so the visitor sees the wording they picked in the conversation.
- * The booking chip is picked by its own flag, never by its position in the list.
+ * a question chip asks that exact question, so the visitor sees the wording they picked in the
+ * conversation. The booking chip is picked by its own flag, never by its position in the list, and
+ * opens the reservation flow: a booking never goes through the model.
  */
-export const AgentSuggestions = ({ onSelect, disabled }: AgentSuggestionsProps) => (
+export const AgentSuggestions = ({ onSelect, onBook, disabled }: AgentSuggestionsProps) => (
   <ul className={styles.chips} aria-label={chatbot.suggestionsLabel}>
     {SUGGESTIONS.map((suggestion) => (
       <li key={suggestion.id}>
@@ -46,7 +49,7 @@ export const AgentSuggestions = ({ onSelect, disabled }: AgentSuggestionsProps) 
           className={suggestion.booking ? `${styles.chip} ${styles['chip-booking']}` : styles.chip}
           data-suggestion={suggestion.id}
           disabled={disabled}
-          onClick={() => onSelect(suggestion.label)}
+          onClick={() => (suggestion.booking ? onBook() : onSelect(suggestion.label))}
         >
           {suggestion.label}
         </button>

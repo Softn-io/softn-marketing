@@ -33,4 +33,73 @@ describe('readEnv', () => {
 
     expect(() => readEnv()).toThrow('BASEROW_API_URL must be an https URL')
   })
+
+  it('keeps the booking variables of the keyless federation', () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', 'booking@softn-io.iam.gserviceaccount.com')
+    vi.stubEnv('GOOGLE_CALENDAR_OWNER', 'melanie@softn.io')
+    // A dedicated secondary calendar holds the bookings: it is an address, like the owner.
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    vi.stubEnv('GCP_PROJECT_NUMBER', '123456789012')
+    vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_ID', 'vercel')
+    vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID', 'softn-site')
+    vi.stubEnv('VERCEL_OIDC_TOKEN', 'oidc-token')
+    vi.stubEnv('BASEROW_LEADS_TABLE_ID', '42')
+
+    const environment = readEnv()
+
+    expect(environment.GOOGLE_SERVICE_ACCOUNT_EMAIL).toBe('booking@softn-io.iam.gserviceaccount.com')
+    expect(environment.GOOGLE_CALENDAR_OWNER).toBe('melanie@softn.io')
+    expect(environment.GOOGLE_CALENDAR_ID).toBe('abc123@group.calendar.google.com')
+    expect(environment.GCP_PROJECT_NUMBER).toBe('123456789012')
+    expect(environment.GCP_WORKLOAD_IDENTITY_POOL_ID).toBe('vercel')
+    expect(environment.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID).toBe('softn-site')
+    expect(environment.VERCEL_OIDC_TOKEN).toBe('oidc-token')
+    expect(environment.BASEROW_LEADS_TABLE_ID).toBe('42')
+  })
+
+  it('treats a blank booking variable as unset', () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', '  ')
+    vi.stubEnv('GOOGLE_CALENDAR_OWNER', '')
+    vi.stubEnv('GOOGLE_CALENDAR_ID', '')
+    vi.stubEnv('GCP_PROJECT_NUMBER', '')
+    vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_ID', '')
+    vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID', '')
+    vi.stubEnv('VERCEL_OIDC_TOKEN', '')
+    vi.stubEnv('BASEROW_LEADS_TABLE_ID', '')
+
+    const environment = readEnv()
+
+    expect(environment.GOOGLE_SERVICE_ACCOUNT_EMAIL).toBeUndefined()
+    expect(environment.GOOGLE_CALENDAR_OWNER).toBeUndefined()
+    expect(environment.GOOGLE_CALENDAR_ID).toBeUndefined()
+    expect(environment.GCP_PROJECT_NUMBER).toBeUndefined()
+    expect(environment.GCP_WORKLOAD_IDENTITY_POOL_ID).toBeUndefined()
+    expect(environment.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID).toBeUndefined()
+    expect(environment.VERCEL_OIDC_TOKEN).toBeUndefined()
+    expect(environment.BASEROW_LEADS_TABLE_ID).toBeUndefined()
+  })
+
+  it('rejects a service account address that is not an address', () => {
+    vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', 'not-an-address')
+
+    expect(() => readEnv()).toThrow()
+  })
+
+  it('rejects a calendar id that is not an address', () => {
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'primary')
+
+    expect(() => readEnv()).toThrow()
+  })
+
+  it('rejects an owner that is not an address', () => {
+    vi.stubEnv('GOOGLE_CALENDAR_OWNER', 'melanie')
+
+    expect(() => readEnv()).toThrow()
+  })
+
+  it('rejects a project number that is not a number', () => {
+    vi.stubEnv('GCP_PROJECT_NUMBER', 'softn-project')
+
+    expect(() => readEnv()).toThrow('GCP_PROJECT_NUMBER')
+  })
 })

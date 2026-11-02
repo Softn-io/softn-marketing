@@ -1325,6 +1325,9 @@ test.describe('header: mobile drawer', () => {
   test('drawer link focus is ringed', async ({ page }) => {
     await page.goto('/preview')
     await burger(page).click()
+    // The drawer moves focus to the close control on open; Tab only reaches the first link once
+    // that transfer has happened, so the test waits for it instead of racing the opening drawer.
+    await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
     await page.keyboard.press('Tab')
     const first = drawer(page).getByRole('navigation').getByRole('link').first()
     await expect(first).toBeFocused()

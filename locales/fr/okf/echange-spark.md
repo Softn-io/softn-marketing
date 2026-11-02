@@ -5,7 +5,11 @@ description: L'échange découverte offert et sans engagement, suivi d'un plan d
 tags: [échange Spark, appel découverte, réservation, plan d'action, gratuit]
 status: stable
 generated: { by: content-seo/claude-sonnet-5-5, at: 2026-10-28T00:53:29+01:00 }
-verified: [{ by: "human:mel", at: "2026-10-28T01:42:38+01:00" }]
+verified:
+  - { by: "human:mel", at: "2026-10-28T01:42:38+01:00" }
+  - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
+  - { by: "human:mel", at: "2026-11-01T02:05:22+01:00" }
+  - { by: "human:mel", at: "2026-11-01T04:17:47+01:00" }
 sources:
   - { id: hero, resource: ../hero.ts, title: Section d'accueil et appel à l'action }
   - { id: faq, resource: ../faq.ts, title: Questions fréquentes }
@@ -25,7 +29,8 @@ sources:
 # Réserver
 
 - La réservation se fait depuis le site (bouton « Réserver mon échange Spark ») ou avec l'assistant.[^hero][^chatbot]
-- Avec l'assistant, la réservation passe par quelques questions rapides : prénom, nom, adresse e-mail, téléphone (facultatif), type de structure (facultatif), fonction (facultatif), besoin en une phrase, puis choix d'un créneau.[^chatbot]
+- Avec l'assistant, la réservation passe par quelques questions rapides : besoin en une phrase, choix d'un créneau, puis prénom, nom, adresse e-mail, téléphone (facultatif), type de structure (facultatif), fonction (facultatif).[^chatbot]
+- L'échange Spark dure 30 minutes.[^chatbot]
 - Avant toute saisie, l'assistant demande un consentement explicite. Ces données sont transmises à Softn.io pour organiser l'échange et envoyer l'invitation. Elles peuvent être supprimées sur demande, selon la procédure décrite dans la politique de confidentialité.[^chatbot]
 - Une demande réservée est lue avant le rendez-vous.[^chatbot]
 

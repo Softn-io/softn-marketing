@@ -17,8 +17,15 @@ export type CreateBaserowRowInput = {
 /** Non-personal failure codes, mapped to a generic message by the calling Server Action. */
 export type BaserowError = 'not-configured' | 'request-failed'
 
-/** Outcome of a Baserow write: the new row id, or a failure code. */
-export type BaserowResult = { ok: true; data: { id: number } } | { ok: false; error: BaserowError }
+/**
+ * Failure of a Baserow write: its code, plus the numeric status of the upstream answer when one came
+ * back. The status is what tells a missing permission from a bad column, and it is never an upstream
+ * body: those are never read, because they can echo the submitted values.
+ */
+export type BaserowFailure = { readonly ok: false; readonly error: BaserowError; readonly status?: number }
+
+/** Outcome of a Baserow write: the new row id, or a failure carrying no upstream detail. */
+export type BaserowResult = { readonly ok: true; readonly data: { readonly id: number } } | BaserowFailure
 
 /** Upper bound on a Baserow write: the form must not hang when the API is slow. */
 const BASEROW_TIMEOUT_MS = 5000
@@ -71,7 +78,7 @@ export const createBaserowRow = async ({ tableId, fields }: CreateBaserowRowInpu
       },
     )
 
-    if (!response.ok) return { ok: false, error: 'request-failed' }
+    if (!response.ok) return { ok: false, error: 'request-failed', status: response.status }
 
     const payload: unknown = await response.json()
     const parsed = CreateRowResponseSchema.safeParse(payload)

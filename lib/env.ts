@@ -40,6 +40,45 @@ const upstashRedisRestUrl = z.preprocess(
 )
 
 /**
+ * Google service-account address used for the Calendar API. Optional: unset, the booking fails
+ * closed with the generic copy instead of calling Google. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const googleServiceAccountEmail = z.preprocess(blankToUndefined, z.email().optional())
+
+/** Project number of the workload identity pool provider. Optional: unset, the booking fails closed. */
+const gcpProjectNumber = z.preprocess(blankToUndefined, z.string().regex(/^\d+$/).optional())
+
+/** Workload identity pool that trusts the Vercel OIDC issuer. Optional: unset, the booking fails closed. */
+const gcpWorkloadIdentityPoolId = z.preprocess(blankToUndefined, optionalString)
+
+/** Provider of that pool. Optional: unset, the booking fails closed. */
+const gcpWorkloadIdentityPoolProviderId = z.preprocess(blankToUndefined, optionalString)
+
+/**
+ * OIDC token of the running deployment, used as the subject token of the federation.
+ *
+ * Vercel sets it as the `x-vercel-oidc-token` request header, which the Route Handlers read first;
+ * this variable is the development fallback (`vercel env pull` writes it). It is a short-lived
+ * credential, server-side only, never `NEXT_PUBLIC_` and never logged.
+ */
+const vercelOidcToken = z.preprocess(blankToUndefined, optionalString)
+
+/**
+ * Workspace user the service account impersonates through domain-wide delegation. This is the `sub`
+ * claim of the signed assertion, and the identity the access token is issued for: never the calendar
+ * the events go to. Optional: unset, the booking fails closed without any network call.
+ */
+const googleCalendarOwner = z.preprocess(blankToUndefined, z.email().optional())
+
+/**
+ * Calendar the booking writes to: its events, its daily call count, and the free/busy of its own
+ * schedule. An address rather than a keyword, so a secondary calendar
+ * (`abc123@group.calendar.google.com`) is accepted like the owner's primary one. Optional: unset,
+ * the booking fails closed.
+ */
+const googleCalendarId = z.preprocess(blankToUndefined, z.email().optional())
+
+/**
  * Server-side environment schema, validated at every `readEnv` call. Every
  * consumer goes through this module — never `process.env` directly.
  *
@@ -57,6 +96,18 @@ const upstashRedisRestUrl = z.preprocess(
  * and test keep the in-memory window while production fails closed. The token
  * doubles as the HMAC key of the stored client IP. Both stay server-side and
  * must never be prefixed with `NEXT_PUBLIC_`.
+ *
+ * The booking variables are optional too, and the booking endpoints fail
+ * closed without them: `GOOGLE_SERVICE_ACCOUNT_EMAIL`, `GOOGLE_CALENDAR_OWNER`,
+ * `GOOGLE_CALENDAR_ID`, `GCP_PROJECT_NUMBER`, `GCP_WORKLOAD_IDENTITY_POOL_ID`
+ * and `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID` let the server reach the
+ * calendar through Workload Identity Federation, and `BASEROW_LEADS_TABLE_ID`
+ * says where the lead is stored. The owner is the user the service account
+ * impersonates; the calendar id says where the events are written, so a
+ * dedicated secondary calendar can hold the bookings. No service-account key is stored: the subject
+ * token is Vercel's OIDC token, read from the request header (or, in
+ * development, from `VERCEL_OIDC_TOKEN`). All of them stay server-side and
+ * must never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -64,9 +115,17 @@ const EnvSchema = z.object({
   BASEROW_API_URL: baserowApiUrl,
   BASEROW_TOKEN: optionalString,
   BASEROW_WAITLIST_TABLE_ID: optionalString,
+  BASEROW_LEADS_TABLE_ID: optionalString,
   MISTRAL_API_KEY: optionalString,
   UPSTASH_REDIS_REST_URL: upstashRedisRestUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,
+  GOOGLE_SERVICE_ACCOUNT_EMAIL: googleServiceAccountEmail,
+  GOOGLE_CALENDAR_OWNER: googleCalendarOwner,
+  GOOGLE_CALENDAR_ID: googleCalendarId,
+  GCP_PROJECT_NUMBER: gcpProjectNumber,
+  GCP_WORKLOAD_IDENTITY_POOL_ID: gcpWorkloadIdentityPoolId,
+  GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: gcpWorkloadIdentityPoolProviderId,
+  VERCEL_OIDC_TOKEN: vercelOidcToken,
 })
 
 export type Env = z.infer<typeof EnvSchema>
