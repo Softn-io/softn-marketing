@@ -83,19 +83,28 @@ describe('createBaserowRow', () => {
     expect(url).toBe('https://api.baserow.io/api/database/rows/table/123456/?user_field_names=true')
   })
 
-  it('returns a request failure on a non-2xx response without echoing the error body', async () => {
+  it('returns a request failure with the status, without echoing the error body', async () => {
+    // The body carries a sentinel the log must never see: it can echo the submitted values, which is
+    // why nothing in the module reads it.
+    const sentinel = 'SENTINEL-UPSTREAM-BODY-VALUE'
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ error: 'ERROR_REQUEST_BODY_VALIDATION', detail: 'mel@example.fr' }), {
+      new Response(JSON.stringify({ error: 'ERROR_REQUEST_BODY_VALIDATION', detail: sentinel }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       }),
     )
+    const consoleSpies = [vi.spyOn(console, 'log'), vi.spyOn(console, 'error'), vi.spyOn(console, 'warn')]
 
     const result = await createBaserowRow({ tableId: '123456', fields: { Email: 'mel@example.fr' } })
 
-    expect(result).toEqual({ ok: false, error: 'request-failed' })
-    expect(JSON.stringify(result)).not.toContain('ERROR_REQUEST_BODY_VALIDATION')
+    // The status is what tells a missing permission from a bad column; the body stays unread.
+    expect(result).toEqual({ ok: false, error: 'request-failed', status: 400 })
+    expect(JSON.stringify(result)).not.toContain(sentinel)
     expect(JSON.stringify(result)).not.toContain('mel@example.fr')
+    for (const spy of consoleSpies) {
+      expect(JSON.stringify(spy.mock.calls)).not.toContain(sentinel)
+      spy.mockRestore()
+    }
   })
 
   it('returns a request failure when the request times out', async () => {
