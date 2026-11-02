@@ -6,8 +6,8 @@ import { chatbot } from '@/locales/fr/chatbot'
 import { withAssistantName } from './data/agentMessages'
 import styles from './styles/Agent.module.css'
 
-/** Id shared by the question input and its label. */
-const INPUT_ID = 'agent-question'
+/** Id shared by the question input and its label. Exported so the conversation can give it focus. */
+export const AGENT_QUESTION_INPUT_ID = 'agent-question'
 
 /** Id of the scope note that describes what the assistant answers. */
 const SCOPE_NOTE_ID = 'agent-scope-note'
@@ -55,11 +55,11 @@ export const AgentComposer = ({ question, onQuestionChange, onSubmit, sending, t
       noValidate
     >
       <div className={`${styles.composer} ${tooLong ? styles['composer-invalid'] : ''}`}>
-        <label className="sr-only" htmlFor={INPUT_ID}>
+        <label className="sr-only" htmlFor={AGENT_QUESTION_INPUT_ID}>
           {agent.inputLabel}
         </label>
         <input
-          id={INPUT_ID}
+          id={AGENT_QUESTION_INPUT_ID}
           className={styles.input}
           type="text"
           value={question}

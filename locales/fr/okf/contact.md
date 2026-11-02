@@ -5,7 +5,9 @@ description: Écrire à Softn.io via le formulaire de la page /contact, ou rése
 tags: [contact, formulaire, devis, partenariat, données personnelles]
 status: stable
 generated: { by: content-seo/claude-sonnet-5-5, at: 2026-10-28T00:53:29+01:00 }
-verified: [{ by: "human:mel", at: "2026-10-28T01:42:38+01:00" }]
+verified:
+  - { by: "human:mel", at: "2026-10-28T01:42:38+01:00" }
+  - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
 sources:
   - { id: contact, resource: ../contact.ts, title: Page de contact }
   - { id: legal, resource: ../legal.ts, title: Politique de confidentialité }
