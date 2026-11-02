@@ -518,7 +518,9 @@ test.describe('agent shell: contrast', () => {
         `error text contrast (${colorScheme})`,
       ).toBeGreaterThanOrEqual(4.5)
 
-      // The contact-page link keeps the message's own type step and the secondary foreground.
+      // The link inherits the message's own colour (`currentColor` in `Agent.module.css`): inside an
+      // error line it reads as the error colour, inside a normal message as the message text. The
+      // underline and the AA contrast carry the affordance.
       const link = alert.getByRole('link', { name: chatbot.contactPageLinkLabel })
       await expect(link).toBeVisible()
       const linkStyle = await link.evaluate((element) => {
@@ -535,8 +537,8 @@ test.describe('agent shell: contrast', () => {
         linkStyle.paragraphFontSize,
       )
       expect(
-        await sameColor(page, linkStyle.color, await tokenValue(page, '--softn-color-secondary')),
-        `the link uses --softn-color-secondary (${colorScheme})`,
+        await sameColor(page, linkStyle.color, error.textColor),
+        `the link inherits the message colour, here --softn-error (${colorScheme})`,
       ).toBe(true)
       expect(linkStyle.textDecorationLine, `the link stays underlined (${colorScheme})`).toContain('underline')
       expect(
