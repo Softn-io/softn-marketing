@@ -4,6 +4,7 @@ import { Drawer } from '@base-ui/react/drawer'
 import { ArrowRight, Menu, X } from 'lucide-react'
 import Link from 'next/link'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { Logo } from '@components/ui/Logo'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
 import { nav } from '@/locales/fr/hero'
 import { goToSection } from '@/lib/anchors'
@@ -109,14 +110,8 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
             data-swipe-dismissed={dismissedBySwipe ? '' : undefined}
           >
             <div className={`${styles.header} ${styles['drawer-bar']} flex items-center justify-between gap-6`}>
-              <Link
-                href="/"
-                aria-label={nav.logo.ariaLabel}
-                className={`${styles.logo} font-display text-title-md text-foreground`}
-                onClick={() => setOpen(false)}
-              >
-                {nav.logo.name}
-                <span className="text-brand-vivid">{nav.logo.suffix}</span>
+              <Link href="/" aria-label={nav.logo.ariaLabel} className={styles.logo} onClick={() => setOpen(false)}>
+                <Logo />
               </Link>
               <div className="flex items-center gap-3">
                 <ThemeToggle />

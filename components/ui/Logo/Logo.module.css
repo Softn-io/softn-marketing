@@ -1,0 +1,22 @@
+/*
+ * Typography of the wordmark, owned here so no caller sizes it. `md` is the type scale's
+ * `text-title-md` step, taken as a utility in the markup; `hero` has no step of its own: no token
+ * covers the design's giant size yet (`display-xl` tops out at 86px), so the fluid clamp lives here
+ * until a display-2xl step exists.
+ *
+ * The wordmark is a block box, not an inline one: an inline box shares its line box with the
+ * caller's own strut, and the display face's metrics differ from the body face's, which moved the
+ * header wordmark by about 1px and the giant one by about 6px once the typography moved out of the
+ * callers. Block-level, only the wordmark's own font decides its box.
+ */
+
+.wordmark {
+  display: block;
+}
+
+.hero {
+  font-size: clamp(56px, 14vw, 168px);
+  font-weight: var(--softn-font-weight-title-lg);
+  line-height: var(--softn-font-line-height-display-xl);
+  letter-spacing: var(--softn-font-letter-spacing-display-xl);
+}

@@ -124,14 +124,9 @@
   gap: var(--softn-space-3);
 }
 
-/* No token covers the design's giant wordmark size yet (display-xl tops out at 86px), so the
-   fluid clamp stays here until a display-2xl step exists. */
+/* The wordmark sizes itself (`components/ui/Logo/`); the layout only places it. */
 .wordmark-large {
   margin-block-start: clamp(var(--softn-space-4), 2.4vh, var(--softn-space-6));
-  font-size: clamp(56px, 14vw, 168px);
-  font-weight: var(--softn-font-weight-title-lg);
-  line-height: var(--softn-font-line-height-display-xl);
-  letter-spacing: var(--softn-font-letter-spacing-display-xl);
 }
 
 .dot {

@@ -201,7 +201,8 @@ test.describe('coming-soon: structure and copy', () => {
     await expect(wordmark).toBeVisible()
     await expect(wordmark).toHaveAttribute('href', '/')
     await expect(wordmark).toHaveText(WORDMARK)
-    await expect(wordmark.locator('span')).toHaveText(nav.logo.suffix)
+    // The suffix is the innermost span: `Logo` wraps the name and the suffix in one span of its own.
+    await expect(wordmark.locator('span').last()).toHaveText(nav.logo.suffix)
 
     // The header's other control is the shared theme toggle, labelled from `nav.themeToggle`.
     await expect(page.getByRole('button', { name: nav.themeToggle.toLight })).toBeVisible()
@@ -1472,10 +1473,16 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       body: document.body,
       header: document.querySelector('body > div > header'),
       wordmark: document.querySelector('body > div > header a'),
+      // The wordmark's face and size live in `Logo` now, on the element inside the link that
+      // renders them; the link itself only holds the layout and the focus ring.
+      wordmarkText: document.querySelector('body > div > header a > span'),
       toggle: document.querySelector('body > div > header button'),
       main: document.querySelector('main'),
       eyebrow: document.querySelector('main p'),
       wordmarkLarge: document.querySelector('main > div > div[aria-hidden="true"]'),
+      // The giant wordmark's type lives in `Logo` now, one level below the `aria-hidden` block: this
+      // is the element the size clamp lands on (`wordmarkLargeFontSize` reads it).
+      wordmarkLargeText: document.querySelector('main > div > div[aria-hidden="true"] > span'),
       h1: document.querySelector('main h1'),
       bodyCopy: document.querySelector('main h1 + div p'),
       field: document.querySelector('main input[type="email"]'),
@@ -1509,12 +1516,14 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
           /plus.?jakarta|zalando|fallback/i.test(clean)
         if (!known) mismatches.push(`${name}.fontFamily: unexpected family ${fam.trim()}`)
       }
-      const decorative = el.getAttribute('aria-hidden') === 'true'
+      // Decorative-only allowance (see collectFontSizeFluid): today just the giant wordmark's
+      // raw `clamp(56px, 14vw, 168px)`, which `Logo` carries one level below the `aria-hidden`
+      // block it is drawn in — the subtree is what is decorative, not the block alone (same rule as
+      // the viewport check above). A raw size on reachable content still fails.
+      const decorative = el.closest('[aria-hidden="true"]') !== null
       for (const prop of ['fontSize', 'borderTopLeftRadius'] as const) {
         const v = num(c[prop])
         if (!Number.isFinite(v) || lengthOk(v)) continue
-        // Decorative-only allowance (see collectFontSizeFluid): today just the giant wordmark's
-        // raw `clamp(56px, 14vw, 168px)`. A raw size on reachable content still fails.
         if (decorative && fontSizeFluidOk(v)) continue
         mismatches.push(`${name}.${prop}: ${c[prop]} not in token scale`)
       }
@@ -1576,13 +1585,14 @@ test.describe('coming-soon: computed styles match @softnio-labs/tokens values (Q
       fluidIntervals,
       fontSizeFluidIntervals,
       wordmarkLargeFontSize:
-        elements.wordmarkLarge == null ? -1 : num(getComputedStyle(elements.wordmarkLarge).fontSize),
+        elements.wordmarkLargeText == null ? -1 : num(getComputedStyle(elements.wordmarkLargeText).fontSize),
       mismatches,
       gradientColorMismatches,
       loadedFontFamilies: [...loaded],
       bodyTokenFamily: rootStyle.getPropertyValue('--softn-font-body'),
       displayTokenFamily: rootStyle.getPropertyValue('--softn-font-display'),
-      wordmarkFamily: elements.wordmark == null ? '' : firstFamily(getComputedStyle(elements.wordmark).fontFamily),
+      wordmarkFamily:
+        elements.wordmarkText == null ? '' : firstFamily(getComputedStyle(elements.wordmarkText).fontFamily),
       h1Family: elements.h1 == null ? '' : firstFamily(getComputedStyle(elements.h1).fontFamily),
       bodyCopyFamily: elements.bodyCopy == null ? '' : firstFamily(getComputedStyle(elements.bodyCopy).fontFamily),
       footerFamily: elements.footer == null ? '' : firstFamily(getComputedStyle(elements.footer).fontFamily),
