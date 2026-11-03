@@ -1,11 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
-import {
-  BookingManage,
-  BookingManageFooter,
-  BookingManageHeader,
-  type BookingManageState,
-} from '@components/sections/BookingManage'
+import { MinimalHeader } from '@components/layout/MinimalHeader'
+import { BookingManage, BookingManageFooter, type BookingManageState } from '@components/sections/BookingManage'
 import { formatSlotLabel } from '@/lib/booking/labels'
 import { BOOKING_MANAGE_PATH, readBookingLinkSecret, verifyBookingManageToken } from '@/lib/booking/manageToken'
 import { BOOKING_RULES, manageRescheduleVerdict } from '@/lib/booking/rules'
@@ -57,7 +53,7 @@ const slotLabelOf = (event: BookingEvent): string | undefined => {
 /** Page chrome and the client island, in the state the server decided. */
 const BookingManageScreen = ({ token, state, slotLabel }: BookingManageScreenProps) => (
   <>
-    <BookingManageHeader />
+    <MinimalHeader />
     <BookingManage
       token={token}
       state={state}
