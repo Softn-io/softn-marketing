@@ -32,18 +32,24 @@
   margin: 0;
 }
 
+/* The moved view's eyebrow is a brand caption. The brand glow is violet400: 2.48:1 on the light
+   page background, under the 4.5:1 an 11 px caption needs, so the light theme swaps it for the
+   brand accent (violet600, 5.19:1). Dark keeps the glow (7:1). Same theme detection as
+   ComingSoon: the attribute selector covers an explicit choice, the media query the system
+   preference when no `data-theme="dark"` is set. */
 .eyebrow-brand {
   color: var(--softn-brand-glow);
 }
 
-.eyebrow-danger {
-  color: var(--softn-input-error-text);
+:global([data-theme='light']) .eyebrow-brand {
+  color: var(--softn-brand-accent);
 }
 
-.eyebrow-success {
-  color: var(--softn-success);
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme='dark'])) .eyebrow-brand {
+    color: var(--softn-brand-accent);
+  }
 }
-
 .eyebrow-tertiary {
   color: var(--softn-color-tertiary);
 }
@@ -92,8 +98,8 @@
   gap: var(--softn-space-1) var(--softn-space-5);
   align-items: baseline;
   margin: 0;
-  font-size: var(--softn-font-size-body-lg);
-  font-weight: var(--softn-font-weight-title-sm);
+  font-size: var(--softn-font-size-body-md);
+  font-weight: var(--softn-font-weight-body-md);
   color: var(--softn-color);
 }
 
@@ -379,40 +385,6 @@
   margin: 0;
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--softn-space-6);
-  padding: var(--softn-space-4) clamp(var(--softn-space-4), 5vw, var(--softn-space-12));
-}
-
-.logo {
-  color: var(--softn-color);
-  letter-spacing: -0.02em;
-  text-decoration: none;
-}
-
-.logoSuffix {
-  color: var(--softn-brand-vivid);
-}
-
-.headerActions {
-  display: flex;
-  align-items: center;
-  gap: var(--softn-space-5);
-}
-
-.backLink {
-  color: var(--softn-color-tertiary);
-  text-decoration: none;
-  transition: color var(--softn-duration-micro) var(--softn-easing-out);
-}
-
-.backLink:hover {
-  color: var(--softn-color);
-}
-
 .footer {
   border-block-start: 1px solid var(--softn-border-subtle);
   padding: clamp(var(--softn-space-6), 4vw, var(--softn-space-10))
@@ -455,7 +427,6 @@
 .outline:focus-visible,
 .danger:focus-visible,
 .quiet:focus-visible,
-.backLink:focus-visible,
 .legalLink:focus-visible,
 .messageLink:focus-visible {
   outline: 2px solid var(--softn-border-active);
@@ -468,8 +439,7 @@
   .reasonChip,
   .outline,
   .danger,
-  .quiet,
-  .backLink {
+  .quiet {
     transition: none;
   }
 }

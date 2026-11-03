@@ -293,14 +293,7 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
             ? bookingManage.eyebrow.cancelled
             : bookingManage.eyebrow.overview
 
-  const eyebrowTone =
-    view === 'cancel' || view === 'invalid'
-      ? styles['eyebrow-danger']
-      : view === 'moved'
-        ? styles['eyebrow-success']
-        : view === 'cancelled' || view === 'late' || view === 'started' || view === 'unavailable'
-          ? styles['eyebrow-tertiary']
-          : styles['eyebrow-brand']
+  const eyebrowTone = view === 'moved' ? styles['eyebrow-brand'] : styles['eyebrow-tertiary']
 
   const heading =
     view === 'chooser'
@@ -552,7 +545,7 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
                 setView('cancel')
               }}
             >
-              {bookingManage.cancel.shortAction}
+              {bookingManage.cancel.action}
             </button>
           </div>
         ) : null}
@@ -573,7 +566,7 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
           </div>
         ) : null}
 
-        <p className={`${styles.contactLine} text-body-sm text-foreground-tertiary`}>
+        <p className={`${styles.contactLine} text-body-md text-foreground-tertiary`}>
           <ManageMessage template={bookingManage.contact.sentence} />
         </p>
       </div>

@@ -18,7 +18,7 @@ export const bookingManage = {
   eyebrow: {
     overview: 'Votre rendez-vous',
     reschedule: 'Reprogrammer',
-    cancel: 'Annulation',
+    cancel: 'Annuler',
     moved: 'Rendez-vous déplacé',
     cancelled: 'Rendez-vous annulé',
   },
@@ -36,7 +36,7 @@ export const bookingManage = {
     /** Quiet control that leaves the chooser without changing anything. */
     back: 'Retour',
     /** Quiet control of the moved view that opens the chooser again. */
-    changeAgain: 'Changer encore',
+    changeAgain: 'Modifier de nouveau',
     chooser: {
       title: 'Choisissez votre nouveau créneau',
       timezoneNote: 'Les horaires sont indiqués en heure de Paris.',
@@ -60,15 +60,13 @@ export const bookingManage = {
   },
   cancel: {
     action: 'Annuler le rendez-vous',
-    /** Short label of the cancellation on the moved view, where the long one is too heavy. */
-    shortAction: 'Annuler',
     /** Optional reason of the cancellation: a chip writes its label, never free text. */
     reason: {
       label: 'Une raison ? (facultatif)',
       options: {
         prevented: 'Empêchement',
-        'no-longer-needed': "Plus besoin pour l'instant",
-        'found-alternative': 'Trouvé une autre solution',
+        'no-longer-needed': 'Report de projet',
+        'found-alternative': 'Solution trouvée',
         other: 'Autre',
       },
     },

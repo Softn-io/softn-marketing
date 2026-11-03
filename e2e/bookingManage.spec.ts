@@ -32,11 +32,13 @@
  * in the environment of the command; a value set there still wins. It is never written to any
  * `.env*` file.
  */
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 import { AxeBuilder } from '@axe-core/playwright'
 import { bookingManageToken, verifyBookingManageToken } from '../lib/booking/manageToken'
 import { bookingManage } from '../locales/fr/bookingManage'
 import { chatbot } from '../locales/fr/chatbot'
+import { nav } from '../locales/fr/hero'
+import { minimalHeader } from '../locales/fr/minimalHeader'
 import { resolveBookingLinkSecret } from './support/bookingLinkSecret'
 
 /** The secret the server was started with: the same resolution as the config's webServer env. */
@@ -236,6 +238,263 @@ test.describe('rendez-vous page: accessibility (WCAG 2.1 AA)', () => {
     // The heading carries tabindex=-1: the island moves the focus onto it when the view changes
     // (asserted in the jsdom suite); here the browser keeps the attribute reachable.
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('tabindex', '-1')
+  })
+
+  test('the eyebrow tones of every view pass contrast at caption size (the moved tone probed)', async ({ browser }) => {
+    // The axe runs above cover the states a browser reaches without credentials; the `moved` view
+    // needs a live calendar read, so its brand tone is measured here on a probe that wears exactly
+    // what a visitor wears: the page's real eyebrow, cloned from the reachable invalid state (the
+    // same intro markup the moved view renders), with its tone class swapped for the very
+    // `.eyebrow-brand` CSS Module class the moved view applies — the build hashes module class
+    // names, so the class is read out of the page's own stylesheets, never guessed. The clone
+    // keeps the eyebrow's own typography (`text-caption uppercase`: 11 px, below the large-text
+    // threshold, so 4.5:1 applies) over the page background. Light is verified both ways it can be
+    // set: the explicit `data-theme='light'` the toggle writes, and the system preference with no
+    // `data-theme` attribute at all.
+    type Measure = {
+      brandClass: string | null
+      probeColor: string
+      tertiaryColor: string
+      tertiaryToken: string
+      glow: string
+      accent: string
+      background: string
+      ratio: number
+      redefinedTokenRules: string[]
+    }
+
+    const measureEyebrowContrast = async (mode: 'dark' | 'light-explicit' | 'light-system'): Promise<Measure> => {
+      const ctx = await browser.newContext({
+        viewport: { width: 1280, height: 800 },
+        colorScheme: mode === 'light-system' ? 'light' : 'dark',
+      })
+      const page = await ctx.newPage()
+      await page.goto('/rendez-vous/not-a-signed-token')
+      await expect(page.getByRole('main')).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+
+      // The theme is set the way each run claims, and that is asserted so the measurement cannot
+      // silently drift to another path: the explicit run goes through the toggle's own attribute,
+      // the two system runs have no `data-theme` at all.
+      if (mode === 'light-explicit') {
+        await page.getByRole('button', { name: nav.themeToggle.toLight }).click()
+        await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+      } else {
+        await expect(page.locator('html')).not.toHaveAttribute('data-theme')
+      }
+
+      const measure: Measure = await page.evaluate((label) => {
+        /**
+         * Contrast ratio of two computed colours, by the WCAG 2.1 relative-luminance formula. The
+         * canvas turns each computed value (the tokens are oklch) into sRGB and fails loudly when
+         * a colour does not paint opaquely.
+         */
+        const contrastRatio = (foreground: string, background: string): number => {
+          const luminance = (color: string): number => {
+            const canvas = document.createElement('canvas')
+            canvas.width = 1
+            canvas.height = 1
+            const canvasCtx = canvas.getContext('2d')
+            if (canvasCtx === null) throw new Error('no 2d context for the contrast canvas')
+            canvasCtx.fillStyle = color
+            canvasCtx.fillRect(0, 0, 1, 1)
+            const [r = 0, g = 0, b = 0, alpha = 0] = Array.from(canvasCtx.getImageData(0, 0, 1, 1).data)
+            if (alpha !== 255) throw new Error(`the colour ${color} did not paint opaquely`)
+            const channel = (v: number): number => {
+              const c = v / 255
+              return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
+            }
+            return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+          }
+          const l1 = luminance(foreground)
+          const l2 = luminance(background)
+          return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05)
+        }
+
+        // Computed colour of a token, on an element the page stylesheets actually style.
+        const refColor = (name: string): string => {
+          const ref = document.createElement('span')
+          ref.style.color = `var(${name})`
+          document.body.appendChild(ref)
+          const value = getComputedStyle(ref).color
+          ref.remove()
+          return value
+        }
+
+        // 1. The hashed `.eyebrow-brand` class, from the page's own stylesheets — and a guard:
+        //    only the package's root-level theme blocks may declare the two brand tokens.
+        let brandClass: string | null = null
+        const redefinedTokenRules: string[] = []
+        const walk = (rules: CSSRuleList): void => {
+          for (const rule of Array.from(rules)) {
+            if (rule instanceof CSSStyleRule) {
+              if (rule.style.color.includes('--softn-brand-')) {
+                const name = /\.([-\w]*eyebrow-brand[-\w]*)/.exec(rule.selectorText)?.[1]
+                if (name !== undefined) brandClass = name
+              }
+              for (const property of Array.from(rule.style)) {
+                if (
+                  (property === '--softn-brand-glow' || property === '--softn-brand-accent') &&
+                  /[.#]/.test(rule.selectorText)
+                ) {
+                  redefinedTokenRules.push(
+                    `${rule.selectorText} { ${property}: ${rule.style.getPropertyValue(property)} }`,
+                  )
+                }
+              }
+            } else if (rule instanceof CSSGroupingRule) walk(rule.cssRules)
+          }
+        }
+        for (const sheet of Array.from(document.styleSheets)) {
+          try {
+            walk(sheet.cssRules)
+          } catch {
+            /* unreadable sheet: none should be, but never crash the audit */
+          }
+        }
+
+        // 2. The real eyebrow of the invalid state: the same intro markup the moved view renders.
+        const real = document.querySelector('main p')
+        if (!(real instanceof HTMLElement)) throw new Error('the page renders no eyebrow paragraph in main')
+        const tertiaryClass = Array.from(real.classList).find((name) => name.includes('eyebrow-tertiary')) ?? ''
+
+        // 3. The probes: clones of the real eyebrow, the tone class the only difference. The
+        //    tertiary clone is the element the reachable states already show; the brand clone
+        //    carries the moved view's own class.
+        const cloneWithTone = (id: string, tone: string | null, droppedTone: string, text: string): HTMLElement => {
+          const probe = real.cloneNode(true) as HTMLElement
+          if (droppedTone !== '') probe.classList.remove(droppedTone)
+          if (tone !== null) probe.classList.add(tone)
+          probe.id = id
+          probe.textContent = text
+          real.parentElement?.appendChild(probe)
+          return probe
+        }
+        const tertiaryProbe = cloneWithTone('eyebrow-probe-tertiary', null, '', real.textContent ?? '')
+        const brandProbe = cloneWithTone('eyebrow-probe-brand', brandClass, tertiaryClass, label)
+
+        // 4. What the visitor sees, in this theme.
+        const probeColor = getComputedStyle(brandProbe).color
+        const tertiaryColor = getComputedStyle(tertiaryProbe).color
+        const background = getComputedStyle(document.body).backgroundColor
+        return {
+          brandClass,
+          probeColor,
+          tertiaryColor,
+          tertiaryToken: refColor('--softn-color-tertiary'),
+          glow: refColor('--softn-brand-glow'),
+          accent: refColor('--softn-brand-accent'),
+          background,
+          ratio: contrastRatio(probeColor, background),
+          redefinedTokenRules,
+        }
+      }, bookingManage.eyebrow.moved)
+
+      // The class the built page ships for the moved tone, resolved from its own stylesheets.
+      expect(
+        measure.brandClass,
+        'the hashed .eyebrow-brand class of the built CSS module must be found in the page stylesheets',
+      ).not.toBeNull()
+      // The two brand tokens keep their package definitions: nothing on the page redefines them.
+      expect(measure.redefinedTokenRules, '--softn-* brand tokens must keep their package definitions').toEqual([])
+      // The reachable views paint their own eyebrow with the tertiary token.
+      expect(measure.tertiaryColor, 'the reachable eyebrow paints the tertiary token').toBe(measure.tertiaryToken)
+
+      // The probe paints the theme's own brand token — glow in the dark theme, accent when light
+      // is set, whichever way light is set — and never the other one.
+      if (mode === 'dark') {
+        expect(measure.probeColor, 'the moved eyebrow paints the brand glow in the dark theme').toBe(measure.glow)
+        expect(measure.probeColor, 'the dark theme does not paint the light tone').not.toBe(measure.accent)
+      } else {
+        expect(measure.probeColor, `the moved eyebrow paints the brand accent when light is set (${mode})`).toBe(
+          measure.accent,
+        )
+        expect(measure.probeColor, 'the light theme does not paint the dark tone').not.toBe(measure.glow)
+      }
+
+      // 4.5:1 at caption size, measured on the probe itself.
+      expect(
+        measure.ratio,
+        `the moved eyebrow measures ${measure.ratio.toFixed(2)}:1 (${measure.probeColor} on ${measure.background}) — 4.5:1 applies at caption size`,
+      ).toBeGreaterThanOrEqual(4.5)
+
+      // And axe, scoped to each probe, agrees.
+      for (const id of ['eyebrow-probe-tertiary', 'eyebrow-probe-brand']) {
+        const results = await new AxeBuilder({ page })
+          .withTags([...WCAG_AA_TAGS])
+          .include(`#${id}`)
+          .analyze()
+        const contrast = results.violations.filter((violation) => violation.id === 'color-contrast')
+        expect(
+          contrast.map(
+            (violation) =>
+              `${id} (${mode}): ${(violation.nodes[0]?.any?.[0]?.message ?? violation.help).slice(0, 200)}`,
+          ),
+          `eyebrow tone probe #${id} (${mode}) must pass 4.5:1 at caption size`,
+        ).toEqual([])
+      }
+      await ctx.close()
+      return measure
+    }
+
+    await measureEyebrowContrast('dark')
+    await measureEyebrowContrast('light-explicit')
+    await measureEyebrowContrast('light-system')
+  })
+})
+
+test.describe('rendez-vous page: keyboard', () => {
+  test('Tab reaches every control in DOM order with a visible ring, Enter toggles the theme and follows the retry', async ({
+    browser,
+  }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'dark' })
+    const page = await ctx.newPage()
+    const token = tokenFor()
+    await page.goto(`/rendez-vous/${token}`)
+    await expect(page.getByRole('main')).toBeVisible()
+
+    // The interactive controls of the unavailable state, in DOM order: the header's three, then
+    // inside the main the contact link of the unavailable message, then the retry link (the page
+    // carries a second contact link in its closing line, after the retry).
+    const stops: readonly [Locator, Locator, Locator, Locator, Locator] = [
+      page.getByRole('link', { name: nav.logo.ariaLabel }),
+      page.getByRole('link', { name: `← ${minimalHeader.backLink.label}` }),
+      page.getByRole('button', { name: nav.themeToggle.toLight }),
+      page.getByRole('link', { name: bookingManage.contact.linkLabel }).first(),
+      page.getByRole('link', { name: bookingManage.errors.retry }),
+    ]
+
+    // Every control of the page carries the site's own 2 px :focus-visible ring — the logo link of
+    // the minimal header now styles one too (2 px, --softn-border-active), with no browser-default
+    // allowance left.
+    for (const [index, stop] of stops.entries()) {
+      await page.keyboard.press('Tab')
+      await expect(stop, 'the next Tab stop is the next control of the page').toBeFocused()
+
+      const ring = await page.evaluate(() => {
+        const style = getComputedStyle(document.activeElement as Element)
+        return { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth }
+      })
+      expect(ring.outlineStyle, 'keyboard focus is ringed by the page styles').toBe('solid')
+      expect(Number.parseFloat(ring.outlineWidth), 'the ring is at least 2 px').toBeGreaterThanOrEqual(2)
+
+      // Enter on the theme toggle switches the theme without a pointer, and the focus stays put
+      // (the toggle's own label changes with the theme, hence the name-agnostic locator).
+      if (index === 2) {
+        const before = await page.getAttribute('html', 'data-theme')
+        await page.keyboard.press('Enter')
+        await expect(page.locator('html')).toHaveAttribute('data-theme', before === 'light' ? 'dark' : 'light')
+        await expect(page.getByRole('button', { name: /Passer au mode (clair|sombre)/ })).toBeFocused()
+      }
+    }
+
+    // Enter on the retry link follows it: the same page, read again. The focus is on it: it is
+    // the last Tab stop of the loop.
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('main')).toBeVisible()
+    expect(new URL(page.url()).pathname).toBe(`/rendez-vous/${token}`)
+
+    await ctx.close()
   })
 })
 
@@ -482,7 +741,7 @@ test.describe('rendez-vous page: design tokens (4a-1)', () => {
       expect(families, 'loaded font faces on the manage page').toContain('jakarta')
       expect(families, 'loaded font faces on the manage page').toContain('zalando')
 
-      // The invalid state adds the danger eyebrow tone.
+      // The invalid state renders the tertiary eyebrow tone (the danger tone is gone).
       await page.goto('/rendez-vous/not-a-signed-token')
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(bookingManage.states.invalid.title)
       const invalid = await page.evaluate(auditManagePage)
