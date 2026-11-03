@@ -44,6 +44,11 @@ export default defineConfig({
       GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: '',
       VERCEL_OIDC_TOKEN: '',
       MISTRAL_API_KEY: '',
+      // Signing secret of the manage links. Default: unset, so every token is refused
+      // (fail closed). The manage suite passes a test-only secret through the environment
+      // of the command (`BOOKING_LINK_SECRET=… playwright test`) and the server then signs
+      // and verifies with the very same value; it is never written to any .env file.
+      BOOKING_LINK_SECRET: process.env.BOOKING_LINK_SECRET ?? '',
     },
   },
 })
