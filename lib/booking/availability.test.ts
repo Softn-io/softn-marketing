@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BOOKING_CALENDAR_QUERY_MARGIN_DAYS,
   bookingDayKeyOfInstant,
   bookingDayRangeOfInstant,
+  bookingQueryWindow,
   bookingWallClockOfInstant,
   findFreeSlots,
   isSlotBookable,
+  releaseOwnSlot,
   type BusyInterval,
 } from './availability'
 import type { BookingRules } from './rules'
@@ -28,6 +31,7 @@ const TEST_RULES: BookingRules = {
   slotMinutes: 30,
   bufferMinutes: 15,
   minimumNoticeHours: 24,
+  rescheduleNoticeHours: 12,
   horizonDays: 21,
   maxCallsPerDay: 3,
 }
@@ -300,5 +304,90 @@ describe('isSlotBookable', () => {
     expect(isSlotBookable(input, { start: '2026-06-13T07:30:00.000Z', end: '2026-06-13T08:00:00.000Z' })).toBe(false)
     expect(isSlotBookable(input, { start: '2026-06-10T08:30:00.000Z', end: '2026-06-10T09:00:00.000Z' })).toBe(false)
     expect(isSlotBookable(input, { start: '2026-08-05T07:30:00.000Z', end: '2026-08-05T08:00:00.000Z' })).toBe(false)
+  })
+})
+
+describe('bookingQueryWindow', () => {
+  it('spans from now to the horizon, with the margin of the day edges', () => {
+    const window = bookingQueryWindow({ now: new Date(WEDNESDAY_MORNING), rules: { ...TEST_RULES, horizonDays: 21 } })
+
+    expect(window.timeMin).toBe(WEDNESDAY_MORNING)
+    expect(window.timeMax).toBe(
+      new Date(Date.parse(WEDNESDAY_MORNING) + (BOOKING_CALENDAR_QUERY_MARGIN_DAYS + 21) * 86_400_000).toISOString(),
+    )
+  })
+})
+
+describe('releaseOwnSlot', () => {
+  /** The event being managed: 10:00-10:30 Paris on Thursday 11 June 2026. */
+  const OWN_START = '2026-06-11T08:00:00.000Z'
+  const OWN_END = '2026-06-11T08:30:00.000Z'
+  const other = { start: '2026-06-11T09:00:00.000Z', end: '2026-06-11T09:30:00.000Z' }
+
+  const release = (overrides: Partial<Parameters<typeof releaseOwnSlot>[0]> = {}) =>
+    releaseOwnSlot({
+      busy: [other, { start: OWN_START, end: OWN_END }],
+      bookedCallsPerDay: { '2026-06-11': 2 },
+      ownStart: OWN_START,
+      ownEnd: OWN_END,
+      rules: TEST_RULES,
+      ...overrides,
+    })
+
+  it('removes the interval that exactly matches the event, and one from its own day', () => {
+    const released = release()
+
+    expect(released.busy).toEqual([other])
+    expect(released.bookedCallsPerDay).toEqual({ '2026-06-11': 1 })
+  })
+
+  it('matches on instants, whatever offset the calendar wrote', () => {
+    const released = release({
+      busy: [{ start: '2026-06-11T10:00:00+02:00', end: '2026-06-11T10:30:00+02:00' }],
+    })
+
+    expect(released.busy).toEqual([])
+    expect(released.bookedCallsPerDay).toEqual({ '2026-06-11': 1 })
+  })
+
+  it('leaves a merged interval busy, and its day counted, which fails safe', () => {
+    // Another appointment merged into the event's interval: its bounds are wider than the event's.
+    const merged = [{ start: OWN_START, end: '2026-06-11T10:00:00.000Z' }]
+    const released = release({ busy: merged })
+
+    expect(released.busy).toEqual(merged)
+    expect(released.bookedCallsPerDay).toEqual({ '2026-06-11': 2 })
+  })
+
+  it('changes nothing when the interval is absent, the bounds are unreadable or reversed', () => {
+    const busy = [other]
+    expect(release({ busy }).busy).toEqual(busy)
+    expect(release({ busy }).bookedCallsPerDay).toEqual({ '2026-06-11': 2 })
+    expect(release({ ownStart: 'not-a-date' }).busy).toHaveLength(2)
+    expect(release({ ownEnd: OWN_START }).busy).toHaveLength(2)
+  })
+
+  it('never counts a day below zero', () => {
+    const released = release({ bookedCallsPerDay: {} })
+
+    expect(released.bookedCallsPerDay).toEqual({ '2026-06-11': 0 })
+  })
+
+  it('frees the event slot for its own reschedule without freeing its neighbours', () => {
+    const released = release()
+    const slots = starts(
+      onDay(
+        find({
+          now: WEDNESDAY_MORNING,
+          busy: released.busy,
+          bookedCallsPerDay: released.bookedCallsPerDay,
+          limit: 60,
+        }),
+        '2026-06-11',
+      ),
+    )
+
+    expect(slots).toContain(OWN_START)
+    expect(slots).not.toContain('2026-06-11T08:30:00.000Z')
   })
 })

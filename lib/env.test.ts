@@ -44,6 +44,7 @@ describe('readEnv', () => {
     vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID', 'softn-site')
     vi.stubEnv('VERCEL_OIDC_TOKEN', 'oidc-token')
     vi.stubEnv('BASEROW_LEADS_TABLE_ID', '42')
+    vi.stubEnv('BOOKING_LINK_SECRET', 's'.repeat(40))
 
     const environment = readEnv()
 
@@ -55,6 +56,7 @@ describe('readEnv', () => {
     expect(environment.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID).toBe('softn-site')
     expect(environment.VERCEL_OIDC_TOKEN).toBe('oidc-token')
     expect(environment.BASEROW_LEADS_TABLE_ID).toBe('42')
+    expect(environment.BOOKING_LINK_SECRET).toBe('s'.repeat(40))
   })
 
   it('treats a blank booking variable as unset', () => {
@@ -66,6 +68,7 @@ describe('readEnv', () => {
     vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID', '')
     vi.stubEnv('VERCEL_OIDC_TOKEN', '')
     vi.stubEnv('BASEROW_LEADS_TABLE_ID', '')
+    vi.stubEnv('BOOKING_LINK_SECRET', '')
 
     const environment = readEnv()
 
@@ -77,6 +80,7 @@ describe('readEnv', () => {
     expect(environment.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID).toBeUndefined()
     expect(environment.VERCEL_OIDC_TOKEN).toBeUndefined()
     expect(environment.BASEROW_LEADS_TABLE_ID).toBeUndefined()
+    expect(environment.BOOKING_LINK_SECRET).toBeUndefined()
   })
 
   it('rejects a service account address that is not an address', () => {
@@ -101,5 +105,28 @@ describe('readEnv', () => {
     vi.stubEnv('GCP_PROJECT_NUMBER', 'softn-project')
 
     expect(() => readEnv()).toThrow('GCP_PROJECT_NUMBER')
+  })
+
+  it('keeps a manage link secret of at least 32 characters', () => {
+    vi.stubEnv('BOOKING_LINK_SECRET', 's'.repeat(32))
+
+    expect(readEnv().BOOKING_LINK_SECRET).toBe('s'.repeat(32))
+  })
+
+  it('rejects a manage link secret that is too short, and treats a blank one as unset', () => {
+    vi.stubEnv('BOOKING_LINK_SECRET', 'too-short')
+
+    expect(() => readEnv()).toThrow('BOOKING_LINK_SECRET')
+
+    vi.stubEnv('BOOKING_LINK_SECRET', '   ')
+    expect(readEnv().BOOKING_LINK_SECRET).toBeUndefined()
+  })
+
+  it('reads the deployment marker Vercel sets, and treats a blank one as unset', () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    expect(readEnv().VERCEL_ENV).toBe('production')
+
+    vi.stubEnv('VERCEL_ENV', '   ')
+    expect(readEnv().VERCEL_ENV).toBeUndefined()
   })
 })

@@ -6,9 +6,16 @@ import {
   isSlotBookable,
   type BookingSlot,
 } from '@/lib/booking/availability'
-import { bookingEventDescription, bookingEventTitle, type BookingLead } from '@/lib/booking/event'
+import {
+  bookingEventDescription,
+  bookingEventTitle,
+  bookingManageLinkOrigin,
+  bookingManageUrlOfEvent,
+  type BookingLead,
+} from '@/lib/booking/event'
 import { hasJsonContentType, isSameOriginRequest } from '@/lib/booking/guard'
 import { bookingLeadFields } from '@/lib/booking/lead'
+import { readBookingLinkSecret } from '@/lib/booking/manageToken'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { readEnv } from '@/lib/env'
 import { readSubjectToken } from '@/lib/google/auth'
@@ -17,6 +24,7 @@ import {
   insertBookingEvent,
   markBookingLeadNotStored,
   queryBusyIntervals,
+  storeBookingLeadRowId,
   type CalendarFailure,
 } from '@/lib/google/calendar'
 import { BookingRequestSchema, type BookingRequest } from '@/schemas/booking'
@@ -118,10 +126,11 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
  * calendar: a bot learns nothing from the answer.
  *
  * The slot is re-checked against the calendar before anything is written, then the event is created
- * with a Meet link and an invitation to the visitor, and only then the lead is stored in Baserow.
- * Every failure before the event exists answers `slot-taken` or the generic error and leaves no
- * trace. When only Baserow fails the booking stands — the visitor is told it succeeded and the
- * failure is logged as a code, because the event description already carries their answers.
+ * with a Meet link, a signed manage link and an invitation to the visitor, and only then the lead is
+ * stored in Baserow; the id of the new row is written back to the event, best effort. Every failure
+ * before the event exists answers `slot-taken` or the generic error and leaves no trace. When only
+ * Baserow fails the booking stands — the visitor is told it succeeded and the failure is logged as a
+ * code, because the event description already carries their answers.
  *
  * @param request Incoming `POST` with the booking request as JSON.
  * @returns `{ booked: true }` on success, or `{ error }` with 400, 403, 409, 415, 429 or 503.
@@ -188,11 +197,24 @@ export const POST = async (request: Request): Promise<Response> => {
   if (!stillFree) return errorResponse('slot-taken', 409)
 
   const lead = leadOfRequest({ ...parsed.data, consentAt })
+  // The manage link is built on the origin of this request — except in production, where it is
+  // pinned to the canonical site origin, so a forged Host cannot put a foreign address in the
+  // invitation. A preview deployment's links point at the deployment that holds their secret.
+  // Without a secret the booking still stands, it just carries no way to manage itself: the fact is
+  // logged once, as a code.
+  const origin = bookingManageLinkOrigin(request)
+  if (readBookingLinkSecret() === undefined) logFailure('manage link: secret-unset')
+
   const event = await insertBookingEvent({
     slot,
     attendeeEmail: lead.email,
     title: bookingEventTitle(lead),
-    description: bookingEventDescription({ lead }),
+    // Each attempt of the event id builds its own description: the manage URL it carries is signed
+    // for that id.
+    descriptionOfEvent: (eventId) => {
+      const manageUrl = bookingManageUrlOfEvent({ origin, eventId, expiresAt: slot.start })
+      return bookingEventDescription({ lead, ...(manageUrl === null ? {} : { manageUrl }) })
+    },
     consentAt: lead.consentAt,
     rules: BOOKING_RULES,
     subjectToken,
@@ -209,6 +231,11 @@ export const POST = async (request: Request): Promise<Response> => {
     // missing. It is best effort, and a failed mark never changes what the visitor was told.
     const mark = await markBookingLeadNotStored({ eventId: event.data.eventId, subjectToken })
     if (!mark.ok) logFailure(`lead not stored: calendar ${googleFailureDetail('events patch', mark)}`)
+  } else {
+    // The id of the row is kept with the event, best effort, so a later reschedule or cancellation
+    // updates the row without a lookup by personal data. No notification is sent to the visitor.
+    const mark = await storeBookingLeadRowId({ eventId: event.data.eventId, rowId: row.data.id, subjectToken })
+    if (!mark.ok) logFailure(`lead row id not stored: calendar ${googleFailureDetail('events patch', mark)}`)
   }
 
   return json({ booked: true }, 200)

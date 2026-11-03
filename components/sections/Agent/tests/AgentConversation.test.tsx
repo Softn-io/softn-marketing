@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BOOKING_OPEN_QUERY_KEY, SECTION_IDS } from '@/lib/anchors'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS } from '@/lib/assistant/intent'
 import { interpolate } from '@/lib/interpolate'
 import { ASSISTANT_QUESTION_MAX_LENGTH } from '@/schemas/assistantLimits'
@@ -45,6 +46,8 @@ const fetchMock = vi.fn<typeof fetch>()
 beforeEach(() => {
   fetchMock.mockReset()
   vi.stubGlobal('fetch', fetchMock)
+  // Each test starts on the plain home URL: the book-again key of another test must not leak in.
+  window.history.replaceState({}, '', '/')
 })
 
 afterEach(() => {
@@ -233,6 +236,56 @@ describe('Agent conversation', () => {
     await screen.findByRole('region', { name: chatbot.suggestions.book })
     expect(await screen.findByText(chatbot.booking.intro)).toBeTruthy()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('Agent conversation book-again link', () => {
+  beforeEach(() => {
+    stubMotionPreference(true)
+    answerBooking(fetchMock)
+  })
+
+  it('opens the reservation flow from the query key, then removes the key and keeps the hash', async () => {
+    window.history.replaceState({}, '', `/?${BOOKING_OPEN_QUERY_KEY}=1#${SECTION_IDS.agent}`)
+    render(<Agent />)
+
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    // The key leaves the address bar, so a reload or a shared URL does not reopen the flow; the hash
+    // stays, so the section is still the one the link pointed at.
+    expect(window.location.search).toBe('')
+    expect(window.location.hash).toBe(`#${SECTION_IDS.agent}`)
+  })
+
+  it('does not open the flow when the link only carries the section hash', async () => {
+    window.history.replaceState({}, '', `/#${SECTION_IDS.agent}`)
+    render(<Agent />)
+
+    // The other calls to action target the same hash and must stay closed.
+    expect(screen.queryByRole('region', { name: chatbot.suggestions.book })).toBeNull()
+    expect(window.location.hash).toBe(`#${SECTION_IDS.agent}`)
+  })
+
+  it('keeps the other query parameters while removing the booking key', async () => {
+    window.history.replaceState({}, '', `/?${BOOKING_OPEN_QUERY_KEY}=1&utm_source=email#${SECTION_IDS.agent}`)
+    render(<Agent />)
+
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    expect(window.location.search).toBe('?utm_source=email')
+    expect(window.location.hash).toBe(`#${SECTION_IDS.agent}`)
+  })
+
+  it('opens the flow once: a reload of the cleaned URL stays closed', async () => {
+    window.history.replaceState({}, '', `/?${BOOKING_OPEN_QUERY_KEY}=1#${SECTION_IDS.agent}`)
+    const first = render(<Agent />)
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+
+    first.unmount()
+    window.history.replaceState({}, '', `/#${SECTION_IDS.agent}`)
+    render(<Agent />)
+
+    expect(screen.queryByRole('region', { name: chatbot.suggestions.book })).toBeNull()
   })
 })
 

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import type { BookingLead } from './event'
-import { BOOKING_LEAD_FIELDS, BOOKING_LEAD_SOURCE, bookingLeadFields } from './lead'
+import {
+  BOOKING_LEAD_FIELDS,
+  BOOKING_LEAD_SOURCE,
+  BOOKING_LEAD_STATUS_BOOKED,
+  BOOKING_LEAD_STATUS_CANCELLED,
+  bookingLeadCancellationFields,
+  bookingLeadFields,
+  bookingLeadRescheduleFields,
+} from './lead'
 
 /** Slot the calendar event was created from, as an ISO 8601 instant. */
 const SLOT = { start: '2026-11-03T08:30:00.000Z', end: '2026-11-03T09:00:00.000Z' }
@@ -33,6 +41,8 @@ describe('bookingLeadFields', () => {
       // Date field without time: the Paris calendar date, not the UTC one.
       [BOOKING_LEAD_FIELDS.consentOn]: '2026-11-01',
       [BOOKING_LEAD_FIELDS.source]: BOOKING_LEAD_SOURCE,
+      // Single select: the option name travels as a plain string.
+      [BOOKING_LEAD_FIELDS.status]: BOOKING_LEAD_STATUS_BOOKED,
       [BOOKING_LEAD_FIELDS.phone]: '06 12 34 56 78',
       [BOOKING_LEAD_FIELDS.companyType]: 'PME',
       [BOOKING_LEAD_FIELDS.role]: 'Dirigeant',
@@ -52,6 +62,8 @@ describe('bookingLeadFields', () => {
       'Consent',
       'Consent on',
       'Source',
+      'Status',
+      'Cancel reason',
     ])
   })
 
@@ -59,7 +71,7 @@ describe('bookingLeadFields', () => {
     const fields = bookingLeadFields({ lead: LEAD, slot: SLOT, consentOn: '2026-11-01' })
 
     expect(JSON.stringify(fields)).toBe(
-      '{"First name":"Camille","Last name":"Moreau","Email":"camille.moreau@example.com","Need":"Automatiser mes devis","Slot":"2026-11-03T08:30:00.000Z","Consent":true,"Consent on":"2026-11-01","Source":"chatbot","Phone":"06 12 34 56 78","Company type":"PME","Role":"Dirigeant"}',
+      '{"First name":"Camille","Last name":"Moreau","Email":"camille.moreau@example.com","Need":"Automatiser mes devis","Slot":"2026-11-03T08:30:00.000Z","Consent":true,"Consent on":"2026-11-01","Source":"chatbot","Status":"Spark booked","Phone":"06 12 34 56 78","Company type":"PME","Role":"Dirigeant"}',
     )
   })
 
@@ -104,5 +116,26 @@ describe('bookingLeadFields', () => {
     })
 
     expect(fields[BOOKING_LEAD_FIELDS.companyType]).toBe('Association')
+  })
+})
+
+describe('bookingLeadRescheduleFields', () => {
+  it('patches the slot only, leaving the status of the pipeline alone', () => {
+    const moved = { start: '2026-11-05T13:30:00.000Z', end: '2026-11-05T14:00:00.000Z' }
+
+    expect(bookingLeadRescheduleFields({ slot: moved })).toEqual({ [BOOKING_LEAD_FIELDS.slot]: moved.start })
+  })
+})
+
+describe('bookingLeadCancellationFields', () => {
+  it('writes the cancelled status only, keeping the slot of the appointment', () => {
+    expect(bookingLeadCancellationFields()).toEqual({ [BOOKING_LEAD_FIELDS.status]: BOOKING_LEAD_STATUS_CANCELLED })
+  })
+
+  it('never writes the values only Mel sets by hand', () => {
+    const payload = JSON.stringify(bookingLeadCancellationFields())
+
+    expect(payload).not.toContain('New')
+    expect(payload).not.toContain('Spark Done')
   })
 })

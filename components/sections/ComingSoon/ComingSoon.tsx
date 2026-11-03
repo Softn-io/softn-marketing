@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Logo } from '@components/ui/Logo'
 import { PointerGlow } from '@components/ui/PointerGlow'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
 import { joinWaitlist } from '@/actions/joinWaitlist'
@@ -31,13 +32,8 @@ export const ComingSoon = () => {
         <div className={styles['backdrop-fade']} />
       </div>
       <header className={styles.header}>
-        <Link
-          href="/"
-          aria-label={nav.logo.ariaLabel}
-          className={`${styles.wordmark} font-display text-title-md text-foreground`}
-        >
-          {nav.logo.name}
-          <span className="text-brand-vivid">{nav.logo.suffix}</span>
+        <Link href="/" aria-label={nav.logo.ariaLabel} className={styles.wordmark}>
+          <Logo />
         </Link>
         <ThemeToggle />
       </header>
@@ -49,10 +45,9 @@ export const ComingSoon = () => {
           </p>
           <div
             aria-hidden="true"
-            className={`${styles['wordmark-large']} ${styles.reveal} ${styles['reveal-delay-1']} font-display text-foreground`}
+            className={`${styles['wordmark-large']} ${styles.reveal} ${styles['reveal-delay-1']}`}
           >
-            {nav.logo.name}
-            <span className="text-brand-vivid">{nav.logo.suffix}</span>
+            <Logo size="hero" />
           </div>
           <h1
             className={`${styles.title} ${styles.reveal} ${styles['reveal-delay-2']} font-display text-display-sm text-foreground sm:text-display-md`}

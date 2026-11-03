@@ -61,12 +61,15 @@ export const buildContentSecurityPolicy = ({ isDev }: ContentSecurityPolicyOptio
 }
 
 /**
- * Builds the security header rules: one applied to every path, static assets included, and a
- * preview-only rule that marks the gated page `noindex`.
+ * Builds the security header rules: one applied to every path, static assets included, a
+ * `no-referrer` rule for the booking manage page, and a preview-only rule that marks the gated page
+ * `noindex`.
  *
  * `Strict-Transport-Security` omits `preload` on purpose: preloading is a
  * hard-to-reverse commitment for the whole domain. `X-Robots-Tag` stays out of
- * the global rule so no public page carries it.
+ * the global rule so no public page carries it. The manage page's token lives in its URL, so a
+ * referrer never leaves it: its rule overrides the global policy for that path alone, and the CSP of
+ * every other route is untouched.
  */
 export const buildSecurityHeaders = ({ isDev }: ContentSecurityPolicyOptions): HeaderRule[] => {
   return [
@@ -88,6 +91,10 @@ export const buildSecurityHeaders = ({ isDev }: ContentSecurityPolicyOptions): H
         },
         { key: 'X-Content-Type-Options', value: 'nosniff' },
       ],
+    },
+    {
+      source: '/rendez-vous/:path*',
+      headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
     },
     {
       source: '/preview',

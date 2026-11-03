@@ -74,7 +74,7 @@ export const legal = {
     },
     collected: {
       booking:
-        "Lors d'une prise de rendez-vous avec l'assistant : prénom, nom, adresse e-mail, téléphone (facultatif), type de structure (facultatif), fonction (facultatif), description du besoin, créneau choisi, et trace du consentement.",
+        "Lors d'une prise de rendez-vous avec l'assistant : prénom, nom, adresse e-mail, téléphone (facultatif), type de structure (facultatif), fonction (facultatif), description du besoin, créneau choisi, motif d'annulation (facultatif), et trace du consentement.",
       contact:
         "Lors de l'envoi d'un message via le formulaire de contact : prénom, nom, adresse e-mail, objet du message, contenu du message et trace du consentement. Finalité : répondre au message. Durée de conservation : [À COMPLÉTER PAR MEL : durée à décider].",
       technical:
@@ -84,7 +84,7 @@ export const legal = {
     },
     purposes: {
       booking:
-        "Organiser l'échange découverte, envoyer l'invitation et préparer le plan d'action. Base légale : consentement de la personne, recueilli avant toute saisie dans l'assistant.",
+        "Organiser l'échange découverte, envoyer l'invitation, préparer le plan d'action, et permettre à la personne de déplacer ou d'annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour. Base légale : consentement de la personne, recueilli avant toute saisie dans l'assistant.",
       technical: 'Assurer le fonctionnement et la sécurité du site. Base légale : intérêt légitime.',
       audience: "Mesurer l'audience du site. Base légale : consentement, recueilli par le bandeau de cookies.",
       note: '[À FAIRE VALIDER : bases légales proposées à confirmer par la relecture RGPD.]',

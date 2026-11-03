@@ -1,0 +1,51 @@
+/*
+ * Minimal page chrome: the logo, the way back to the site and the theme toggle.
+ *
+ * Every colour, length and transition comes from a --softn-* token; the fluid padding follows the
+ * rhythm of the site's sections, so the header breathes the same way on a phone and on a desktop.
+ * The wordmark sizes itself (`components/ui/Logo/`); here it only gets placed.
+ */
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--softn-space-6);
+  padding: var(--softn-space-4) clamp(var(--softn-space-4), 5vw, var(--softn-space-12));
+}
+
+.logo {
+  text-decoration: none;
+}
+
+.logo:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--softn-space-5);
+}
+
+.backLink {
+  color: var(--softn-color-tertiary);
+  text-decoration: none;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.backLink:hover {
+  color: var(--softn-color);
+}
+
+.backLink:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .backLink {
+    transition: none;
+  }
+}

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Logo } from '@components/ui/Logo'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
 import { SECTION_IDS } from '@/lib/anchors'
 import { nav } from '@/locales/fr/hero'
@@ -26,13 +27,8 @@ export const Header = () => {
         {nav.skipLink}
       </a>
       <header className={`${styles.header} sticky top-0 z-sticky flex items-center justify-between gap-6 bg-base`}>
-        <Link
-          href="/"
-          aria-label={nav.logo.ariaLabel}
-          className={`${styles.logo} font-display text-title-md text-foreground`}
-        >
-          {nav.logo.name}
-          <span className="text-brand-vivid">{nav.logo.suffix}</span>
+        <Link href="/" aria-label={nav.logo.ariaLabel} className={styles.logo}>
+          <Logo />
         </Link>
         <nav aria-label={nav.ariaLabel} className="hidden min-w-0 lg:block">
           <ul className="flex items-center justify-center gap-4">

@@ -118,6 +118,30 @@ export const isGoogleTimeoutError = (error: unknown): boolean =>
   error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
 
 /**
+ * Reads the subject token from a header store: the deployment's OIDC token.
+ *
+ * The header comes first, as Vercel documents (`x-vercel-oidc-token`); the header store may be the
+ * one of a Route Handler's Request or the `headers()` of a Server Component. `VERCEL_OIDC_TOKEN`,
+ * which `vercel env pull` writes to the local environment, is the development fallback. The token is
+ * never logged, never cached and never returned to a caller.
+ *
+ * @param headerStore Anything exposing `get`, like the Headers of a request or of a Server Component.
+ * @returns The subject token, or `undefined` when the environment does not provide one.
+ */
+export const readSubjectTokenFromHeaderStore = (headerStore: {
+  get(name: string): string | null | undefined
+}): string | undefined => {
+  const header = headerStore.get(VERCEL_OIDC_HEADER)?.trim()
+  if (header !== undefined && header !== '') return header
+
+  try {
+    return readEnv().VERCEL_OIDC_TOKEN
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Reads the subject token of this request: the deployment's OIDC token.
  *
  * The request header comes first, as Vercel documents (`x-vercel-oidc-token`, read from the Request
@@ -128,16 +152,8 @@ export const isGoogleTimeoutError = (error: unknown): boolean =>
  * @param request Incoming request, or `null` outside a request (a build, a script).
  * @returns The subject token, or `undefined` when the environment does not provide one.
  */
-export const readSubjectToken = (request: Request | null): string | undefined => {
-  const header = request?.headers.get(VERCEL_OIDC_HEADER)?.trim()
-  if (header !== undefined && header !== '') return header
-
-  try {
-    return readEnv().VERCEL_OIDC_TOKEN
-  } catch {
-    return undefined
-  }
-}
+export const readSubjectToken = (request: Request | null): string | undefined =>
+  readSubjectTokenFromHeaderStore(request?.headers ?? { get: () => null })
 
 /**
  * Configuration the exchange needs, read at call time so a running server sees its own values.

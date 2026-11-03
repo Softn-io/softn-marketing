@@ -1,0 +1,1 @@
+export { MinimalHeader } from './MinimalHeader'

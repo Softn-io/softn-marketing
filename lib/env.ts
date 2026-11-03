@@ -79,6 +79,21 @@ const googleCalendarOwner = z.preprocess(blankToUndefined, z.email().optional())
 const googleCalendarId = z.preprocess(blankToUndefined, z.email().optional())
 
 /**
+ * Secret that signs the manage link of a booking, at least 32 characters (a keyed digest of a short
+ * payload, so the strength is in the secret itself). Optional: unset, a booking still succeeds but
+ * carries no manage line, and every manage link is refused. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const bookingLinkSecret = z.preprocess(blankToUndefined, z.string().min(32).optional())
+
+/**
+ * Deployment environment Vercel sets on every build (`production`, `preview`, `development`).
+ * Optional because nobody configures it by hand, and because local runs have no such variable:
+ * only the exact value `production` pins the manage link to the canonical site origin. Server-side
+ * only, never `NEXT_PUBLIC_`.
+ */
+const vercelEnv = z.preprocess(blankToUndefined, optionalString)
+
+/**
  * Server-side environment schema, validated at every `readEnv` call. Every
  * consumer goes through this module — never `process.env` directly.
  *
@@ -106,8 +121,12 @@ const googleCalendarId = z.preprocess(blankToUndefined, z.email().optional())
  * impersonates; the calendar id says where the events are written, so a
  * dedicated secondary calendar can hold the bookings. No service-account key is stored: the subject
  * token is Vercel's OIDC token, read from the request header (or, in
- * development, from `VERCEL_OIDC_TOKEN`). All of them stay server-side and
- * must never be prefixed with `NEXT_PUBLIC_`.
+ * development, from `VERCEL_OIDC_TOKEN`). `BOOKING_LINK_SECRET` is the
+ * optional signing secret of the manage link: unset, a booking carries no
+ * manage line and every manage token is refused. `VERCEL_ENV` is set by the
+ * platform on every deployment, never by hand: it is read to pin the manage
+ * link's origin to the canonical site in production. All of them stay
+ * server-side and must never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -126,6 +145,8 @@ const EnvSchema = z.object({
   GCP_WORKLOAD_IDENTITY_POOL_ID: gcpWorkloadIdentityPoolId,
   GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: gcpWorkloadIdentityPoolProviderId,
   VERCEL_OIDC_TOKEN: vercelOidcToken,
+  BOOKING_LINK_SECRET: bookingLinkSecret,
+  VERCEL_ENV: vercelEnv,
 })
 
 export type Env = z.infer<typeof EnvSchema>

@@ -28,12 +28,12 @@ describe('buildContentSecurityPolicy', () => {
 
 describe('buildSecurityHeaders', () => {
   const rules = buildSecurityHeaders({ isDev: false })
-  const [globalRule] = rules
+  const [globalRule, manageRule, previewRule] = rules
   const valueOf = (key: string) => globalRule?.headers.find((header) => header.key === key)?.value
 
   it('applies the global rule to every path', () => {
-    expect(rules).toHaveLength(2)
-    expect(buildSecurityHeaders({ isDev: true })).toHaveLength(2)
+    expect(rules).toHaveLength(3)
+    expect(buildSecurityHeaders({ isDev: true })).toHaveLength(3)
     expect(globalRule?.source).toBe('/:path*')
   })
 
@@ -41,8 +41,16 @@ describe('buildSecurityHeaders', () => {
     const noindexRules = rules.filter(({ headers }) => headers.some(({ key }) => key === 'X-Robots-Tag'))
 
     expect(noindexRules.map(({ source }) => source)).toEqual(['/preview'])
-    expect(noindexRules[0]?.headers).toEqual([{ key: 'X-Robots-Tag', value: 'noindex' }])
+    expect(previewRule?.headers).toEqual([{ key: 'X-Robots-Tag', value: 'noindex' }])
     expect(valueOf('X-Robots-Tag')).toBeUndefined()
+  })
+
+  it('sends no referrer from the manage page, without touching the other routes', () => {
+    expect(manageRule?.source).toBe('/rendez-vous/:path*')
+    expect(manageRule?.headers).toEqual([{ key: 'Referrer-Policy', value: 'no-referrer' }])
+    // The override names one header only: the global policy still applies to that path.
+    expect(valueOf('Referrer-Policy')).toBe('strict-origin-when-cross-origin')
+    expect(valueOf('Content-Security-Policy')).toBe(buildContentSecurityPolicy({ isDev: false }))
   })
 
   it('sets HSTS for two years without preload', () => {
