@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatSlotLabel } from './labels'
+import { formatBookingDayLabel, formatBookingDayLongLabel, formatBookingTimeLabel, formatSlotLabel } from './labels'
 import type { BookingRules } from './rules'
 
 /**
@@ -13,6 +13,7 @@ const TEST_RULES: BookingRules = {
   slotMinutes: 30,
   bufferMinutes: 15,
   minimumNoticeHours: 24,
+  rescheduleNoticeHours: 12,
   horizonDays: 21,
   maxCallsPerDay: 3,
 }
@@ -41,5 +42,38 @@ describe('formatSlotLabel', () => {
   it('is stable for the same instant, and differs between instants', () => {
     expect(formatSlotLabel(slotOf(SLOTS[0]), TEST_RULES)).toBe(formatSlotLabel(slotOf(SLOTS[0]), TEST_RULES))
     expect(formatSlotLabel(slotOf(SLOTS[0]), TEST_RULES)).not.toBe(formatSlotLabel(slotOf(SLOTS[1]), TEST_RULES))
+  })
+})
+
+describe('formatBookingTimeLabel', () => {
+  it('reads the Paris time of the slot, never its UTC hour', () => {
+    expect(formatBookingTimeLabel(SLOTS[0], TEST_RULES)).toBe('09:30')
+    expect(formatBookingTimeLabel('2026-06-11T08:00:00.000Z', TEST_RULES)).toBe('10:00')
+  })
+
+  it('returns nothing for an instant it cannot read', () => {
+    expect(formatBookingTimeLabel('not-a-date', TEST_RULES)).toBe('')
+  })
+})
+
+describe('formatBookingDayLabel', () => {
+  it('reads the compact parts of a day, without the dots of the abbreviations', () => {
+    expect(formatBookingDayLabel('2026-11-03', TEST_RULES)).toEqual({
+      key: '2026-11-03',
+      weekday: 'mar',
+      day: '3',
+      month: 'nov',
+    })
+  })
+
+  it('returns nothing for a day key it cannot read', () => {
+    expect(formatBookingDayLabel('03/11/2026', TEST_RULES)).toBeNull()
+  })
+})
+
+describe('formatBookingDayLongLabel', () => {
+  it('reads the long day of the « Heure · {day} » heading', () => {
+    expect(formatBookingDayLongLabel('2026-11-03', TEST_RULES)).toBe('mardi 3 novembre')
+    expect(formatBookingDayLongLabel('not-a-day', TEST_RULES)).toBe('')
   })
 })

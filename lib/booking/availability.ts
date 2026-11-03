@@ -64,6 +64,7 @@ type CalendarDay = {
 
 const MILLISECONDS_PER_MINUTE = 60_000
 const MILLISECONDS_PER_HOUR = 3_600_000
+const MILLISECONDS_PER_DAY = 86_400_000
 const MINUTES_PER_HOUR = 60
 /** ISO weekday of Sunday, the last day of the week. */
 const SUNDAY = 7
@@ -365,4 +366,96 @@ export const bookingDayRangeOfInstant = (
   if (start === null || end === null || end <= start) return null
 
   return { timeMin: new Date(start).toISOString(), timeMax: new Date(end).toISOString() }
+}
+
+/**
+ * Days added after the horizon when the calendar is queried: the query works on instants while the
+ * horizon is counted in Paris days, and a daylight saving change makes one of them longer.
+ */
+export const BOOKING_CALENDAR_QUERY_MARGIN_DAYS = 2
+
+/** Arguments of {@link bookingQueryWindow}. */
+export type BookingQueryWindowInput = {
+  /** Instant the availability is computed for. */
+  now: Date
+  /** Rules holding the horizon. */
+  rules: BookingRules
+}
+
+/**
+ * Window a full availability query spans: from now to the end of the horizon, margin included.
+ *
+ * Shared by the slots answer and the reschedule chooser, so a visitor is offered the same horizon
+ * whichever page they come from.
+ *
+ * @param input Current instant and rules.
+ * @returns Inclusive start and exclusive end of the queried window, as ISO 8601 instants.
+ */
+export const bookingQueryWindow = ({ now, rules }: BookingQueryWindowInput): { timeMin: string; timeMax: string } => ({
+  timeMin: now.toISOString(),
+  timeMax: new Date(
+    now.getTime() + (rules.horizonDays + BOOKING_CALENDAR_QUERY_MARGIN_DAYS) * MILLISECONDS_PER_DAY,
+  ).toISOString(),
+})
+
+/** Busy intervals and per-day counts once the managed event's own slot is released. */
+export type ReleasedOwnSlot = {
+  /** Busy intervals with the event's own interval removed, or the same list when it cannot be. */
+  readonly busy: readonly BusyInterval[]
+  /** Per-day counts with one call removed from the event's own day, or the same counts. */
+  readonly bookedCallsPerDay: Readonly<Record<BookingDayKey, number>>
+}
+
+/** Arguments of {@link releaseOwnSlot}. */
+export type ReleaseOwnSlotInput = {
+  /** Intervals already taken in the owner's calendar, before the buffer is applied. */
+  busy: readonly BusyInterval[]
+  /** Calls already booked per day, keyed by {@link BookingDayKey}. */
+  bookedCallsPerDay: Readonly<Record<BookingDayKey, number>>
+  /** Current start of the event being managed, as an ISO 8601 instant. */
+  ownStart: string
+  /** Current end of the event being managed, as an ISO 8601 instant. */
+  ownEnd: string
+  /** Rules holding the time zone the day is read in. */
+  rules: BookingRules
+}
+
+/**
+ * Releases the managed event's own slot, so it neither blocks its neighbours nor counts against the
+ * daily cap of its own day.
+ *
+ * Only the busy interval that exactly matches the event's current start and end is removed: an
+ * interval the calendar merged with another appointment carries wider bounds, so it stays busy and
+ * the day keeps its count, which fails towards refusing a slot rather than overbooking. The
+ * comparison is made on instants, so an offset written differently by the calendar matches all the
+ * same.
+ *
+ * @param input Busy intervals, counts, the event's own interval and the rules.
+ * @returns The intervals and counts without the event's own slot, or the inputs unchanged.
+ */
+export const releaseOwnSlot = ({
+  busy,
+  bookedCallsPerDay,
+  ownStart,
+  ownEnd,
+  rules,
+}: ReleaseOwnSlotInput): ReleasedOwnSlot => {
+  const startMs = instantOfIso(ownStart)
+  const endMs = instantOfIso(ownEnd)
+  if (startMs === null || endMs === null || endMs <= startMs) return { busy, bookedCallsPerDay }
+
+  const index = busy.findIndex(
+    (interval) => instantOfIso(interval.start) === startMs && instantOfIso(interval.end) === endMs,
+  )
+  if (index === -1) return { busy, bookedCallsPerDay }
+
+  const dayKey = bookingDayKeyOfInstant(ownStart, rules)
+  if (dayKey === null) return { busy, bookedCallsPerDay }
+
+  const remaining = (bookedCallsPerDay[dayKey] ?? 0) - 1
+
+  return {
+    busy: busy.filter((_interval, position) => position !== index),
+    bookedCallsPerDay: { ...bookedCallsPerDay, [dayKey]: remaining < 0 ? 0 : remaining },
+  }
 }

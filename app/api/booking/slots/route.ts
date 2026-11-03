@@ -1,5 +1,5 @@
 import { checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/assistant/rateLimit'
-import { findFreeSlots } from '@/lib/booking/availability'
+import { bookingQueryWindow, findFreeSlots } from '@/lib/booking/availability'
 import { isSameOriginRequest } from '@/lib/booking/guard'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { readSubjectToken } from '@/lib/google/auth'
@@ -11,15 +11,6 @@ export const runtime = 'nodejs'
 
 /** Two bounded Google calls and the availability stay well inside this budget. */
 export const maxDuration = 30
-
-/** Milliseconds in one day, used to overshoot the horizon when querying the calendar. */
-const MILLISECONDS_PER_DAY = 86_400_000
-
-/**
- * Days added after the horizon when the calendar is queried: the query works on instants while the
- * horizon is counted in Paris days, and a daylight saving change makes one of them longer.
- */
-const CALENDAR_QUERY_MARGIN_DAYS = 2
 
 const json = (body: unknown, status: number): Response =>
   Response.json(body, {
@@ -76,10 +67,7 @@ export const GET = async (request: Request): Promise<Response> => {
 
   const subjectToken = readSubjectToken(request)
   const now = new Date()
-  const timeMin = now.toISOString()
-  const timeMax = new Date(
-    now.getTime() + (BOOKING_RULES.horizonDays + CALENDAR_QUERY_MARGIN_DAYS) * MILLISECONDS_PER_DAY,
-  ).toISOString()
+  const { timeMin, timeMax } = bookingQueryWindow({ now, rules: BOOKING_RULES })
 
   // The two queries are independent: the busy intervals and the calls this booking already created.
   const [busy, bookedCalls] = await Promise.all([

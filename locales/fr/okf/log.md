@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-02
+
+- **Modification légale**: Dans `locales/fr/legal.ts`, la finalité `purposes.booking` précise désormais que la personne peut déplacer ou annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour, et `collected.booking` mentionne le motif d'annulation facultatif. Texte décidé par Mel (proposition `docs/content-proposals/booking-manage-2026-11-02.md`).
+- **Vérification**: Les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, reçoivent une entrée `verified` au `2026-11-02T23:21:03+01:00` ; leurs contenus ne changent pas, les rubriques qu'ils citent (« Assistant virtuel », « Droits des personnes ») étant inchangées. L'empreinte de `legal.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
 ## 2026-11-01
 
 - **Mise à jour**: Textes de réservation modifiés dans `locales/fr/chatbot.ts` : nouvelle introduction de l'échange Spark (durée de 30 minutes, offre et absence d'engagement, ordre des questions) et nouvel intitulé de l'événement créé dans le calendrier (« Échange Spark — {firstName} {lastName} x Softn.io »). Le consentement n'est plus écrit dans la description de l'événement : il reste dans ses propriétés privées et dans la ligne Baserow.

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BookingRules } from '@/lib/booking/rules'
-import { bookingEventId } from './eventId'
+import { BOOKING_EVENT_ID_ATTEMPTS, bookingEventId, bookingEventIdAttempt } from './eventId'
 
 /**
  * The schedule these assertions were written for, fixed here: `TEST_RULES` is Mel's to edit, and a
@@ -13,6 +13,7 @@ const TEST_RULES: BookingRules = {
   slotMinutes: 30,
   bufferMinutes: 15,
   minimumNoticeHours: 24,
+  rescheduleNoticeHours: 12,
   horizonDays: 21,
   maxCallsPerDay: 3,
 }
@@ -51,6 +52,22 @@ const calendarCalls = (): readonly { readonly url: string; readonly init: Reques
       return !CHAIN_ENDPOINTS.includes(url) && !url.includes('iamcredentials.googleapis.com')
     })
     .map(([input, init]) => ({ url: String(input), init }))
+
+/** Event id supplied in the body of one insert call. */
+const insertedIdOf = (call: { readonly init: RequestInit | undefined }): string => {
+  const body = JSON.parse(String(call.init?.body)) as { id: string }
+  return body.id
+}
+
+/** One event as the API returns it, with the booking tag this application writes. */
+const bookingEventResponse = (eventId: string, overrides: Readonly<Record<string, unknown>> = {}): unknown => ({
+  id: eventId,
+  status: 'confirmed',
+  start: { dateTime: '2026-06-11T09:30:00+02:00' },
+  end: { dateTime: '2026-06-11T10:00:00+02:00' },
+  extendedProperties: { private: { softnBooking: 'discovery' } },
+  ...overrides,
+})
 
 beforeEach(() => {
   vi.resetModules()
@@ -252,6 +269,7 @@ describe('queryBusyIntervals', () => {
     expect(await queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
       ok: false,
       error: 'request-failed',
+      status: 500,
     })
   })
 
@@ -261,6 +279,7 @@ describe('queryBusyIntervals', () => {
     expect(await forbidden.queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
       ok: false,
       error: 'unauthorized',
+      status: 403,
     })
 
     vi.resetModules()
@@ -270,6 +289,8 @@ describe('queryBusyIntervals', () => {
     expect(await timedOut.queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
       ok: false,
       error: 'timeout',
+      // The step of the credential chain that timed out is kept for the caller's log line.
+      step: 'sts',
     })
   })
 
@@ -368,23 +389,27 @@ describe('insertBookingEvent', () => {
   const slot = { start: '2026-06-11T07:30:00.000Z', end: '2026-06-11T08:00:00.000Z' }
   const consentAt = '2026-10-31T09:00:00.000Z'
 
-  const insert = (responder: () => Response | Promise<Response>) => {
-    withToken(responder)
-    return import('./calendar')
+  /** Answers every insert with the id it was called with, so each attempt succeeds on its own id. */
+  const answerInserts = (): void => {
+    withToken((_url, init) => jsonResponse({ id: insertedIdOf({ init }) }))
   }
 
-  it('creates the event with its Meet link, its attendee and its invitation', async () => {
-    const { insertBookingEvent } = await insert(() => jsonResponse({ id: bookingEventId(slot.start) }))
+  const input = (overrides: Readonly<Record<string, unknown>> = {}) => ({
+    slot,
+    attendeeEmail: 'marie@example.fr',
+    title: 'Échange Spark — Marie Dupont x Softn.io',
+    descriptionOfEvent: (eventId: string) => `Besoin : automatiser mes devis\nlien: ${eventId}`,
+    consentAt,
+    rules: TEST_RULES,
+    subjectToken: SUBJECT_TOKEN,
+    ...overrides,
+  })
 
-    const result = await insertBookingEvent({
-      slot,
-      attendeeEmail: 'marie@example.fr',
-      title: 'Échange Spark — Marie Dupont x Softn.io',
-      description: 'Besoin : automatiser mes devis',
-      consentAt,
-      rules: TEST_RULES,
-      subjectToken: SUBJECT_TOKEN,
-    })
+  it('creates the event with its Meet link, its attendee and its invitation', async () => {
+    answerInserts()
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input())
 
     expect(result).toEqual({ ok: true, data: { eventId: bookingEventId(slot.start) } })
 
@@ -411,21 +436,16 @@ describe('insertBookingEvent', () => {
       private: { softnBooking: 'discovery', softnSlotStart: slot.start, softnConsentAt: consentAt },
     })
     expect(String(body['description'])).not.toContain(consentAt)
+    // The description is built from the id of the attempt: its manage link holds that id.
+    expect(body['description']).toContain(bookingEventId(slot.start))
   })
 
   it('writes the event to the booking calendar, not to the owner calendar', async () => {
     vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
-    const { insertBookingEvent } = await insert(() => jsonResponse({ id: bookingEventId(slot.start) }))
+    answerInserts()
+    const { insertBookingEvent } = await import('./calendar')
 
-    const result = await insertBookingEvent({
-      slot,
-      attendeeEmail: 'marie@example.fr',
-      title: 'Échange Spark — Marie Dupont x Softn.io',
-      description: 'Besoin : automatiser mes devis',
-      consentAt,
-      rules: TEST_RULES,
-      subjectToken: SUBJECT_TOKEN,
-    })
+    const result = await insertBookingEvent(input())
 
     expect(result).toEqual({ ok: true, data: { eventId: bookingEventId(slot.start) } })
 
@@ -434,53 +454,159 @@ describe('insertBookingEvent', () => {
     expect(url.pathname).toBe('/calendar/v3/calendars/abc123%40group.calendar.google.com/events')
   })
 
-  it('answers a duplicate identifier as a taken slot, without reading the body', async () => {
-    const { insertBookingEvent } = await insert(() => new Response('not json at all', { status: 409 }))
-
-    const result = await insertBookingEvent({
-      slot,
-      attendeeEmail: 'marie@example.fr',
-      title: 'Échange Spark — Marie Dupont x Softn.io',
-      description: 'Besoin : automatiser mes devis',
-      consentAt,
-      rules: TEST_RULES,
-      subjectToken: SUBJECT_TOKEN,
-    })
-
-    expect(result).toEqual({ ok: false, error: 'slot-taken' })
-  })
-
   it('fails closed on any other error status', async () => {
-    const { insertBookingEvent } = await insert(() => new Response('not json at all', { status: 502 }))
+    withToken(() => new Response('not json at all', { status: 502 }))
+    const { insertBookingEvent } = await import('./calendar')
 
-    const result = await insertBookingEvent({
-      slot,
-      attendeeEmail: 'marie@example.fr',
-      title: 't',
-      description: 'd',
-      consentAt,
-      rules: TEST_RULES,
-      subjectToken: SUBJECT_TOKEN,
-    })
+    const result = await insertBookingEvent(input())
 
-    expect(result).toEqual({ ok: false, error: 'request-failed' })
+    expect(result).toEqual({ ok: false, error: 'request-failed', status: 502 })
   })
 
   it('refuses to write when the event id could not be checked', async () => {
-    const { insertBookingEvent } = await insert(() => jsonResponse({ id: 'unused' }))
+    withToken(() => jsonResponse({ id: 'unused' }))
+    const { insertBookingEvent } = await import('./calendar')
 
-    const result = await insertBookingEvent({
-      slot: { start: 'not-a-date', end: 'not-a-date' },
-      attendeeEmail: 'marie@example.fr',
-      title: 't',
-      description: 'd',
-      consentAt,
-      rules: TEST_RULES,
-      subjectToken: SUBJECT_TOKEN,
-    })
+    const result = await insertBookingEvent(input({ slot: { start: 'not-a-date', end: 'not-a-date' } }))
 
     expect(result).toEqual({ ok: false, error: 'invalid-response' })
     expect(calendarCalls()).toEqual([])
+  })
+})
+
+describe('insertBookingEvent on a held event id', () => {
+  const slot = { start: '2026-06-11T07:30:00.000Z', end: '2026-06-11T08:00:00.000Z' }
+
+  const input = {
+    slot,
+    attendeeEmail: 'marie@example.fr',
+    title: 'Échange Spark — Marie Dupont x Softn.io',
+    descriptionOfEvent: (eventId: string) => `lien: ${eventId}`,
+    consentAt: '2026-10-31T09:00:00.000Z',
+    rules: TEST_RULES,
+    subjectToken: SUBJECT_TOKEN,
+  }
+
+  /**
+   * Answers the insert of the given event id with a conflict, every other insert with its own id,
+   * and every event read with the given event.
+   */
+  const answerHeldId = (heldEventId: string, eventBody: unknown | (() => Response | Promise<Response>)): void => {
+    withToken((url, init) => {
+      if (init?.method === 'GET') {
+        return typeof eventBody === 'function' ? eventBody() : jsonResponse(eventBody)
+      }
+
+      const body = JSON.parse(String(init?.body)) as { id: string }
+      if (body.id === heldEventId) return new Response('', { status: 409 })
+      return jsonResponse({ id: body.id })
+    })
+  }
+
+  it('walks past a cancelled event of the same slot and books the next id', async () => {
+    const heldId = bookingEventId(slot.start)
+    answerHeldId(heldId, bookingEventResponse(heldId, { status: 'cancelled', start: undefined, end: undefined }))
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: true, data: { eventId: bookingEventIdAttempt(slot.start, 1) } })
+
+    const calls = calendarCalls()
+    const inserted = calls.filter((call) => call.init?.method === 'POST').map(insertedIdOf)
+    expect(inserted).toEqual([bookingEventIdAttempt(slot.start, 0), bookingEventIdAttempt(slot.start, 1)])
+
+    // The held id was read before the walk continued, on the booking calendar.
+    const read = calls.find((call) => call.init?.method === 'GET')
+    expect(new URL(String(read?.url)).pathname).toBe(`/calendar/v3/calendars/melanie%40softn.io/events/${heldId}`)
+  })
+
+  it('walks past an event Mel moved to another instant, comparing the real start', async () => {
+    const heldId = bookingEventId(slot.start)
+    answerHeldId(
+      heldId,
+      bookingEventResponse(heldId, {
+        // The private property still holds the slot, but the real start is elsewhere.
+        extendedProperties: { private: { softnBooking: 'discovery', softnSlotStart: slot.start } },
+        start: { dateTime: '2026-06-12T09:30:00+02:00' },
+        end: { dateTime: '2026-06-12T10:00:00+02:00' },
+      }),
+    )
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: true, data: { eventId: bookingEventIdAttempt(slot.start, 1) } })
+  })
+
+  it('answers slot-taken when the held event is live at this very instant', async () => {
+    const heldId = bookingEventId(slot.start)
+    answerHeldId(heldId, bookingEventResponse(heldId, { start: { dateTime: slot.start } }))
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: false, error: 'slot-taken' })
+
+    const calls = calendarCalls()
+    expect(calls.filter((call) => call.init?.method === 'POST')).toHaveLength(1)
+  })
+
+  it('treats an event that vanished between the refusal and the read as a free id', async () => {
+    const heldId = bookingEventId(slot.start)
+    answerHeldId(heldId, () => new Response('', { status: 404 }))
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: true, data: { eventId: bookingEventIdAttempt(slot.start, 1) } })
+  })
+
+  it('treats an event without the booking tag as not found, and walks on', async () => {
+    const heldId = bookingEventId(slot.start)
+    answerHeldId(heldId, { id: heldId, status: 'confirmed', extendedProperties: { private: {} } })
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: true, data: { eventId: bookingEventIdAttempt(slot.start, 1) } })
+  })
+
+  it('answers a generic failure once the whole id list is exhausted', async () => {
+    withToken((url, init) =>
+      init?.method === 'GET'
+        ? jsonResponse(
+            bookingEventResponse(url.split('/').at(-1) ?? '', {
+              status: 'cancelled',
+              start: undefined,
+              end: undefined,
+            }),
+          )
+        : new Response('', { status: 409 }),
+    )
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: false, error: 'request-failed' })
+
+    const calls = calendarCalls()
+    const inserted = calls.filter((call) => call.init?.method === 'POST').map(insertedIdOf)
+    expect(inserted).toHaveLength(BOOKING_EVENT_ID_ATTEMPTS)
+    expect(new Set(inserted).size).toBe(BOOKING_EVENT_ID_ATTEMPTS)
+    expect(inserted[0]).toBe(bookingEventId(slot.start))
+  })
+
+  it('never keeps walking when the held event cannot be read', async () => {
+    withToken((_url, init) =>
+      init?.method === 'GET' ? new Response('', { status: 403 }) : new Response('', { status: 409 }),
+    )
+    const { insertBookingEvent } = await import('./calendar')
+
+    const result = await insertBookingEvent(input)
+
+    expect(result).toEqual({ ok: false, error: 'unauthorized' })
+    expect(calendarCalls().filter((call) => call.init?.method === 'POST')).toHaveLength(1)
   })
 })
 
@@ -488,14 +614,14 @@ describe('insertBookingEvent conference room', () => {
   const slot = { start: '2026-06-11T07:30:00.000Z', end: '2026-06-11T08:00:00.000Z' }
 
   it('never asks for the same meeting room twice for one slot', async () => {
-    withToken(() => jsonResponse({ id: bookingEventId(slot.start) }))
+    withToken((_url, init) => jsonResponse({ id: insertedIdOf({ init }) }))
     const { insertBookingEvent } = await import('./calendar')
 
     const input = {
       slot,
       attendeeEmail: 'marie@example.fr',
       title: 'Échange Spark — Marie Dupont x Softn.io',
-      description: 'Besoin : automatiser mes devis',
+      descriptionOfEvent: (eventId: string) => `lien: ${eventId}`,
       consentAt: '2026-10-31T09:00:00.000Z',
       rules: TEST_RULES,
       subjectToken: SUBJECT_TOKEN,
@@ -512,6 +638,228 @@ describe('insertBookingEvent conference room', () => {
     expect(requests).toHaveLength(2)
     expect(requests[0]).not.toBe(requests[1])
     expect(requests[0]?.startsWith(bookingEventId(slot.start))).toBe(true)
+  })
+})
+
+describe('readBookingEvent', () => {
+  const EVENT_ID = 'softnabc0123456789abcdefghijkl'
+
+  it('reads the event with its real bounds, its description and its leads row id', async () => {
+    withToken(() =>
+      jsonResponse(
+        bookingEventResponse(EVENT_ID, {
+          description: 'Besoin : automatiser mes devis\nlien: https://softn.io/rendez-vous/token',
+          extendedProperties: { private: { softnBooking: 'discovery', softnLeadRowId: '42' } },
+        }),
+      ),
+    )
+    const { readBookingEvent } = await import('./calendar')
+
+    const result = await readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        eventId: EVENT_ID,
+        cancelled: false,
+        start: '2026-06-11T09:30:00+02:00',
+        end: '2026-06-11T10:00:00+02:00',
+        description: 'Besoin : automatiser mes devis\nlien: https://softn.io/rendez-vous/token',
+        leadRowId: '42',
+      },
+    })
+
+    const [call] = calendarCalls()
+    const url = new URL(String(call?.url))
+    expect(url.pathname).toBe(`/calendar/v3/calendars/melanie%40softn.io/events/${EVENT_ID}`)
+    expect(call?.init?.method).toBe('GET')
+    expect(call?.init?.body).toBeUndefined()
+  })
+
+  it('reads a cancelled event without a start, which is what a cancellation leaves', async () => {
+    withToken(() => jsonResponse(bookingEventResponse(EVENT_ID, { status: 'cancelled' })))
+    const { readBookingEvent } = await import('./calendar')
+
+    const result = await readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })
+
+    expect(result).toMatchObject({ ok: true, data: { cancelled: true } })
+    if (result.ok) {
+      // The API promises nothing but the id on some cancelled copies; unreadable bounds are not an
+      // error here, the status is what the caller acts on.
+      expect(result.data.start === undefined || typeof result.data.start === 'string').toBe(true)
+    }
+  })
+
+  it('answers an event without the booking tag as not found, like a missing one', async () => {
+    withToken(() => jsonResponse({ id: EVENT_ID, status: 'confirmed' }))
+    const { readBookingEvent } = await import('./calendar')
+
+    expect(await readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'not-found',
+    })
+  })
+
+  it('maps a 404 to not found and any other error status to its code', async () => {
+    withToken(() => new Response('', { status: 404 }))
+    const missing = await import('./calendar')
+    expect(await missing.readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'not-found',
+      status: 404,
+    })
+
+    vi.resetModules()
+    fetchMock.mockReset()
+    withToken(() => new Response('', { status: 500 }))
+    const broken = await import('./calendar')
+    expect(await broken.readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 500,
+    })
+  })
+
+  it('fails closed when the answer names another event', async () => {
+    withToken(() => jsonResponse(bookingEventResponse('another-event-id')))
+    const { readBookingEvent } = await import('./calendar')
+
+    expect(await readBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'invalid-response',
+    })
+  })
+})
+
+describe('rescheduleBookingEvent', () => {
+  const EVENT_ID = 'softnabc0123456789abcdefghijkl'
+  const slot = { start: '2026-06-12T07:30:00.000Z', end: '2026-06-12T08:00:00.000Z' }
+
+  it('patches the new bounds, the private slot and the fresh description, and emails the update', async () => {
+    withToken(() => jsonResponse({ id: EVENT_ID }))
+    const { rescheduleBookingEvent } = await import('./calendar')
+
+    const result = await rescheduleBookingEvent({
+      eventId: EVENT_ID,
+      slot,
+      description: 'Besoin : automatiser mes devis\nlien: https://softn.io/rendez-vous/token',
+      rules: TEST_RULES,
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    expect(result).toEqual({ ok: true, data: { eventId: EVENT_ID } })
+
+    const [call] = calendarCalls()
+    const url = new URL(String(call?.url))
+    expect(url.pathname).toBe(`/calendar/v3/calendars/melanie%40softn.io/events/${EVENT_ID}`)
+    expect(call?.init?.method).toBe('PATCH')
+    // Google requires conferenceDataVersion=1 on every modification of an event with a Meet link, so
+    // the conference survives the patch; sendUpdates=all emails the updated invitation.
+    expect(url.searchParams.get('conferenceDataVersion')).toBe('1')
+    expect(url.searchParams.get('sendUpdates')).toBe('all')
+
+    const body = JSON.parse(String(call?.init?.body)) as Record<string, unknown>
+    expect(body['start']).toEqual({ dateTime: '2026-06-12T09:30:00', timeZone: 'Europe/Paris' })
+    expect(body['end']).toEqual({ dateTime: '2026-06-12T10:00:00', timeZone: 'Europe/Paris' })
+    // Only the named fields travel: the attendee, the conference and the other private properties
+    // are left out and survive the patch.
+    expect(body['attendees']).toBeUndefined()
+    expect(body['conferenceData']).toBeUndefined()
+    expect(body['extendedProperties']).toEqual({ private: { softnSlotStart: slot.start } })
+    expect(String(body['description'])).toContain('https://softn.io/rendez-vous/token')
+  })
+
+  it('reports an upstream failure as its code, without reading the body', async () => {
+    withToken(() => new Response('not json at all', { status: 412 }))
+    const { rescheduleBookingEvent } = await import('./calendar')
+
+    expect(
+      await rescheduleBookingEvent({
+        eventId: EVENT_ID,
+        slot,
+        description: 'd',
+        rules: TEST_RULES,
+        subjectToken: SUBJECT_TOKEN,
+      }),
+    ).toEqual({ ok: false, error: 'request-failed', status: 412 })
+  })
+
+  it('refuses an unreadable slot before any network call', async () => {
+    withToken(() => jsonResponse({ id: EVENT_ID }))
+    const { rescheduleBookingEvent } = await import('./calendar')
+
+    expect(
+      await rescheduleBookingEvent({
+        eventId: EVENT_ID,
+        slot: { start: 'not-a-date', end: 'not-a-date' },
+        description: 'd',
+        rules: TEST_RULES,
+        subjectToken: SUBJECT_TOKEN,
+      }),
+    ).toEqual({ ok: false, error: 'invalid-response' })
+    expect(calendarCalls()).toEqual([])
+  })
+})
+
+describe('cancelBookingEvent', () => {
+  const EVENT_ID = 'softnabc0123456789abcdefghijkl'
+
+  it('deletes the event with sendUpdates=all, so Google emails the cancellation', async () => {
+    withToken(() => new Response(null, { status: 204 }))
+    const { cancelBookingEvent } = await import('./calendar')
+
+    const result = await cancelBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })
+
+    expect(result).toEqual({ ok: true, data: true })
+
+    const [call] = calendarCalls()
+    const url = new URL(String(call?.url))
+    expect(url.pathname).toBe(`/calendar/v3/calendars/melanie%40softn.io/events/${EVENT_ID}`)
+    expect(call?.init?.method).toBe('DELETE')
+    expect(url.searchParams.get('sendUpdates')).toBe('all')
+    expect(call?.init?.body).toBeUndefined()
+  })
+
+  it('reports an upstream failure as its code', async () => {
+    withToken(() => new Response('', { status: 410 }))
+    const { cancelBookingEvent } = await import('./calendar')
+
+    expect(await cancelBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 410,
+    })
+  })
+})
+
+describe('storeBookingLeadRowId', () => {
+  it('patches the private row id, without sending any notification', async () => {
+    withToken(() => jsonResponse({ id: 'softnabc' }))
+    const { storeBookingLeadRowId } = await import('./calendar')
+
+    const result = await storeBookingLeadRowId({ eventId: 'softnabc', rowId: 42, subjectToken: SUBJECT_TOKEN })
+
+    expect(result).toEqual({ ok: true, data: true })
+
+    const [call] = calendarCalls()
+    const url = new URL(String(call?.url))
+    expect(url.pathname).toBe('/calendar/v3/calendars/melanie%40softn.io/events/softnabc')
+    expect(call?.init?.method).toBe('PATCH')
+    expect(url.searchParams.has('sendUpdates')).toBe(false)
+    expect(JSON.parse(String(call?.init?.body))).toEqual({
+      extendedProperties: { private: { softnLeadRowId: '42' } },
+    })
+  })
+
+  it('reports a failure as a code, so the caller logs it without changing the visitor answer', async () => {
+    withToken(() => new Response('not json at all', { status: 404 }))
+    const { storeBookingLeadRowId } = await import('./calendar')
+
+    expect(await storeBookingLeadRowId({ eventId: 'softnabc', rowId: 42, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 404,
+    })
   })
 })
 
@@ -541,6 +889,7 @@ describe('markBookingLeadNotStored', () => {
     expect(await markBookingLeadNotStored({ eventId: 'softnabc', subjectToken: SUBJECT_TOKEN })).toEqual({
       ok: false,
       error: 'request-failed',
+      status: 404,
     })
   })
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { findFreeSlots } from '@/lib/booking/availability'
 import { BOOKING_RULES } from '@/lib/booking/rules'
-import { BOOKING_LEAD_FIELDS } from '@/lib/booking/lead'
+import { BOOKING_LEAD_FIELDS, BOOKING_LEAD_STATUS_BOOKED } from '@/lib/booking/lead'
 import { POST } from './route'
 
 const calendarMock = vi.hoisted(() => ({
@@ -9,6 +9,7 @@ const calendarMock = vi.hoisted(() => ({
   countBookedCallsPerDay: vi.fn(),
   insertBookingEvent: vi.fn(),
   markBookingLeadNotStored: vi.fn(),
+  storeBookingLeadRowId: vi.fn(),
 }))
 
 const baserowMock = vi.hoisted(() => ({ createBaserowRow: vi.fn() }))
@@ -62,10 +63,12 @@ const request = (
 beforeEach(() => {
   errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.stubEnv('BASEROW_LEADS_TABLE_ID', '42')
+  vi.stubEnv('BOOKING_LINK_SECRET', 's'.repeat(48))
   calendarMock.queryBusyIntervals.mockReset()
   calendarMock.countBookedCallsPerDay.mockReset()
   calendarMock.insertBookingEvent.mockReset()
   calendarMock.markBookingLeadNotStored.mockReset()
+  calendarMock.storeBookingLeadRowId.mockReset()
   baserowMock.createBaserowRow.mockReset()
   rateLimitMock.checkRateLimit.mockReset()
   rateLimitMock.trustedClientIp.mockReset()
@@ -74,6 +77,7 @@ beforeEach(() => {
   calendarMock.countBookedCallsPerDay.mockResolvedValue({ ok: true, data: {} })
   calendarMock.insertBookingEvent.mockResolvedValue({ ok: true, data: { eventId: 'softnabc' } })
   calendarMock.markBookingLeadNotStored.mockResolvedValue({ ok: true, data: true })
+  calendarMock.storeBookingLeadRowId.mockResolvedValue({ ok: true, data: true })
   baserowMock.createBaserowRow.mockResolvedValue({ ok: true, data: { id: 7 } })
   rateLimitMock.checkRateLimit.mockResolvedValue({ ok: true, data: 'allowed' })
   rateLimitMock.trustedClientIp.mockReturnValue('test-client')
@@ -236,14 +240,21 @@ describe('POST /api/booking order', () => {
     expect(await response.json()).toEqual({ booked: true })
 
     expect(calendarMock.insertBookingEvent).toHaveBeenCalledTimes(1)
-    const insertInput = calendarMock.insertBookingEvent.mock.calls[0]?.[0] as Record<string, unknown>
+    const insertInput = calendarMock.insertBookingEvent.mock.calls[0]?.[0] as {
+      descriptionOfEvent: (eventId: string) => string
+      [key: string]: unknown
+    }
     expect(insertInput['slot']).toEqual(slot)
     expect(insertInput['attendeeEmail']).toBe('marie@example.fr')
     expect(String(insertInput['consentAt'])).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(insertInput['subjectToken']).toBeUndefined()
-    expect(String(insertInput['description'])).toContain('Automatiser mes devis')
-    expect(String(insertInput['description'])).toContain('marie@example.fr')
-    expect(String(insertInput['description'])).not.toContain('Consentement')
+    // The description is built per attempt: it carries the answers and a manage link signed for the
+    // event id of that attempt.
+    const description = insertInput.descriptionOfEvent('softnabc')
+    expect(description).toContain('Automatiser mes devis')
+    expect(description).toContain('marie@example.fr')
+    expect(description).toContain('http://localhost/rendez-vous/')
+    expect(description).not.toContain('Consentement')
 
     expect(baserowMock.createBaserowRow).toHaveBeenCalledTimes(1)
     expect(baserowMock.createBaserowRow).toHaveBeenCalledWith({
@@ -257,8 +268,45 @@ describe('POST /api/booking order', () => {
         [BOOKING_LEAD_FIELDS.consent]: true,
         [BOOKING_LEAD_FIELDS.consentOn]: new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' }),
         [BOOKING_LEAD_FIELDS.source]: 'chatbot',
+        [BOOKING_LEAD_FIELDS.status]: BOOKING_LEAD_STATUS_BOOKED,
       },
     })
+
+    // The id of the new row is kept with the event, without notifying the attendee.
+    expect(calendarMock.storeBookingLeadRowId).toHaveBeenCalledWith({
+      eventId: 'softnabc',
+      rowId: 7,
+      subjectToken: undefined,
+    })
+  })
+
+  it('books without a manage line when the deployment has no signing secret, logging one code', async () => {
+    vi.stubEnv('BOOKING_LINK_SECRET', '')
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+
+    const insertInput = calendarMock.insertBookingEvent.mock.calls[0]?.[0] as {
+      descriptionOfEvent: (eventId: string) => string
+    }
+    expect(insertInput.descriptionOfEvent('softnabc')).not.toContain('/rendez-vous/')
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage link: secret-unset')
+    // A failed best-effort mark never changes the answer.
+    expect(calendarMock.storeBookingLeadRowId).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the booking when the row id cannot be kept with the event', async () => {
+    calendarMock.storeBookingLeadRowId.mockResolvedValue({ ok: false, error: 'request-failed', status: 500 })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[booking] lead row id not stored: calendar events patch request-failed status=500',
+    )
   })
 
   it('records the Paris calendar date of the stamped consent', async () => {
@@ -409,5 +457,43 @@ describe('POST /api/booking order', () => {
 
     expect(response.status).toBe(400)
     expect(calendarMock.insertBookingEvent).not.toHaveBeenCalled()
+  })
+})
+
+describe('POST /api/booking manage link origin', () => {
+  /** Description the route built for the event of this request. */
+  const descriptionOfLastInsert = (): string => {
+    const insertInput = calendarMock.insertBookingEvent.mock.calls.at(-1)?.[0] as {
+      descriptionOfEvent: (eventId: string) => string
+    }
+    return insertInput.descriptionOfEvent('softnabc')
+  }
+
+  it('keeps the origin of the request outside production, so a preview links to itself', async () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(descriptionOfLastInsert()).toContain('http://localhost/rendez-vous/')
+  })
+
+  it('pins the link to the canonical site in production, even when the request forges its origin', async () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+
+    // A forged Host and Origin that agree pass the same-origin guard: only the production pin
+    // keeps the attacker's origin out of the invitation e-mailed to the visitor.
+    const response = await POST(
+      new Request('https://evil.example/api/booking', {
+        method: 'POST',
+        headers: { origin: 'https://evil.example', 'content-type': 'application/json' },
+        body: JSON.stringify(bookingBody()),
+      }),
+    )
+
+    expect(response.status).toBe(200)
+    const description = descriptionOfLastInsert()
+    expect(description).toContain('https://softn.io/rendez-vous/')
+    expect(description).not.toContain('evil.example')
   })
 })

@@ -1,8 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_URL } from '@/lib/site'
+import { bookingManage } from '@/locales/fr/bookingManage'
 import { chatbot } from '@/locales/fr/chatbot'
 import { formatSlotLabel } from './labels'
-import { bookingEventDescription, bookingEventTitle, type BookingLead } from './event'
+import {
+  bookingEventDescription,
+  bookingEventDescriptionWithFreshLink,
+  bookingEventTitle,
+  bookingManageLinkOrigin,
+  type BookingLead,
+} from './event'
 import type { BookingRules } from './rules'
 
 /**
@@ -16,6 +24,7 @@ const TEST_RULES: BookingRules = {
   slotMinutes: 30,
   bufferMinutes: 15,
   minimumNoticeHours: 24,
+  rescheduleNoticeHours: 12,
   horizonDays: 21,
   maxCallsPerDay: 3,
 }
@@ -73,6 +82,117 @@ describe('bookingEventDescription', () => {
 
     expect(description).toContain(structureLine)
     expect(description).toContain('marie@example.fr')
+  })
+
+  it('appends the manage link as its own line when the deployment builds one', () => {
+    const manageUrl = 'https://softn.io/rendez-vous/token-value'
+    const description = bookingEventDescription({ lead: LEAD, manageUrl })
+    const linkLine = interpolate(bookingManage.calendarEvent.line, { link: manageUrl })
+
+    expect(description.split('\n').at(-1)).toBe(linkLine)
+    expect(description).toContain('marie@example.fr')
+  })
+
+  it('writes no management line when there is no link to write', () => {
+    const description = bookingEventDescription({ lead: LEAD })
+
+    expect(description).not.toContain(bookingManage.calendarEvent.line.split('{link}')[0])
+  })
+})
+
+describe('bookingEventDescriptionWithFreshLink', () => {
+  const OLD_URL = 'https://softn.io/rendez-vous/old-token'
+  const NEW_URL = 'https://softn.io/rendez-vous/new-token'
+
+  it('replaces the manage URL and keeps every answer line around it', () => {
+    const description = `Besoin : automatiser mes devis\n${interpolate(bookingManage.calendarEvent.line, { link: OLD_URL })}`
+    const refreshed = bookingEventDescriptionWithFreshLink({ description, manageUrl: NEW_URL })
+
+    expect(refreshed).toContain(NEW_URL)
+    expect(refreshed).not.toContain('old-token')
+    expect(refreshed).toContain('Besoin : automatiser mes devis')
+    expect(refreshed.split('\n')).toHaveLength(2)
+  })
+
+  it('replaces the URL of another origin, so a preview link is lifted to production', () => {
+    const description = interpolate(bookingManage.calendarEvent.line, {
+      link: 'https://preview-abc.vercel.app/rendez-vous/old-token',
+    })
+
+    expect(bookingEventDescriptionWithFreshLink({ description, manageUrl: NEW_URL })).toBe(
+      interpolate(bookingManage.calendarEvent.line, { link: NEW_URL }),
+    )
+  })
+
+  it('ignores the manage path inside a visitor answer and replaces the real link', () => {
+    const description = `Besoin : un parcours /rendez-vous/interne à refondre\n${interpolate(bookingManage.calendarEvent.line, { link: OLD_URL })}`
+    const refreshed = bookingEventDescriptionWithFreshLink({ description, manageUrl: NEW_URL })
+
+    expect(refreshed).toContain('Besoin : un parcours /rendez-vous/interne à refondre')
+    expect(refreshed).toContain(NEW_URL)
+    expect(refreshed).not.toContain('old-token')
+  })
+
+  it('adds the line to an event that carries no link yet, instead of losing its answers', () => {
+    const refreshed = bookingEventDescriptionWithFreshLink({ description: 'Besoin : un site', manageUrl: NEW_URL })
+
+    expect(refreshed.split('\n')).toEqual([
+      'Besoin : un site',
+      interpolate(bookingManage.calendarEvent.line, { link: NEW_URL }),
+    ])
+  })
+
+  it('uses the link line alone when the description is empty', () => {
+    expect(bookingEventDescriptionWithFreshLink({ description: '', manageUrl: NEW_URL })).toBe(
+      interpolate(bookingManage.calendarEvent.line, { link: NEW_URL }),
+    )
+  })
+
+  it('leaves an answer that mentions the manage path alone, replacing the link after it', () => {
+    const need = 'Reprendre la page /rendez-vous/ de mon site'
+    const description = `Besoin : ${need}\n${interpolate(bookingManage.calendarEvent.line, { link: OLD_URL })}`
+
+    const refreshed = bookingEventDescriptionWithFreshLink({ description, manageUrl: NEW_URL })
+
+    expect(refreshed.split('\n')).toEqual([
+      `Besoin : ${need}`,
+      interpolate(bookingManage.calendarEvent.line, { link: NEW_URL }),
+    ])
+  })
+})
+
+describe('bookingManageLinkOrigin', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  it('keeps the origin of the request outside production, so a preview links to itself', () => {
+    vi.stubEnv('VERCEL_ENV', 'preview')
+
+    const request = new Request('https://preview-abc.vercel.app/api/booking', { method: 'POST' })
+
+    expect(bookingManageLinkOrigin(request)).toBe('https://preview-abc.vercel.app')
+  })
+
+  it('pins the link to the canonical site origin in production', () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+
+    const request = new Request('https://preview-abc.vercel.app/api/booking', { method: 'POST' })
+
+    expect(bookingManageLinkOrigin(request)).toBe(SITE_URL)
+  })
+
+  it('pins a request whose forged origin and host agree to the canonical site in production', () => {
+    vi.stubEnv('VERCEL_ENV', 'production')
+    // Both headers carry the forged origin, which is exactly what the same-origin guard compares:
+    // the request passes it, and only the production pin keeps the attacker's origin out of the
+    // invitation e-mailed to the visitor.
+    const forged = new Request('https://evil.example/api/booking', {
+      method: 'POST',
+      headers: { origin: 'https://evil.example' },
+    })
+
+    expect(bookingManageLinkOrigin(forged)).toBe(SITE_URL)
   })
 })
 

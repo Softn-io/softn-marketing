@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBaserowRow } from './baserow'
+import { createBaserowRow, updateBaserowRow } from './baserow'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -138,6 +138,93 @@ describe('createBaserowRow', () => {
     const result = await createBaserowRow({ tableId: '', fields: { Email: 'mel@example.fr' } })
 
     expect(result).toEqual({ ok: false, error: 'not-configured' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('updateBaserowRow', () => {
+  it('patches the row with the given fields and returns its id', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 42, Status: 'Spark cancelled' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const result = await updateBaserowRow({ tableId: '123456', rowId: 42, fields: { Status: 'Spark cancelled' } })
+
+    expect(result).toEqual({ ok: true, data: { id: 42 } })
+
+    const [url, init] = firstCall()
+    expect(url).toBe('https://api.baserow.io/api/database/rows/table/123456/42/?user_field_names=true')
+    expect(init?.method).toBe('PATCH')
+    expect(init?.cache).toBe('no-store')
+    expect(init?.signal).toBeInstanceOf(AbortSignal)
+    expect(init?.headers).toMatchObject({
+      Authorization: 'Token testDatabaseToken',
+      'Content-Type': 'application/json',
+    })
+    // Only the named fields travel: a patch leaves every other cell of the row untouched.
+    expect(JSON.parse(String(init?.body))).toEqual({ Status: 'Spark cancelled' })
+  })
+
+  it('uses the configured API URL, for a self-hosted instance', async () => {
+    vi.stubEnv('BASEROW_API_URL', 'https://baserow.example.fr/')
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ id: 7 }), { status: 200 }))
+
+    await updateBaserowRow({ tableId: '9', rowId: 7, fields: { Slot: '2026-11-03T08:30:00.000Z' } })
+
+    const [url] = firstCall()
+    expect(url).toBe('https://baserow.example.fr/api/database/rows/table/9/7/?user_field_names=true')
+  })
+
+  it('returns a request failure with the status, without echoing the error body', async () => {
+    const sentinel = 'SENTINEL-UPSTREAM-BODY-VALUE'
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'ERROR_REQUEST_BODY_VALIDATION', detail: sentinel }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    const result = await updateBaserowRow({ tableId: '123456', rowId: 42, fields: { Status: 'Spark booked' } })
+
+    expect(result).toEqual({ ok: false, error: 'request-failed', status: 400 })
+    expect(JSON.stringify(result)).not.toContain(sentinel)
+  })
+
+  it('returns a request failure when the request times out or the body is malformed', async () => {
+    fetchMock.mockRejectedValueOnce(new DOMException('The operation was aborted due to timeout', 'TimeoutError'))
+
+    expect(await updateBaserowRow({ tableId: '1', rowId: 2, fields: {} })).toEqual({
+      ok: false,
+      error: 'request-failed',
+    })
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ results: [] }), { status: 200 }))
+    expect(await updateBaserowRow({ tableId: '1', rowId: 2, fields: {} })).toEqual({
+      ok: false,
+      error: 'request-failed',
+    })
+  })
+
+  it('does not call Baserow without a token, a table id or a usable row id', async () => {
+    vi.stubEnv('BASEROW_TOKEN', '')
+
+    expect(await updateBaserowRow({ tableId: '1', rowId: 2, fields: {} })).toEqual({
+      ok: false,
+      error: 'not-configured',
+    })
+
+    vi.stubEnv('BASEROW_TOKEN', 'testDatabaseToken')
+    expect(await updateBaserowRow({ tableId: '', rowId: 2, fields: {} })).toEqual({
+      ok: false,
+      error: 'not-configured',
+    })
+    expect(await updateBaserowRow({ tableId: '1', rowId: 0, fields: {} })).toEqual({
+      ok: false,
+      error: 'not-configured',
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
