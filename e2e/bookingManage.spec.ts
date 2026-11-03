@@ -7,8 +7,12 @@
  * `playwright.config.ts`): no run of this suite can reach Google or Baserow.
  *
  * - The states the link itself decides, each with **zero** Google call on the server: a token this
- *   deployment did not sign renders "Lien non valide", an expired one renders "L'appel a déjà
- *   commencé", and the route answers a forged token with 403 and `Cache-Control: no-store`.
+ *   deployment did not sign renders "Lien non valide" and never reaches the manage API, an expired
+ *   one renders "L'appel a déjà commencé". The route's own 403 and `Cache-Control: no-store` for a
+ *   forged token are unit-covered in `app/api/booking/manage/route.test.ts`, not here: on a
+ *   production server without the Upstash store the rate limiter fails closed before the token
+ *   check (503 — the intended behaviour, see `lib/assistant/rateLimit.ts`), so that answer cannot
+ *   be exercised by a browser run and no suite depends on a live store.
  * - The fail-closed answer of the page: a validly signed token still only renders the unavailable
  *   state with its retry when the calendar cannot answer, never a management UI.
  * - The page hides itself from search engines (`noindex, nofollow` in its own metadata, and no
@@ -87,22 +91,29 @@ test.describe('rendez-vous page: link states', () => {
     expect(response.headers()['referrer-policy']).toBe('no-referrer')
   })
 
-  test('a forged token is refused by the route with 403 and no-store, before any calendar call', async ({
-    request,
-  }) => {
+  test('a forged token renders the invalid state, and the page never reaches the manage API', async ({ page }) => {
     // A token signed by another deployment's secret: the very leak scenario the verifier exists for.
     const forged = bookingManageToken({ secret: 'f'.repeat(48), eventId: EVENT_ID, expiresAt: FUTURE })
     expect(forged).not.toBeNull()
     expect(verifyBookingManageToken({ secret: SECRET, token: forged as string }).ok).toBe(false)
 
-    const response = await request.post('/api/booking/manage', {
-      headers: { origin: selfOriginOf(), 'content-type': 'application/json' },
-      data: { action: 'cancel', token: forged },
+    // The manage API sits behind the rate limiter, which fails closed on a production server
+    // without its Upstash store (the 503 CI saw) — so the route's 403 for a forged token stays
+    // unit-covered (app/api/booking/manage/route.test.ts). What the browser proves is the leak
+    // scenario the page exists to prevent: a forged link renders the invalid state, and not one
+    // request of the page reaches the manage API.
+    const manageCalls: string[] = []
+    page.on('request', (req) => {
+      if (new URL(req.url()).pathname === '/api/booking/manage') manageCalls.push(req.url())
     })
 
-    expect(response.status()).toBe(403)
-    expect(await response.json()).toEqual({ error: 'invalid' })
-    expect(response.headers()['cache-control']).toBe('no-store')
+    const response = await page.goto(`/rendez-vous/${forged}`)
+    expect(response?.status(), 'an invalid link is still a page, not an error').toBe(200)
+
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(bookingManage.states.invalid.title)
+    await expect(page.getByRole('button', { name: bookingManage.reschedule.action })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: bookingManage.cancel.action })).toHaveCount(0)
+    expect(manageCalls, 'a forged link must call nothing on the manage API').toEqual([])
   })
 
   test('a valid token whose event cannot be read answers fail closed: the unavailable state, never a management UI', async ({
