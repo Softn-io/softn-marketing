@@ -23,18 +23,20 @@
  *   exist as a value of `@softnio-labs/tokens`, in both themes, on the states a browser can reach
  *   without credentials (invalid, expired, unavailable — the chooser needs a live calendar read).
  *
- * A test-only secret travels through the environment of the command —
- * `BOOKING_LINK_SECRET=… ./node_modules/.bin/playwright test e2e/bookingManage.spec.ts` — and the
- * webServer receives the same value (see the config). It is never written to any `.env*` file.
+ * A test-only secret (e2e/support/bookingLinkSecret.ts, never a real credential) is shared by
+ * this suite and the webServer of `playwright.config.ts` when `BOOKING_LINK_SECRET` is not set
+ * in the environment of the command; a value set there still wins. It is never written to any
+ * `.env*` file.
  */
 import { expect, test, type Page } from '@playwright/test'
 import { AxeBuilder } from '@axe-core/playwright'
 import { bookingManageToken, verifyBookingManageToken } from '../lib/booking/manageToken'
 import { bookingManage } from '../locales/fr/bookingManage'
 import { chatbot } from '../locales/fr/chatbot'
+import { resolveBookingLinkSecret } from './support/bookingLinkSecret'
 
-/** The suite needs the secret the server was started with; absent, the signed-token tests cannot run. */
-const SECRET = process.env.BOOKING_LINK_SECRET ?? ''
+/** The secret the server was started with: the same resolution as the config's webServer env. */
+const SECRET = resolveBookingLinkSecret()
 
 /** Event id in the base32hex alphabet the verifier accepts (`^[0-9a-v]{5,1024}$`). */
 const EVENT_ID = 'softnabc0123456789abcdefghijkl'
@@ -45,17 +47,11 @@ const selfOriginOf = (): string => test.info().project.use.baseURL ?? 'http://lo
 /** Instant in ten days: a valid link, and long past the reschedule notice for the event. */
 const FUTURE = new Date(Date.now() + 10 * 86_400_000).toISOString()
 
-/** Signs a token the server accepts (when its secret is this suite's). */
+/** Signs a token the server accepts (its secret is this suite's, see the config). */
 const tokenFor = (expiresAt: string = FUTURE): string => {
-  if (SECRET === '') throw new Error('BOOKING_LINK_SECRET must be set in the environment of the command')
   const token = bookingManageToken({ secret: SECRET, eventId: EVENT_ID, expiresAt })
   if (token === null) throw new Error('the fixture must build a token')
   return token
-}
-
-/** Signed-token tests are meaningless without the secret: fail loudly instead of testing nothing. */
-const requireSecret = (): void => {
-  expect(SECRET, 'BOOKING_LINK_SECRET must be set in the environment of the command').not.toBe('')
 }
 
 test.describe('rendez-vous page: link states', () => {
@@ -76,7 +72,6 @@ test.describe('rendez-vous page: link states', () => {
     page,
     request,
   }) => {
-    requireSecret()
     const token = tokenFor(new Date(Date.now() - 60_000).toISOString())
 
     // The expired link is told apart from a forged one: it names the call, not the link.
@@ -95,7 +90,6 @@ test.describe('rendez-vous page: link states', () => {
   test('a forged token is refused by the route with 403 and no-store, before any calendar call', async ({
     request,
   }) => {
-    requireSecret()
     // A token signed by another deployment's secret: the very leak scenario the verifier exists for.
     const forged = bookingManageToken({ secret: 'f'.repeat(48), eventId: EVENT_ID, expiresAt: FUTURE })
     expect(forged).not.toBeNull()
@@ -114,7 +108,6 @@ test.describe('rendez-vous page: link states', () => {
   test('a valid token whose event cannot be read answers fail closed: the unavailable state, never a management UI', async ({
     page,
   }) => {
-    requireSecret()
     const token = tokenFor()
 
     await page.goto(`/rendez-vous/${token}`)
@@ -146,7 +139,6 @@ test.describe('rendez-vous page: isolation', () => {
     const origins = new Set<string>()
     page.on('request', (req) => origins.add(new URL(req.url()).origin))
 
-    requireSecret()
     const selfOrigin = new URL(selfOriginOf()).origin
     for (const path of [
       `/rendez-vous/not-a-signed-token`,
@@ -199,7 +191,6 @@ test.describe('rendez-vous page: accessibility (WCAG 2.1 AA)', () => {
 
   for (const theme of ['dark', 'light'] as const) {
     test(`axe finds no WCAG 2.1 A/AA violation on the reachable states (${theme})`, async ({ browser }) => {
-      requireSecret()
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: theme })
       const page = await ctx.newPage()
       await page.emulateMedia({ colorScheme: theme })
@@ -224,7 +215,6 @@ test.describe('rendez-vous page: accessibility (WCAG 2.1 AA)', () => {
   }
 
   test('the page exposes one h1, the header and footer landmarks, and a focusable heading', async ({ page }) => {
-    requireSecret()
     await page.goto('/rendez-vous/not-a-signed-token')
 
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1)
@@ -465,7 +455,6 @@ test.describe('rendez-vous page: design tokens (4a-1)', () => {
 
   for (const theme of ['dark', 'light'] as const) {
     test(`computed styles of the manage page match @softnio-labs/tokens values (${theme})`, async ({ browser }) => {
-      requireSecret()
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: theme })
       const page: Page = await ctx.newPage()
 
@@ -493,7 +482,6 @@ test.describe('rendez-vous page: design tokens (4a-1)', () => {
   }
 
   test('the reading column and the footer keep the design rhythm at 375, 768 and 1280 px', async ({ browser }) => {
-    requireSecret()
     for (const width of [375, 768, 1280]) {
       const ctx = await browser.newContext({ viewport: { width, height: 800 } })
       const page = await ctx.newPage()

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
+import { resolveBookingLinkSecret } from './e2e/support/bookingLinkSecret'
+
 /** Dedicated port so the suite never reuses a developer's `next dev` on 3000. */
 const PORT = 3100
 
@@ -44,11 +46,12 @@ export default defineConfig({
       GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: '',
       VERCEL_OIDC_TOKEN: '',
       MISTRAL_API_KEY: '',
-      // Signing secret of the manage links. Default: unset, so every token is refused
-      // (fail closed). The manage suite passes a test-only secret through the environment
-      // of the command (`BOOKING_LINK_SECRET=… playwright test`) and the server then signs
-      // and verifies with the very same value; it is never written to any .env file.
-      BOOKING_LINK_SECRET: process.env.BOOKING_LINK_SECRET ?? '',
+      // Signing secret of the manage links. Default: the test-only value of
+      // e2e/support/bookingLinkSecret.ts (a fixed fixture, never a real secret), so the manage
+      // suite signs tokens with the very value the server verifies with no command configuration
+      // at all; a `BOOKING_LINK_SECRET` set in the environment of the command still wins. It is
+      // never written to any .env file.
+      BOOKING_LINK_SECRET: resolveBookingLinkSecret(),
     },
   },
 })
