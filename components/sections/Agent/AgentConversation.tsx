@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
+import { BOOKING_OPEN_QUERY_KEY } from '@/lib/anchors'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS, type AssistantIntentDetail } from '@/lib/assistant/intent'
 import { chatbot } from '@/locales/fr/chatbot'
 import { AGENT_QUESTION_INPUT_ID, AgentComposer } from './AgentComposer'
@@ -90,6 +91,19 @@ export const AgentConversation = () => {
 
     window.addEventListener(ASSISTANT_INTENT_EVENT, handleIntent)
     return () => window.removeEventListener(ASSISTANT_INTENT_EVENT, handleIntent)
+  }, [openBooking])
+
+  // A book-again link carries the booking query key: the flow opens once, then the key leaves the
+  // address bar so a reload or a shared URL does not reopen it. The hash is kept, so the page still
+  // scrolls to the section like every other call to action. Opening is deferred to a microtask: the
+  // effect itself only touches the URL, and the state update never runs inside it.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has(BOOKING_OPEN_QUERY_KEY)) return
+
+    url.searchParams.delete(BOOKING_OPEN_QUERY_KEY)
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+    queueMicrotask(openBooking)
   }, [openBooking])
 
   // Closing the flow gives focus back to the composer: the conversation is where the visitor was.

@@ -15,6 +15,15 @@ export const SECTION_IDS = {
  */
 export const HERO_CTA_ID = 'hero-cta'
 
+/**
+ * Query key of the home page link that opens the reservation flow as it lands.
+ *
+ * A hash alone cannot carry that intent: `#assistant` is the target of the site's other calls to
+ * action, which must not open the flow. The conversation island reads the key once and removes it
+ * from the address bar, so a reload or a shared URL does not reopen the flow.
+ */
+export const BOOKING_OPEN_QUERY_KEY = 'rdv'
+
 export type SectionId = (typeof SECTION_IDS)[keyof typeof SECTION_IDS]
 
 /**
