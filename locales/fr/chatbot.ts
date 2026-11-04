@@ -83,7 +83,7 @@ export const chatbot = {
         example: 'Automatiser mes devis',
       },
       slot: {
-        question: 'Parmi ces créneaux, lequel vous convient ?',
+        question: 'Quel jour et quelle heure vous conviennent\u00A0?',
         field: 'Créneau',
       },
       firstName: {
@@ -120,8 +120,10 @@ export const chatbot = {
     step: 'Question {current} sur {total}',
     slots: {
       loading: 'Je consulte les disponibilités…',
-      listLabel: 'Créneaux disponibles',
-      more: 'Voir plus de créneaux',
+      dayLabel: 'Jour',
+      timeLabel: 'Heure · {day}',
+      dayGroupLabel: 'Jours disponibles',
+      timeGroupLabel: 'Heures disponibles le {day}',
       timezoneNote: 'Les horaires sont indiqués en heure de Paris.',
       none: 'Je ne trouve aucun créneau disponible pour le moment. Vous pouvez écrire via la {contactPageLink}, et votre demande sera lue.',
       unavailable:

@@ -28,9 +28,6 @@ export const BOOKING_EMAIL_MAX_LENGTH = 254
  */
 export const BOOKING_HONEYPOT_FIELD = 'reference'
 
-/** Slots shown at once in the chat. The proposal asks for 3 to 5 chips, never the whole horizon. */
-export const BOOKING_SLOTS_PAGE_SIZE = 4
-
 /** Most slots one slots answer carries, so a visitor browses a page of the horizon, not all of it. */
 export const BOOKING_SLOTS_MAX = 60
 

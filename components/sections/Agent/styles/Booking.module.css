@@ -163,15 +163,12 @@
   cursor: not-allowed;
 }
 
-/* Slot chips carry the day and the hour: one type step above the answer chips. */
-.slotChip {
-  font-size: var(--softn-font-size-body-md);
-  line-height: var(--softn-font-line-height-body-md);
-}
-
-.timezoneNote {
-  margin: 0;
-  max-inline-size: 60ch;
+/*
+ * Day row of the slot chooser inside the flow: the row scrolls sideways in the narrow column, and
+ * this keeps the focus ring of a day button inside the scroll box instead of clipped by its top edge.
+ */
+.slotDays {
+  padding-block-start: var(--softn-space-1);
 }
 
 /*
