@@ -365,7 +365,6 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
                         dayGroupLabel={chatbot.booking.slots.dayGroupLabel}
                         timeGroupLabel={interpolate(chatbot.booking.slots.timeGroupLabel, { day: pickedDayLongLabel })}
                         timezoneNote={chatbot.booking.slots.timezoneNote}
-                        daysClassName={styles.slotDays}
                         focusAnchor
                         onPickDay={(dayKey) => setDayPick({ dayKey, slots: flow.slots })}
                         onPickTime={flow.chooseSlot}

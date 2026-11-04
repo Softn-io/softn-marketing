@@ -164,14 +164,6 @@
 }
 
 /*
- * Day row of the slot chooser inside the flow: the row scrolls sideways in the narrow column, and
- * this keeps the focus ring of a day button inside the scroll box instead of clipped by its top edge.
- */
-.slotDays {
-  padding-block-start: var(--softn-space-1);
-}
-
-/*
  * Step actions: the forward control first, the way out last. They sit on one line and stay centred
  * against each other wherever the row has room for both, and wrap to two flush-left lines on a
  * narrow screen.

@@ -3,9 +3,9 @@
  *
  * Every colour, radius and length comes from a --softn-* token, and the two callers keep their own
  * copy: this stylesheet owns the control's own rhythm, never the layout of the section around it.
- * The day row scrolls sideways, so the row keeps room for a focus ring inside its scroll box: the
- * base padding below is the one the manage page draws, and a caller in a narrow column adds its own
- * class to the row through `daysClassName` when the ring needs more room.
+ * The day row scrolls sideways, so its scroll box clips both axes: the row keeps the room a card's
+ * focus ring needs on every side, 4 px (2 px ring plus its 2 px offset) inline and above, 8 px
+ * below.
  */
 
 .chooser {
@@ -33,6 +33,9 @@
   gap: var(--softn-space-2);
   margin: 0 calc(var(--softn-space-1) * -1);
   padding: 0 var(--softn-space-1) var(--softn-space-2);
+  /* The row scrolls sideways, so its scroll box clips vertically too: the ring needs the same
+     4 px (2 px plus its 2 px offset) above a card as at either inline end. */
+  padding-block-start: var(--softn-space-1);
   overflow-x: auto;
   scrollbar-width: thin;
   /* Room a card's focus ring needs (2 px) plus its offset (2 px) at either end of the row: a card

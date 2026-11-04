@@ -26,8 +26,6 @@ export type SlotChooserProps = {
   timeGroupLabel: string
   /** Note under the times. */
   timezoneNote: string
-  /** Extra class put on the day row, so a caller can give the focus ring room inside its scroll box. */
-  daysClassName?: string | undefined
   /**
    * True when the caller wants the chooser to carry the booking flow's step-control anchor: the
    * picked day button then holds `data-booking-focus`, so the flow focuses it when the step opens
@@ -101,7 +99,6 @@ export const SlotChooser = ({
   dayGroupLabel,
   timeGroupLabel,
   timezoneNote,
-  daysClassName,
   focusAnchor,
   onPickDay,
   onPickTime,
@@ -131,13 +128,12 @@ export const SlotChooser = ({
   }, [pickedDayKey])
 
   const pickedDay = days.find((day) => day.key === pickedDayKey) ?? null
-  const rowClassName = daysClassName === undefined ? styles.days : `${styles.days} ${daysClassName}`
 
   return (
     <div className={styles.chooser}>
       <div className={styles.block}>
         <p className={styles.label}>{dayLabel}</p>
-        <div ref={dayRow} className={rowClassName} role="group" aria-label={dayGroupLabel}>
+        <div ref={dayRow} className={styles.days} role="group" aria-label={dayGroupLabel}>
           {days.map((day) => (
             <button
               key={day.key}

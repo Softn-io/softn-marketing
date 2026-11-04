@@ -53,7 +53,6 @@ const renderChooser = (props: Partial<SlotChooserProps> = {}) =>
       dayGroupLabel={TEXT.dayGroupLabel}
       timeGroupLabel={TEXT.timeGroupLabel}
       timezoneNote={TEXT.timezoneNote}
-      daysClassName={props.daysClassName}
       focusAnchor={props.focusAnchor}
       onPickDay={onPickDay}
       onPickTime={onPickTime}
@@ -160,14 +159,6 @@ describe('SlotChooser', () => {
 
     expect(screen.getByRole('group', { name: TEXT.dayGroupLabel })).toBeTruthy()
     expect(screen.queryByRole('group', { name: TEXT.timeGroupLabel })).toBeNull()
-  })
-
-  it('puts the caller class on the day row, beside its own', () => {
-    renderChooser({ daysClassName: 'caller-row-class' })
-
-    const dayGroup = screen.getByRole('group', { name: TEXT.dayGroupLabel })
-    expect(dayGroup.classList.contains('caller-row-class')).toBe(true)
-    expect(dayGroup.className.split(' ')).toHaveLength(2)
   })
 
   it('brings a picked day that sits outside the row back into it', () => {
