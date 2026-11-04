@@ -1498,7 +1498,8 @@ test.describe('booking flow: the chooser day row at 375 px', () => {
      * Every day button is a Tab stop before the times, in DOM order, and focusing each one keeps
      * its card fully inside the row's visible box with room for its ring: the scroll box clips
      * vertically too, so the card must sit at least the ring (2 px) plus its offset (2 px) away
-     * from the row's top and bottom edges — the room the caller's `daysClassName` padding gives.
+     * from the row's top and bottom edges — the room the shared row's own padding gives (4 px
+     * above and at either inline end, 8 px below).
      */
     const dayButtons = await days.getByRole('button').all()
     if (dayButtons[0] === undefined) throw new Error('the mocked horizon offers no day')
@@ -1549,6 +1550,10 @@ test.describe('booking flow: the chooser day row at 375 px', () => {
           bottomRoom: rowBox.bottom - box.bottom,
           left: box.left,
           right: box.right,
+          // The ring draws 2 px wide, 2 px away from the card's box, so the room the row keeps on
+          // each side must reach 4 px for the ring to stay inside on all four sides.
+          leftRoom: box.left - rowBox.left,
+          rightRoom: rowBox.right - box.right,
           rowClientLeft: rowBox.left,
           rowClientRight: rowBox.right,
           scrollLeft: (element.parentElement as HTMLElement).scrollLeft,
@@ -1568,6 +1573,12 @@ test.describe('booking flow: the chooser day row at 375 px', () => {
       }
       expect(ring.topRoom, 'the ring fits above the card inside the scroll box').toBeGreaterThanOrEqual(3.99)
       expect(ring.bottomRoom, 'the ring fits below the card inside the scroll box').toBeGreaterThanOrEqual(3.99)
+      expect(ring.leftRoom, "the ring fits at the card's inline start inside the scroll box").toBeGreaterThanOrEqual(
+        3.99,
+      )
+      expect(ring.rightRoom, "the ring fits at the card's inline end inside the scroll box").toBeGreaterThanOrEqual(
+        3.99,
+      )
       expect(
         ring.left,
         `the focused card sits inside the visible strip (box ${ring.left}..${ring.right}, strip ${ring.rowClientLeft}..${ring.rowClientRight}, scrollLeft ${ring.scrollLeft})`,
@@ -1587,6 +1598,89 @@ test.describe('booking flow: the chooser day row at 375 px', () => {
     expect(calls.slotsCalls).toBe(1)
     expect(calls.bookingCalls).toEqual([])
   })
+})
+
+test.describe('booking flow: the slot step day row, ring inside the row, at 375 and 1280 px, in both themes', () => {
+  const THEME_STORAGE_KEY = 'softn-theme'
+
+  /**
+   * The room the row's own stylesheet reserves for the ring: 4 px above and at either inline end
+   * (2 px ring + 2 px offset), 8 px below. The assertion is the room, so the ring stays inside on
+   * all four sides whatever the theme or the width.
+   */
+  const MIN_ROOM_PX = 3.99
+
+  for (const width of [375, 1280] as const) {
+    test.use({ viewport: { width, height: width === 375 ? 667 : 800 } })
+
+    for (const theme of ['dark', 'light'] as const) {
+      test(`every keyboard-focused day card keeps its ring inside the row at ${width} px (${theme})`, async ({
+        page,
+      }) => {
+        await page.emulateMedia({ colorScheme: theme })
+        await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [
+          THEME_STORAGE_KEY,
+          theme,
+        ] as const)
+
+        await mockBooking(page, {
+          slots: () => ({ status: 200, body: { slots: MANY_SLOTS } }),
+          booking: () => ({ status: 200, body: { booked: true } }),
+        })
+        await page.goto('/preview')
+        await page.getByRole('button', { name: chatbot.suggestions.book }).click()
+        await acceptConsent(page)
+        await answerNeed(page)
+
+        const days = dayRow(page)
+        const cards = await days.getByRole('button').all()
+        if (cards[0] === undefined) throw new Error('the mocked horizon offers no day')
+        // A pointer-opened flow draws no :focus-visible ring on the scripted anchor card; one Tab
+        // press puts the browser in keyboard mode, so the scripted focus that follows draws the
+        // shipped ring on every card, the anchor included.
+        await page.keyboard.press('Tab')
+        for (const card of cards) {
+          await card.evaluate((element) => element.focus())
+          await expect(card).toBeFocused()
+          // The focus scroll animates: read the geometry only once the row's own scroll settled.
+          await card.evaluate(async (element) => {
+            await new Promise<void>((resolve) => {
+              const scroller = element.parentElement
+              if (scroller === null) return resolve()
+              let last = scroller.scrollLeft
+              const tick = (): void => {
+                const now = scroller.scrollLeft
+                if (now === last) return resolve()
+                last = now
+                requestAnimationFrame(tick)
+              }
+              requestAnimationFrame(tick)
+            })
+          })
+          const room = await card.evaluate((element) => {
+            const box = element.getBoundingClientRect()
+            const rowBox = (element.parentElement as HTMLElement).getBoundingClientRect()
+            return {
+              focusVisible: element.matches(':focus-visible'),
+              topRoom: box.top - rowBox.top,
+              bottomRoom: rowBox.bottom - box.bottom,
+              leftRoom: box.left - rowBox.left,
+              rightRoom: rowBox.right - box.right,
+            }
+          })
+          expect(room.focusVisible, 'a Tab-reached card is focus-visible').toBe(true)
+          expect(room.topRoom, 'the ring fits above the card inside the row').toBeGreaterThanOrEqual(MIN_ROOM_PX)
+          expect(room.bottomRoom, 'the ring fits below the card inside the row').toBeGreaterThanOrEqual(MIN_ROOM_PX)
+          expect(room.leftRoom, "the ring fits at the card's inline start inside the row").toBeGreaterThanOrEqual(
+            MIN_ROOM_PX,
+          )
+          expect(room.rightRoom, "the ring fits at the card's inline end inside the row").toBeGreaterThanOrEqual(
+            MIN_ROOM_PX,
+          )
+        }
+      })
+    }
+  }
 })
 
 test.describe('booking flow: accessibility (axe)', () => {

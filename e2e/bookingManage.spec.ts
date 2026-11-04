@@ -800,12 +800,12 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
    * that the manage route ships the shared `SlotChooser` stylesheet unchanged: this suite extracts
    * the module's hashed class names from the page's own stylesheets (the technique the eyebrow
    * contrast test above already uses), builds a probe DOM wearing exactly those classes plus the
-   * same global utility classes the component applies, and compares the computed styles against the
-   * pre-change values pinned from `git` (the declarations the manage module used to carry and that
-   * moved verbatim into `components/booking/SlotChooser/SlotChooser.module.css`). This is a
-   * stylesheet-level check on the manage route, not the live component tree; the live tree stays
-   * covered by the jsdom suite (`components/sections/BookingManage/tests/`). Axe runs on the same
-   * probes, in both themes.
+   * same global utility classes the component applies, and compares the computed styles against
+   * the values Mel validated (the declarations the shared
+   * `components/booking/SlotChooser/SlotChooser.module.css` ships, the day row's 4 px top padding
+   * included). This is a stylesheet-level check on the manage route, not the live component tree;
+   * the live tree stays covered by the jsdom suite (`components/sections/BookingManage/tests/`).
+   * Axe runs on the same probes, in both themes.
    */
 
   /** The machine-checkable WCAG 2.1 A and AA rule tags, same list as the axe describes above. */
@@ -893,6 +893,7 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
     labelIsSecondary: boolean
     daysColumnGap: number
     daysPaddingInline: number
+    daysPaddingBlockStart: number
     daysPaddingBlockEnd: number
     daysMarginInline: number
     daysOverflowX: string
@@ -1088,6 +1089,7 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
         labelIsSecondary: color(label, 'color', '--softn-color-secondary'),
         daysColumnGap: num(days, 'column-gap'),
         daysPaddingInline: num(days, 'padding-left'),
+        daysPaddingBlockStart: num(days, 'padding-top'),
         daysPaddingBlockEnd: num(days, 'padding-bottom'),
         daysMarginInline: num(days, 'margin-left'),
         daysOverflowX: style(days, 'overflow-x'),
@@ -1127,8 +1129,8 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
       return reading
     }, classes)
 
-  /** The pre-change manage values, pinned from the module as #115 shipped them. */
-  const expectPreChangeStyles = async (page: Page, reading: ChooserReading): Promise<void> => {
+  /** The manage values Mel validated, pinned from the shared module as #123 ships it. */
+  const expectValidatedStyles = async (page: Page, reading: ChooserReading): Promise<void> => {
     const width = page.viewportSize()?.width ?? 1280
     // .chooser gap: clamp(--softn-space-6, 4vw, --softn-space-8) = clamp(24px, 4vw, 32px).
     expect(reading.chooserGap, 'chooser gap keeps its clamp').toBeCloseTo(Math.min(Math.max(24, width * 0.04), 32), 1)
@@ -1139,6 +1141,7 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
 
     expect(reading.daysColumnGap, 'day row gap is --softn-space-2 (8px)').toBe(8)
     expect(reading.daysPaddingInline, 'day row inline padding is --softn-space-1 (4px)').toBe(4)
+    expect(reading.daysPaddingBlockStart, 'day row block-start padding is --softn-space-1 (4px)').toBe(4)
     expect(reading.daysPaddingBlockEnd, 'day row block-end padding is --softn-space-2 (8px)').toBe(8)
     expect(reading.daysMarginInline, 'day row inline margin is -1 × --softn-space-1 (-4px)').toBe(-4)
     expect(reading.daysOverflowX, 'the day row scrolls sideways').toBe('auto')
@@ -1188,7 +1191,7 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
 
   for (const theme of ['dark', 'light'] as const) {
     for (const width of [375, 768, 1280] as const) {
-      test(`the chooser stylesheet computes the pre-change manage styles at ${width} px (${theme})`, async ({
+      test(`the chooser stylesheet computes the manage styles Mel validated at ${width} px (${theme})`, async ({
         browser,
       }) => {
         const ctx = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: theme })
@@ -1201,7 +1204,61 @@ test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issu
 
         const classes = await chooserClasses(page)
         const reading = await measureChooser(page, classes)
-        await expectPreChangeStyles(page, reading)
+        await expectValidatedStyles(page, reading)
+
+        await ctx.close()
+      })
+    }
+
+    // The row's stylesheet keeps the room a card's focus ring needs on every side (4 px above and
+    // at either inline end, 8 px below): a keyboard-focused day card must keep that ring — 2 px
+    // wide, drawn 2 px away — fully inside the row's box on all four sides.
+    for (const width of [375, 1280] as const) {
+      test(`a keyboard-focused day card keeps its focus ring inside the row at ${width} px (${theme})`, async ({
+        browser,
+      }) => {
+        const ctx = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: theme })
+        const page: Page = await ctx.newPage()
+        await page.emulateMedia({ colorScheme: theme })
+
+        await page.goto(`/rendez-vous/${tokenFor()}`)
+        await expect(page.getByRole('main')).toBeVisible()
+        await page.evaluate(() => document.fonts.ready)
+
+        const classes = await chooserClasses(page)
+        await measureChooser(page, classes)
+        const probe = page.locator('#slot-chooser-probe')
+        // The day cards sit in the row's group: two day cards, then the times' group wears the
+        // time chips, so the count is scoped to the days.
+        const cards = probe.getByRole('group', { name: 'Jours disponibles' }).getByRole('button')
+        expect(await cards.count(), 'the probe wears two day cards').toBe(2)
+
+        // A plain script focus draws no :focus-visible ring; one Tab press puts the browser in
+        // keyboard mode, so the scripted focus that follows draws the shipped ring.
+        await page.keyboard.press('Tab')
+        for (const card of await cards.all()) {
+          await card.evaluate((element) => element.focus())
+          await expect(card).toBeFocused()
+          const room = await card.evaluate((element) => {
+            const style = getComputedStyle(element)
+            const box = element.getBoundingClientRect()
+            const rowBox = (element.parentElement as HTMLElement).getBoundingClientRect()
+            return {
+              focusVisible: element.matches(':focus-visible'),
+              outlineWidth: Number.parseFloat(style.outlineWidth),
+              topRoom: box.top - rowBox.top,
+              bottomRoom: rowBox.bottom - box.bottom,
+              leftRoom: box.left - rowBox.left,
+              rightRoom: rowBox.right - box.right,
+            }
+          })
+          expect(room.focusVisible, 'the scripted focus draws the ring in keyboard mode').toBe(true)
+          expect(room.outlineWidth, 'the ring is the shipped 2 px').toBe(2)
+          expect(room.topRoom, 'the ring fits above the card inside the row').toBeGreaterThanOrEqual(3.99)
+          expect(room.bottomRoom, 'the ring fits below the card inside the row').toBeGreaterThanOrEqual(3.99)
+          expect(room.leftRoom, "the ring fits at the card's inline start inside the row").toBeGreaterThanOrEqual(3.99)
+          expect(room.rightRoom, "the ring fits at the card's inline end inside the row").toBeGreaterThanOrEqual(3.99)
+        }
 
         await ctx.close()
       })
