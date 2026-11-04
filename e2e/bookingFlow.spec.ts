@@ -17,8 +17,10 @@
  *   no indicator and no delay at all.
  * - A keyboard-only walk through every step, with focus landing on the control of the new step;
  *   Escape, the cancel button and declining the consent return to the conversation with nothing sent.
- * - The slot states: a page of chips (3 to 5), «voir plus de créneaux», an empty horizon, an availability
- *   failure with its retry, and a slot taken that reloads a fresh list.
+ * - The slot states: the day-then-time chooser shared with the manage page (the first day holding a
+ *   free slot preselected, picking another day opens its own times, one tap on a time commits and is
+ *   announced, the day row scrolls sideways at 375 px), an empty horizon, an availability failure
+ *   with its retry, and a slot taken that reloads a fresh list.
  * - The confirmation states: a booking failure with its retry, the invalid e-mail and phone
  *   messages, and the honeypot that stays out of the Tab order.
  * - No personal answer ever reaches `/api/assistant`, including when the visitor asks a question
@@ -49,6 +51,13 @@ import { ASSISTANT_NAME, chatbot } from '../locales/fr/chatbot'
 import { offers } from '../locales/fr/offers'
 import { withAssistantName } from '../components/sections/Agent/data/agentMessages'
 import { findFreeSlots, type BookingSlot } from '../lib/booking/availability'
+import { groupSlotsByDay } from '../lib/booking/days'
+import {
+  formatBookingDayLabel,
+  formatBookingDayLongLabel,
+  formatBookingTimeLabel,
+  formatSlotLabel,
+} from '../lib/booking/labels'
 import { BOOKING_RULES } from '../lib/booking/rules'
 import { BOOKING_TYPING_DELAY_MS } from '../components/sections/Agent/hooks/useBookingFlow'
 
@@ -73,6 +82,64 @@ const SLOTS: readonly BookingSlot[] = findFreeSlots({
   now: new Date('2026-11-02T09:00:00Z'),
   limit: 8,
 })
+
+/** Enough slots to fill the day row past the 375 px chat column: nine working days at four calls. */
+const MANY_SLOTS: readonly BookingSlot[] = findFreeSlots({
+  rules: BOOKING_RULES,
+  busy: [],
+  bookedCallsPerDay: {},
+  now: new Date('2026-11-02T09:00:00Z'),
+  limit: 40,
+})
+
+/** The eight mocked slots folded into the days the chooser shows them under. */
+const SLOT_DAYS = groupSlotsByDay(SLOTS, BOOKING_RULES)
+
+/** One chooser day as the tests read it: its key, its two labels and its time labels. */
+type SlotDay = {
+  readonly key: string
+  /** Long label («mardi 3 novembre»), as the «Heure · {day}» heading and the time group carry it. */
+  readonly long: string
+  /** Visible text of a day card («mar 3 nov»), which is also its accessible name (no aria-label). */
+  readonly short: string
+  readonly times: readonly string[]
+  readonly starts: readonly string[]
+}
+
+/** The two days the eight mocked slots span, with the labels and times the component renders. */
+const slotDayOf = (group: (typeof SLOT_DAYS)[number]): SlotDay => {
+  const parts = formatBookingDayLabel(group.key, BOOKING_RULES)
+  if (parts === null) throw new Error(`the mocked day ${group.key} has no visible label parts`)
+  return {
+    key: group.key,
+    long: formatBookingDayLongLabel(group.key, BOOKING_RULES),
+    short: `${parts.weekday} ${parts.day} ${parts.month}`,
+    times: group.slots.map((slot) => formatBookingTimeLabel(slot.start, BOOKING_RULES)),
+    starts: group.slots.map((slot) => slot.start),
+  }
+}
+
+/** Time label at one index of a chooser day, failing loudly when the fixture holds fewer times. */
+const timeLabelOf = (day: SlotDay, index: number): string => {
+  const label = day.times[index]
+  if (label === undefined) throw new Error(`day ${day.key} holds no time ${index}`)
+  return label
+}
+
+/** Slot start at one index of a chooser day, failing loudly the same way. */
+const startOf = (day: SlotDay, index: number): string => {
+  const start = day.starts[index]
+  if (start === undefined) throw new Error(`day ${day.key} holds no slot ${index}`)
+  return start
+}
+
+/** The mocked slot starting at one index of a chooser day, for the labels the flow renders. */
+const slotAt = (day: SlotDay, index: number): BookingSlot => {
+  const start = startOf(day, index)
+  const slot = SLOTS.find((candidate) => candidate.start === start)
+  if (slot === undefined) throw new Error(`the mocked slots hold no slot starting at ${start}`)
+  return slot
+}
 
 /** One answer of a mocked endpoint: a status and a body. */
 type MockAnswer = { status: number; body: unknown }
@@ -111,8 +178,29 @@ const assistantSection = (page: Page): Locator => page.locator(`section#${SECTIO
 /** The flow region, named by the locale like the chip that opens it (`BookingFlow.tsx`). */
 const bookingRegion = (page: Page): Locator => page.getByRole('region', { name: chatbot.suggestions.book })
 
-/** One slot chip of the slot step (`BookingSlots.tsx`). */
+/** One time button of the slot step's chooser, named by its start instant (`SlotChooser.tsx`). */
 const slotChip = (page: Page): Locator => bookingRegion(page).locator('[data-booking-slot]')
+
+/** The chooser's day row, named by the locale like the manage page (`SlotChooser.tsx`). */
+const dayRow = (page: Page): Locator =>
+  bookingRegion(page).getByRole('group', { name: chatbot.booking.slots.dayGroupLabel })
+
+/** The times of one day, whose accessible name carries that day's long label (`SlotChooser.tsx`). */
+const timeRow = (page: Page, day: SlotDay): Locator =>
+  bookingRegion(page).getByRole('group', {
+    name: interpolate(chatbot.booking.slots.timeGroupLabel, { day: day.long }),
+  })
+
+/** Reads one grouped day of the mocked slots, failing loudly when the fixture spans fewer days. */
+const slotDayAt = (index: number): SlotDay => {
+  const group = SLOT_DAYS[index]
+  if (group === undefined) throw new Error(`the mocked slots span no day ${index}`)
+  return slotDayOf(group)
+}
+
+/** The two days the eight mocked slots span: «mardi 3 novembre», then «jeudi 5 novembre». */
+const FIRST_DAY = slotDayAt(0)
+const SECOND_DAY = slotDayAt(1)
 
 /** The conversation list, named by the locale with the assistant name interpolated. */
 const conversationList = (page: Page): Locator =>
@@ -214,9 +302,8 @@ const answerNeed = async (page: Page): Promise<void> => {
   await expect(slotChip(page).first()).toBeVisible()
 }
 
-/** Picks the first slot chip, then answers the identity questions up to the recap. */
-const answerIdentity = async (page: Page): Promise<void> => {
-  await slotChip(page).first().click()
+/** Answers the identity questions from the first name up to the recap, with the slot already picked. */
+const answerIdentityFields = async (page: Page): Promise<void> => {
   await page.getByLabel(chatbot.booking.steps.firstName.field).fill(ANSWERS.firstName)
   await bookingRegion(page).getByRole('button', { name: 'Envoyer' }).click()
   await page.getByLabel(chatbot.booking.steps.lastName.field).fill(ANSWERS.lastName)
@@ -230,6 +317,12 @@ const answerIdentity = async (page: Page): Promise<void> => {
   await bookingRegion(page).getByRole('button', { name: 'PME' }).click()
   await bookingRegion(page).getByRole('button', { name: 'Dirigeant' }).click()
   await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.recap.title })).toBeVisible()
+}
+
+/** Picks the first time of the preselected day, then answers the identity questions up to the recap. */
+const answerIdentity = async (page: Page): Promise<void> => {
+  await slotChip(page).first().click()
+  await answerIdentityFields(page)
 }
 
 /**
@@ -647,7 +740,11 @@ test.describe('booking flow: pacing', () => {
 
       // The visitor scrolls back to the top; the next message must bring the page back down. The
       // click is dispatched, not clicked, so Playwright's own auto-scroll cannot fake the return.
+      // The scroll settles before the position is read: the document's smooth scrolling animates,
+      // and a mid-flight read would pin the walk to a position the shorter next step can no longer
+      // reach (the chooser step is taller than the field steps).
       await page.evaluate(() => window.scrollTo(0, 0))
+      await waitScrollSettled()
       const preChip = await page.evaluate(() => window.scrollY)
       await slotChip(page).first().dispatchEvent('click')
       await expect(page.getByLabel(chatbot.booking.steps.firstName.field)).toBeVisible()
@@ -684,7 +781,9 @@ test.describe('booking flow: pacing', () => {
 
       // Scroll to the top once more before confirming: the flow must bring the visitor back. The
       // click is dispatched, not clicked, so Playwright's own auto-scroll cannot fake the return.
+      // As above, the smooth scroll settles before the position is read.
       await page.evaluate(() => window.scrollTo(0, 0))
+      await waitScrollSettled()
       const preConfirm = await page.evaluate(() => window.scrollY)
       await bookingRegion(page).getByRole('button', { name: chatbot.booking.recap.confirm }).dispatchEvent('click')
       await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.success.title })).toBeVisible()
@@ -738,13 +837,15 @@ test.describe('booking flow: keyboard-only walk', () => {
     await page.keyboard.press('Enter')
     await expect(page.getByLabel(chatbot.booking.steps.need.field)).toBeFocused()
 
-    // Enter submits the need; the flow shows the slots and the container takes focus.
+    // Enter submits the need; the flow shows the slots and the pressed day card takes the focus,
+    // like the control of every other step (the chooser's focus anchor is the preselected card).
     await page.keyboard.type(ANSWERS.need)
     await page.keyboard.press('Enter')
     await expect(slotChip(page).first()).toBeVisible()
-    await expect(bookingRegion(page)).toBeFocused()
+    await expect(dayRow(page).getByRole('button', { name: FIRST_DAY.short })).toBeFocused()
 
-    // Tab reaches the first slot chip; Enter picks it and focus moves to the first name field.
+    // Tab walks the day cards into the times; Enter picks the first time and focus moves to the
+    // first name field.
     await tabUntilFocused(page, slotChip(page).first())
     await page.keyboard.press('Enter')
     await expect(page.getByLabel(chatbot.booking.steps.firstName.field)).toBeFocused()
@@ -904,26 +1005,70 @@ test.describe('booking flow: assistant privacy', () => {
 test.describe('booking flow: slot and booking states', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
 
-  test('shows a page of 3 to 5 chips, then the rest behind «voir plus de créneaux», and books the pick', async ({
-    page,
-  }) => {
+  test('preselects the first day holding a free slot, and another day opens its own times', async ({ page }) => {
     const calls = await mockHappyPath(page)
     await page.goto('/preview')
     await page.getByRole('button', { name: chatbot.suggestions.book }).click()
     await acceptConsent(page)
     await answerNeed(page)
 
-    // BOOKING_SLOTS_PAGE_SIZE is 4: a page the proposal allows (3 to 5 chips).
-    await expect(slotChip(page)).toHaveCount(4)
-    const more = bookingRegion(page).getByRole('button', { name: chatbot.booking.slots.more })
-    await expect(more).toBeVisible()
+    // The eight mocked slots span two days (mardi 3, jeudi 5): the fixture must keep spanning both,
+    // or the preselection and the day switch below lose their meaning.
+    expect(SLOT_DAYS, 'the mocked slots span two days').toHaveLength(2)
 
-    await more.click()
-    await expect(slotChip(page)).toHaveCount(SLOTS.length)
-    await expect(bookingRegion(page).getByRole('button', { name: chatbot.booking.slots.more })).toHaveCount(0)
+    // The first day holding a free slot is pressed without a click, and only its times show, with
+    // no paging control left: every free time of the day is on screen at once (the proposal's
+    // «voir plus de créneaux» key no longer exists to render).
+    const days = dayRow(page)
+    const firstDay = days.getByRole('button', { name: FIRST_DAY.short })
+    const secondDay = days.getByRole('button', { name: SECOND_DAY.short })
+    await expect(firstDay).toHaveAttribute('aria-pressed', 'true')
+    await expect(secondDay).toHaveAttribute('aria-pressed', 'false')
 
-    // A picked slot reaches the recap and books, once.
-    await answerIdentity(page)
+    const firstTimes = timeRow(page, FIRST_DAY)
+    await expect(firstTimes).toBeVisible()
+    await expect(firstTimes.getByRole('button', { name: timeLabelOf(FIRST_DAY, 0) })).toBeVisible()
+    await expect(slotChip(page)).toHaveCount(FIRST_DAY.times.length)
+    await expect(bookingRegion(page)).toContainText(
+      interpolate(chatbot.booking.slots.timeLabel, { day: FIRST_DAY.long }),
+    )
+
+    // Picking the other day presses it, closes the first day's times and opens its own under its
+    // own interpolated label.
+    await secondDay.click()
+    await expect(secondDay).toHaveAttribute('aria-pressed', 'true')
+    await expect(firstDay).toHaveAttribute('aria-pressed', 'false')
+    await expect(timeRow(page, FIRST_DAY)).toHaveCount(0)
+    const secondTimes = timeRow(page, SECOND_DAY)
+    await expect(secondTimes).toBeVisible()
+    await expect(secondTimes.getByRole('button', { name: timeLabelOf(SECOND_DAY, 0) })).toBeVisible()
+    await expect(slotChip(page)).toHaveCount(SECOND_DAY.times.length)
+    await expect(bookingRegion(page)).toContainText(
+      interpolate(chatbot.booking.slots.timeLabel, { day: SECOND_DAY.long }),
+    )
+    expect(calls.slotsCalls).toBe(1)
+    expect(calls.bookingCalls).toEqual([])
+  })
+
+  test('one tap on a time commits the slot, announces it on the live transcript, and books it', async ({ page }) => {
+    const calls = await mockHappyPath(page)
+    await page.goto('/preview')
+    await page.getByRole('button', { name: chatbot.suggestions.book }).click()
+    await acceptConsent(page)
+    await answerNeed(page)
+
+    // One tap on a time of the preselected day: the flow moves on to the identity steps at once,
+    // and the picked slot becomes the visitor's own line on the `aria-live` transcript.
+    const picked = timeRow(page, FIRST_DAY).getByRole('button', { name: timeLabelOf(FIRST_DAY, 1) })
+    await picked.click()
+    await expect(page.getByLabel(chatbot.booking.steps.firstName.field)).toBeVisible()
+    // The picked slot is announced on the `aria-live` transcript as the visitor's own line — it is
+    // on the transcript from the tap on, even while the flow already writes the next question.
+    const announced = flowLines(page).getByText(formatSlotLabel(slotAt(FIRST_DAY, 1), BOOKING_RULES))
+    await expect(announced.first()).toBeVisible()
+
+    // The committed slot is the one the flow books, once, at the recap.
+    await answerIdentityFields(page)
     await bookingRegion(page).getByRole('button', { name: chatbot.booking.recap.confirm }).click()
     await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.success.title })).toBeVisible()
 
@@ -931,7 +1076,7 @@ test.describe('booking flow: slot and booking states', () => {
     const body = calls.bookingCalls[0]?.body as Record<string, unknown>
     expect(body['need']).toBe(ANSWERS.need)
     expect(body['email']).toBe(ANSWERS.email)
-    expect(body['slot']).toBe(SLOTS[0]?.start)
+    expect(body['slot']).toBe(startOf(FIRST_DAY, 1))
     // The client never declares when the consent was given: the server stamps the instant itself.
     expect(JSON.stringify(body), 'the booking body carries no consentAt').not.toContain('consentAt')
   })
@@ -944,13 +1089,15 @@ test.describe('booking flow: slot and booking states', () => {
     await page.goto('/preview')
     await page.getByRole('button', { name: chatbot.suggestions.book }).click()
     await acceptConsent(page)
-    // The need is submitted without waiting for chips: the horizon is empty by design here.
+    // The need is submitted without waiting for the chooser: the horizon is empty by design here.
     await page.getByLabel(chatbot.booking.steps.need.field).fill(ANSWERS.need)
     await bookingRegion(page).getByRole('button', { name: 'Envoyer' }).click()
 
-    // The empty horizon is its own state, whose `{contactPageLink}` renders as the contact link.
+    // The empty horizon is its own state, whose `{contactPageLink}` renders as the contact link,
+    // and the chooser is not rendered at all.
     await expect(bookingRegion(page)).toContainText(filled(chatbot.booking.slots.none))
     await expect(slotChip(page)).toHaveCount(0)
+    await expect(dayRow(page)).toHaveCount(0)
     expect(calls.slotsCalls).toBe(1)
     expect(calls.bookingCalls).toEqual([])
   })
@@ -994,18 +1141,25 @@ test.describe('booking flow: slot and booking states', () => {
     await acceptConsent(page)
     await answerNeed(page)
 
-    const firstChip = await slotChip(page).first().textContent()
-    await answerIdentity(page)
+    // The visitor picks the first time of the preselected day and confirms; the slot was taken
+    // meanwhile, so the confirmation loses with the slot-taken answer.
+    await timeRow(page, FIRST_DAY)
+      .getByRole('button', { name: timeLabelOf(FIRST_DAY, 0) })
+      .click()
+    await answerIdentityFields(page)
     await bookingRegion(page).getByRole('button', { name: chatbot.booking.recap.confirm }).click()
 
     await expect(bookingRegion(page)).toContainText(chatbot.error.slotTaken)
     await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.success.title })).toHaveCount(0)
 
-    // A fresh list is loaded again, and the visitor picks a new slot to finish the booking.
-    await expect(slotChip(page).first()).toBeVisible()
-    const freshChip = await slotChip(page).first().textContent()
-    expect(freshChip).not.toBe(firstChip)
-    await expect(slotChip(page)).toHaveCount(4)
+    // A fresh list is loaded again, and it starts again on its (emptier) first day: the taken time
+    // is gone, the day opens on its next one, with one time fewer than before.
+    const freshTimes = timeRow(page, FIRST_DAY)
+    await expect(freshTimes).toBeVisible()
+    await expect(freshTimes.getByRole('button', { name: timeLabelOf(FIRST_DAY, 0) })).toHaveCount(0)
+    await expect(freshTimes.getByRole('button', { name: timeLabelOf(FIRST_DAY, 1) })).toBeVisible()
+    await expect(slotChip(page)).toHaveCount(FIRST_DAY.times.length - 1)
+    expect(calls.slotsCalls).toBe(2)
   })
 
   test('a booking failure keeps the recap, and the retry confirms on the second attempt', async ({ page }) => {
@@ -1308,31 +1462,166 @@ test.describe('booking flow: slot and booking states', () => {
   })
 })
 
-test.describe('booking flow: accessibility (axe)', () => {
-  test.use({ viewport: { width: 1280, height: 800 } })
+test.describe('booking flow: the chooser day row at 375 px', () => {
+  test.use({ viewport: { width: 375, height: 667 } })
 
-  test('the assistant section is free of critical and serious violations, idle and with the flow open', async ({
+  test('the day row scrolls sideways in the chat column, and every day is reachable by keyboard with a visible, unclipped ring', async ({
     page,
   }) => {
-    const calls = await mockHappyPath(page)
+    const calls = await mockBooking(page, {
+      slots: () => ({ status: 200, body: { slots: MANY_SLOTS } }),
+      booking: () => ({ status: 200, body: { booked: true } }),
+    })
     await page.goto('/preview')
-
-    // The scan is scoped to the assistant section: the whole page is Lighthouse's accessibility
-    // category, this test pins the section the booking flow lives in.
-    const scan = async (): Promise<string[]> =>
-      (await new AxeBuilder({ page }).include(`#${SECTION_IDS.agent}`).analyze()).violations
-        .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
-        .map((violation) => `${violation.id} (${violation.impact})`)
-
-    expect(await scan(), 'idle conversation').toEqual([])
-
     await page.getByRole('button', { name: chatbot.suggestions.book }).click()
     await acceptConsent(page)
     await answerNeed(page)
 
-    expect(await scan(), 'flow open on the slot step').toEqual([])
-    expect(calls.assistantCalls).toEqual([])
+    const days = dayRow(page)
+    await expect(days).toBeVisible()
+
+    // The row overflows sideways and scrolls itself: more day cards than the narrow chat column
+    // shows, and no horizontal scroll gained on the page itself.
+    const row = await days.evaluate((element) => ({
+      scrollWidth: element.scrollWidth,
+      clientWidth: element.clientWidth,
+      overflowX: getComputedStyle(element).overflowX,
+    }))
+    expect(row.scrollWidth, 'the day row holds more days than the column shows').toBeGreaterThan(row.clientWidth)
+    expect(row.overflowX, 'the day row scrolls itself').toBe('auto')
+    const pageOverflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    )
+    expect(pageOverflow, 'the page itself gains no horizontal scroll').toBeLessThanOrEqual(1)
+
+    /**
+     * Every day button is a Tab stop before the times, in DOM order, and focusing each one keeps
+     * its card fully inside the row's visible box with room for its ring: the scroll box clips
+     * vertically too, so the card must sit at least the ring (2 px) plus its offset (2 px) away
+     * from the row's top and bottom edges — the room the caller's `daysClassName` padding gives.
+     */
+    const dayButtons = await days.getByRole('button').all()
+    if (dayButtons[0] === undefined) throw new Error('the mocked horizon offers no day')
+    expect(dayButtons.length, 'the mocked horizon offers many days').toBeGreaterThan(3)
+    // The pressed day card takes the focus when the step opens (the chooser's focus anchor), so the
+    // walk starts on it and Tabs from card to card, in DOM order, ahead of the times.
+    await expect(days.getByRole('button', { name: FIRST_DAY.short })).toBeFocused()
+    for (const [index, day] of dayButtons.entries()) {
+      if (index > 0) await page.keyboard.press('Tab')
+      await expect(day).toBeFocused()
+      // The focus scroll animates: read the geometry only once the row's own scroll has settled.
+      await day.evaluate(async (element) => {
+        await new Promise<void>((resolve) => {
+          const scroller = element.parentElement
+          if (scroller === null) return resolve()
+          let last = scroller.scrollLeft
+          const tick = (): void => {
+            const now = scroller.scrollLeft
+            if (now === last) return resolve()
+            last = now
+            requestAnimationFrame(tick)
+          }
+          requestAnimationFrame(tick)
+        })
+      })
+      const ring = await day.evaluate((element) => {
+        const pixel = (color: string): string => {
+          const canvas = document.createElement('canvas')
+          canvas.width = canvas.height = 1
+          const context = canvas.getContext('2d')
+          if (context === null) throw new Error('no canvas context')
+          context.fillStyle = color
+          context.fillRect(0, 0, 1, 1)
+          return `${context.getImageData(0, 0, 1, 1).data}`
+        }
+        const style = getComputedStyle(element)
+        const box = element.getBoundingClientRect()
+        const rowBox = (element.parentElement as HTMLElement).getBoundingClientRect()
+        return {
+          focusVisible: element.matches(':focus-visible'),
+          outlineStyle: style.outlineStyle,
+          outlineWidth: Number.parseFloat(style.outlineWidth),
+          outlinePixel: pixel(style.outlineColor),
+          activeBorderPixel: pixel(
+            getComputedStyle(document.documentElement).getPropertyValue('--softn-border-active'),
+          ),
+          topRoom: box.top - rowBox.top,
+          bottomRoom: rowBox.bottom - box.bottom,
+          left: box.left,
+          right: box.right,
+          rowClientLeft: rowBox.left,
+          rowClientRight: rowBox.right,
+          scrollLeft: (element.parentElement as HTMLElement).scrollLeft,
+        }
+      })
+      // This walk opens the flow with the pointer, so the pressed card's own focus comes from
+      // script and draws no :focus-visible ring — the platform's rule, and the ring a keyboard
+      // visitor sees on it is asserted by the keyboard-only walk. Every card reached by Tab must
+      // ring, and no focused card's box may clip.
+      if (index === 0) {
+        expect(ring.focusVisible, 'the pointer-opened anchor card draws no ring until a keyboard reach').toBe(false)
+      } else {
+        expect(ring.focusVisible, 'a Tab-reached card is focus-visible').toBe(true)
+        expect(ring.outlineStyle, 'keyboard focus draws the ring').toBe('solid')
+        expect(ring.outlineWidth, 'the ring is at least 2 px').toBeGreaterThanOrEqual(2)
+        expect(ring.outlinePixel, 'the ring paints the active border token').toBe(ring.activeBorderPixel)
+      }
+      expect(ring.topRoom, 'the ring fits above the card inside the scroll box').toBeGreaterThanOrEqual(3.99)
+      expect(ring.bottomRoom, 'the ring fits below the card inside the scroll box').toBeGreaterThanOrEqual(3.99)
+      expect(
+        ring.left,
+        `the focused card sits inside the visible strip (box ${ring.left}..${ring.right}, strip ${ring.rowClientLeft}..${ring.rowClientRight}, scrollLeft ${ring.scrollLeft})`,
+      ).toBeGreaterThanOrEqual(ring.rowClientLeft - 1)
+      expect(
+        ring.right,
+        `the focused card sits inside the visible strip (box ${ring.left}..${ring.right}, strip ${ring.rowClientLeft}..${ring.rowClientRight}, scrollLeft ${ring.scrollLeft})`,
+      ).toBeLessThanOrEqual(ring.rowClientRight + 1)
+    }
+
+    // Tabbing to the farthest card really moved the row: the strip scrolled sideways, and the first
+    // time button of the preselected day follows the days in the Tab order.
+    const scrollLeft = await days.evaluate((element) => element.scrollLeft)
+    expect(scrollLeft, 'keyboard focus scrolled the day row sideways').toBeGreaterThan(0)
+    await page.keyboard.press('Tab')
+    await expect(slotChip(page).first()).toBeFocused()
+    expect(calls.slotsCalls).toBe(1)
+    expect(calls.bookingCalls).toEqual([])
   })
+})
+
+test.describe('booking flow: accessibility (axe)', () => {
+  test.use({ viewport: { width: 1280, height: 800 } })
+
+  /** localStorage key the inline theme script reads; same contract as `e2e/accessibility.spec.ts`. */
+  const THEME_STORAGE_KEY = 'softn-theme'
+
+  for (const theme of ['dark', 'light'] as const) {
+    test(`the assistant section is free of critical and serious violations, idle and with the flow open (${theme})`, async ({
+      page,
+    }) => {
+      // The theme is forced the way the site's own theme script consumes it, before navigation.
+      await page.emulateMedia({ colorScheme: theme })
+      await page.addInitScript(([key, value]) => localStorage.setItem(key, value), [THEME_STORAGE_KEY, theme] as const)
+      const calls = await mockHappyPath(page)
+      await page.goto('/preview')
+
+      // The scan is scoped to the assistant section: the whole page is Lighthouse's accessibility
+      // category, this test pins the section the booking flow lives in.
+      const scan = async (): Promise<string[]> =>
+        (await new AxeBuilder({ page }).include(`#${SECTION_IDS.agent}`).analyze()).violations
+          .filter((violation) => violation.impact === 'critical' || violation.impact === 'serious')
+          .map((violation) => `${violation.id} (${violation.impact})`)
+
+      expect(await scan(), `idle conversation (${theme})`).toEqual([])
+
+      await page.getByRole('button', { name: chatbot.suggestions.book }).click()
+      await acceptConsent(page)
+      await answerNeed(page)
+
+      expect(await scan(), `flow open on the slot step (${theme})`).toEqual([])
+      expect(calls.assistantCalls).toEqual([])
+    })
+  }
 })
 
 test.describe('booking flow: themes and reduced motion', () => {
@@ -1347,7 +1636,7 @@ test.describe('booking flow: themes and reduced motion', () => {
     await expect(bookingRegion(page)).toBeVisible()
     await acceptConsent(page)
     await answerNeed(page)
-    await expect(slotChip(page)).toHaveCount(4)
+    await expect(slotChip(page)).toHaveCount(FIRST_DAY.times.length)
     expect(calls.bookingCalls).toEqual([])
   })
 
@@ -1359,10 +1648,14 @@ test.describe('booking flow: themes and reduced motion', () => {
     await acceptConsent(page)
     await answerNeed(page)
 
-    const chipTransition = await slotChip(page)
-      .first()
-      .evaluate((element) => getComputedStyle(element).transition)
-    expect(chipTransition, 'the slot chip transition is none under reduced motion').toBe('none')
+    const dayCard = dayRow(page).getByRole('button', { name: FIRST_DAY.short })
+    for (const [label, control] of [
+      ['day card', dayCard],
+      ['time chip', slotChip(page).first()],
+    ] as const) {
+      const transition = await control.evaluate((element) => getComputedStyle(element).transition)
+      expect(transition, `the ${label} transition is none under reduced motion`).toBe('none')
+    }
     expect(calls.bookingCalls).toEqual([])
   })
 })
@@ -1385,13 +1678,10 @@ test.describe('booking flow: spacing on the section rhythm (Mel)', () => {
     recapGap: clampPx(20, 3.4, 32, width),
     recapListGap: 16,
     recapRowPaddingBlockEnd: 16,
-    // The chips row and the chips themselves.
-    chipsRowGap: 16,
-    chipsColumnGap: 24,
-    chipPaddingBlock: 8,
-    chipPaddingInline: 20,
-    // The «voir plus de créneaux» control, now a chip inside the slot list.
-    morePaddingBlockEnd: 8,
+    // The chooser's day row and times grid: the shared slot chooser gaps.
+    dayRowGap: 8,
+    timesGap: 8,
+    timeBlockSize: 52,
     // The input row of a text step: its bottom padding keeps the underline readable.
     inputRowPaddingBlockEnd: 12,
   })
@@ -1415,19 +1705,25 @@ test.describe('booking flow: spacing on the section rhythm (Mel)', () => {
       // The flow's elements are selected by structure, not by hashed CSS-module class.
       const step = root.querySelector('ol + div')
       const form = root.querySelector('ol + div form')
-      const chipsList = root.querySelector('ul[aria-label="Créneaux disponibles"]')
-      const recap = root.querySelector('ol + div > div')
+      const dayRowElement = root.querySelector('[role="group"][aria-label="Jours disponibles"]')
+      const dayButton = dayRowElement?.querySelector('button')
+      const timesRow = root.querySelector('[role="group"][aria-label^="Heures disponibles"]')
+      const timeButton = timesRow?.querySelector('button')
+      // The recap div directly holds the rows `ul`; the chooser div of the slot step holds none,
+      // so the `:has` keeps the recap readings off the chooser's own gap.
+      const recap = root.querySelector('ol + div > div:has(> ul)')
       return {
         flowGap: px(root, 'gap'),
         transcriptGap: px(root.querySelector('ol'), 'gap'),
         stepGap: px(step, 'gap'),
         fieldGap: px(form, 'gap'),
         inputRowPaddingBlockEnd: px(form?.querySelector('div'), 'padding-block-end'),
-        chipsRowGap: px(chipsList, 'row-gap'),
-        chipsColumnGap: px(chipsList, 'column-gap'),
-        chipPaddingBlock: px(chipsList?.querySelector('button'), 'padding-block-end'),
-        chipPaddingInline: px(chipsList?.querySelector('button'), 'padding-inline-start'),
-        morePaddingBlockEnd: px(root.querySelector('[data-booking-more]'), 'padding-block-end'),
+        dayRowGap: px(dayRowElement, 'column-gap'),
+        timesGap: px(timesRow, 'column-gap'),
+        timeBlockSize: timeButton == null ? null : timeButton.getBoundingClientRect().height,
+        // The day card width is kept out of the token audit on purpose: its 68 px (4.25rem) is the
+        // manage page's own historical value, reported to Mel rather than asserted here.
+        dayInlineSize: dayButton == null ? null : dayButton.getBoundingClientRect().width,
         recapGap: px(recap, 'gap'),
         recapListGap: px(recap?.querySelector('ul'), 'gap'),
         recapRowPaddingBlockEnd: px(recap?.querySelector('li'), 'padding-block-end'),
@@ -1731,25 +2027,19 @@ test.describe("booking flow: Mel's review of the consent, the chips, the recap a
       'the skip control is vertically aligned with the send button',
     ).toBeLessThanOrEqual(2)
 
-    // 6: «voir plus de créneaux» joins the chips, in the same row flow rather than on its own line.
+    // 6: the recap's slot row reopens the day-then-time chooser: the preselected day row and the
+    // full list of that day's times are back, with no paging control left to place (the proposal's
+    // «voir plus de créneaux» key no longer exists to render).
     await skip.click()
     await bookingRegion(page).getByRole('button', { name: 'PME' }).click()
     await bookingRegion(page).getByRole('button', { name: 'Dirigeant' }).click()
     await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.recap.title })).toBeVisible()
 
     await editAnswer(page, chatbot.booking.steps.slot.field)
-    await expect(slotChip(page)).toHaveCount(4)
-    const more = bookingRegion(page).locator('ul > li > [data-booking-more]')
-    await expect(more, 'the «voir plus de créneaux» control is a chip of the slot list').toHaveCount(1)
-    const chipBoxes = await Promise.all((await slotChip(page).all()).map((chip) => chip.boundingBox()))
-    const moreBox = await more.boundingBox()
-    expect(moreBox).not.toBeNull()
-    const moreRect = moreBox as { y: number; height: number }
-    const centres = chipBoxes.filter((box) => box !== null).map((box) => box.y + box.height / 2)
-    expect(
-      centres.some((centre) => Math.abs(centre - (moreRect.y + moreRect.height / 2)) <= 2),
-      'the control shares one of the chips rows',
-    ).toBe(true)
+    const reopenedDays = dayRow(page)
+    await expect(reopenedDays.getByRole('button', { name: FIRST_DAY.short })).toHaveAttribute('aria-pressed', 'true')
+    await expect(slotChip(page)).toHaveCount(FIRST_DAY.times.length)
+    await expect(timeRow(page, FIRST_DAY).getByRole('button', { name: timeLabelOf(FIRST_DAY, 0) })).toBeVisible()
     expect(calls.bookingCalls).toEqual([])
   })
 
@@ -2503,33 +2793,67 @@ test.describe('booking flow: token fidelity (4a-1)', () => {
       'progress label color is --softn-brand-foreground',
     ).toBe(true)
 
-    // The slot step: the chips list, a slot chip and the timezone note.
+    // The slot step: the shared chooser — the day row, a day card with its number, a time chip and
+    // the timezone note (the same stylesheet the manage page ships).
     await answerNeed(page)
-    const chipsList = step.locator('ul').first()
-    const chip = region.locator('[data-booking-slot]').first()
-    const timezoneNote = step.locator('p').nth(1)
-    expect(Number.parseFloat(await styleOf(chipsList, 'row-gap')), 'chips row gap is --softn-space-4 (16px)').toBe(16)
+    const dayGroup = region.getByRole('group', { name: chatbot.booking.slots.dayGroupLabel })
+    const pickedCard = dayGroup.getByRole('button', { name: FIRST_DAY.short })
+    const otherCard = dayGroup.getByRole('button', { name: SECOND_DAY.short })
+    const dayNumber = pickedCard.locator('span').nth(1)
+    const timesGroup = timeRow(page, FIRST_DAY)
+    const timeChip = timesGroup.getByRole('button', { name: timeLabelOf(FIRST_DAY, 0) })
+    const timezoneNote = region.getByText(chatbot.booking.slots.timezoneNote)
+    expect(Number.parseFloat(await styleOf(dayGroup, 'column-gap')), 'day row gap is --softn-space-2 (8px)').toBe(8)
+    expect(Number.parseFloat(await styleOf(timesGroup, 'column-gap')), 'times gap is --softn-space-2 (8px)').toBe(8)
+    expect(PACKAGE_RADII, 'day card radius is --softn-radius-lg (16px)').toContain(
+      Number.parseFloat(await styleOf(pickedCard, 'border-radius')),
+    )
     expect(
-      Number.parseFloat(await styleOf(chipsList, 'column-gap')),
-      'chips column gap is --softn-space-6 (24px)',
-    ).toBe(24)
-    expect(
-      Number.parseFloat(await styleOf(chip, 'padding-block-end')),
-      'chip padding-block is --softn-space-2 (8px)',
-    ).toBe(8)
-    expect(
-      Number.parseFloat(await styleOf(chip, 'padding-inline-start')),
-      'chip padding-inline is --softn-space-5 (20px)',
-    ).toBe(20)
-    expect(PACKAGE_RADII, 'chip radius is pill').toContain(Number.parseFloat(await styleOf(chip, 'border-radius')))
-    expect(Number.parseFloat(await styleOf(chip, 'font-size')), 'slot chip is body-md (16px)').toBe(16)
-    expect(
-      await sameColor(page, await styleOf(chip, 'color'), await tokenValue(page, '--softn-color-secondary')),
-      'slot chip text color is --softn-color-secondary',
+      await sameColor(
+        page,
+        await styleOf(pickedCard, 'border-top-color'),
+        await tokenValue(page, '--softn-brand-vivid'),
+      ),
+      'picked day card border is --softn-brand-vivid',
     ).toBe(true)
     expect(
-      await sameColor(page, await styleOf(chip, 'border-top-color'), await tokenValue(page, '--softn-border-default')),
-      'slot chip border is --softn-border-default',
+      await sameColor(
+        page,
+        await styleOf(pickedCard, 'background-color'),
+        await tokenValue(page, '--softn-brand-background'),
+      ),
+      'picked day card background is --softn-brand-background',
+    ).toBe(true)
+    expect(
+      await sameColor(
+        page,
+        await styleOf(otherCard, 'border-top-color'),
+        await tokenValue(page, '--softn-border-default'),
+      ),
+      'unpicked day card border is --softn-border-default',
+    ).toBe(true)
+    expect(
+      await sameColor(page, await styleOf(pickedCard, 'color'), await tokenValue(page, '--softn-color')),
+      'day card color is --softn-color',
+    ).toBe(true)
+    expect(Number.parseFloat(await styleOf(dayNumber, 'font-size')), 'day number is title-lg (24px)').toBe(24)
+    expect(Number.parseFloat(await styleOf(dayNumber, 'font-weight')), 'day number weight is title-lg (800)').toBe(800)
+    expect(Number.parseFloat(await styleOf(timeChip, 'height')), 'time chip height is --softn-size-lg (52px)').toBe(52)
+    expect(PACKAGE_RADII, 'time chip radius is pill').toContain(
+      Number.parseFloat(await styleOf(timeChip, 'border-radius')),
+    )
+    expect(Number.parseFloat(await styleOf(timeChip, 'font-size')), 'time chip is body-md (16px)').toBe(16)
+    expect(
+      await sameColor(page, await styleOf(timeChip, 'color'), await tokenValue(page, '--softn-color')),
+      'time chip color is --softn-color',
+    ).toBe(true)
+    expect(
+      await sameColor(
+        page,
+        await styleOf(timeChip, 'border-top-color'),
+        await tokenValue(page, '--softn-border-default'),
+      ),
+      'time chip border is --softn-border-default',
     ).toBe(true)
     expect(Number.parseFloat(await styleOf(timezoneNote, 'font-size')), 'timezone note is body-sm (14px)').toBe(14)
     expect(

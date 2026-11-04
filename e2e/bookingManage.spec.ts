@@ -791,3 +791,443 @@ test.describe('rendez-vous page: design tokens (4a-1)', () => {
     }
   })
 })
+
+test.describe('rendez-vous page: the shared slot chooser, stylesheet-level (issue #123)', () => {
+  /**
+   * The chooser view renders only for a live calendar read, which no credential-free browser run
+   * can show (the webServer blanks every provider key, and `page.route` cannot intercept the
+   * server's own Google fetch). What a browser can still prove — and what issue #123 asks for — is
+   * that the manage route ships the shared `SlotChooser` stylesheet unchanged: this suite extracts
+   * the module's hashed class names from the page's own stylesheets (the technique the eyebrow
+   * contrast test above already uses), builds a probe DOM wearing exactly those classes plus the
+   * same global utility classes the component applies, and compares the computed styles against the
+   * pre-change values pinned from `git` (the declarations the manage module used to carry and that
+   * moved verbatim into `components/booking/SlotChooser/SlotChooser.module.css`). This is a
+   * stylesheet-level check on the manage route, not the live component tree; the live tree stays
+   * covered by the jsdom suite (`components/sections/BookingManage/tests/`). Axe runs on the same
+   * probes, in both themes.
+   */
+
+  /** The machine-checkable WCAG 2.1 A and AA rule tags, same list as the axe describes above. */
+  const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] as const
+
+  /** Local class names of the shared chooser's CSS module, with the parts of the probe markup. */
+  const CHOOSER_LOCALS = [
+    'chooser',
+    'block',
+    'label',
+    'days',
+    'day',
+    'day-picked',
+    'dayWeekday',
+    'dayNumber',
+    'dayMonth',
+    'times',
+    'time',
+    'time-picked',
+    'timezoneNote',
+  ] as const
+
+  type ChooserClasses = Record<(typeof CHOOSER_LOCALS)[number], string>
+
+  /** Resolves the hashed module classes of the shared chooser from the page's own stylesheets. */
+  const chooserClasses = async (page: Page): Promise<ChooserClasses> =>
+    page.evaluate(
+      (locals) => {
+        const tokens = new Set<string>()
+        const walk = (rules: CSSRuleList): void => {
+          for (const rule of Array.from(rules)) {
+            if (rule instanceof CSSStyleRule) {
+              for (const match of rule.selectorText.matchAll(/\.([\w-]+)/g)) tokens.add(match[1] as string)
+            } else if (rule instanceof CSSGroupingRule) walk(rule.cssRules)
+          }
+        }
+        // (the walk recurses through @media and friends, so rules shipped inside them count too)
+        for (const sheet of Array.from(document.styleSheets)) {
+          try {
+            walk(sheet.cssRules)
+          } catch {
+            /* unreadable sheet: none should be, but never crash the audit */
+          }
+        }
+
+        // Next.js production CSS-module naming: the file name is minified to a short hash and the
+        // local name survives, so a class reads `<hash>_<local>` (e.g. `ESjQBG_day-picked`). Group
+        // the tokens by that first segment, then take the one group carrying the module's
+        // distinctive locals — the prefix disambiguates `time` from `time-picked` and this module's
+        // `label` from any other module's.
+        const groups = new Map<string, Set<string>>()
+        for (const token of tokens) {
+          const prefix = /^[A-Za-z0-9]+(?=_)/.exec(token)?.[0]
+          const local = prefix === undefined ? null : token.slice(prefix.length + 1)
+          if (prefix === undefined || local === null || local === '') continue
+          const group = groups.get(prefix) ?? new Set<string>()
+          group.add(local)
+          groups.set(prefix, group)
+        }
+        const candidates = [...groups.entries()].filter(
+          ([, set]) => set.has('day-picked') && set.has('time-picked') && set.has('timezoneNote'),
+        )
+        if (candidates.length !== 1)
+          throw new Error(`expected exactly one SlotChooser module on the page, found ${candidates.length}`)
+        const [prefix, set] = candidates[0] as [string, Set<string>]
+
+        const resolved = {} as Record<string, string>
+        const missing: string[] = []
+        for (const local of locals) {
+          if (set.has(local)) resolved[local] = `${prefix}_${local}`
+          else missing.push(local)
+        }
+        if (missing.length > 0)
+          throw new Error(`the SlotChooser module classes are missing from the page: ${missing.join(', ')}`)
+        return resolved
+      },
+      [...CHOOSER_LOCALS],
+    )
+
+  type ChooserReading = {
+    chooserGap: number
+    blockGap: number
+    labelFontSize: number
+    labelWeight: number
+    labelIsSecondary: boolean
+    daysColumnGap: number
+    daysPaddingInline: number
+    daysPaddingBlockEnd: number
+    daysMarginInline: number
+    daysOverflowX: string
+    daysScrollbarWidth: string
+    dayWidth: number
+    dayPaddingBlockStart: number
+    dayPaddingBlockEnd: number
+    dayBorderWidth: number
+    dayRadius: number
+    pickedDayBorderIsBrandVivid: boolean
+    pickedDayBackgroundIsBrandBackground: boolean
+    unpickedDayBorderIsDefault: boolean
+    unpickedDayBackgroundIsTransparent: boolean
+    dayColorIsColor: boolean
+    weekdayColorIsTertiary: boolean
+    monthColorIsTertiary: boolean
+    dayNumberFontSize: number
+    dayNumberWeight: number
+    dayNumberLetterSpacingPx: number
+    timesColumnGap: number
+    timeHeight: number
+    timeFontSize: number
+    timeWeight: number
+    timeRadius: number
+    pickedTimeBorderIsBrandVivid: boolean
+    pickedTimeBackgroundIsBrandBackground: boolean
+    unpickedTimeBorderIsDefault: boolean
+    unpickedTimeBackgroundIsTransparent: boolean
+    timeColorIsColor: boolean
+    noteMarginBlockStart: number
+    noteFontSize: number
+    noteColorIsTertiary: boolean
+    focusRulePresent: boolean
+    reducedMotionRulePresent: boolean
+  }
+
+  /** Builds the probe DOM inside `main` and reads its computed styles, all in the page. */
+  const measureChooser = async (page: Page, classes: ChooserClasses): Promise<ChooserReading> =>
+    page.evaluate((classes) => {
+      const main = document.querySelector('main')
+      if (main === null) throw new Error('the page renders no main landmark')
+
+      const el = (tag: string, className: string, text?: string): HTMLElement => {
+        const element = document.createElement(tag)
+        element.className = className
+        if (text !== undefined) element.textContent = text
+        return element
+      }
+      const button = (className: string, pressed: string, name: string, text?: string): HTMLButtonElement => {
+        const element = el('button', className, text) as HTMLButtonElement
+        element.type = 'button'
+        element.setAttribute('aria-pressed', pressed)
+        if (name !== '') element.setAttribute('aria-label', name)
+        return element
+      }
+
+      // The probe wears the component's own markup shape, global utility classes included.
+      const chooser = el('div', classes['chooser'] ?? '')
+      const dayBlock = el('div', classes['block'] ?? '')
+      dayBlock.append(el('p', classes['label'] ?? '', 'Jour'))
+      const days = el('div', classes['days'] ?? '')
+      days.setAttribute('role', 'group')
+      days.setAttribute('aria-label', 'Jours disponibles')
+      // A day card carries no aria-label: the component names it by the text it shows, so the probe
+      // wears the visible parts only (two different days, like the real row).
+      const dayCard = (pressed: boolean, weekday: string, dayOfMonth: string, month: string): HTMLButtonElement => {
+        const card = button(classes['day'] ?? '', pressed ? 'true' : 'false', '')
+        card.append(
+          el('span', `${classes['dayWeekday'] ?? ''} text-caption uppercase`, weekday),
+          el('span', `${classes['dayNumber'] ?? ''} font-display`, dayOfMonth),
+          el('span', `${classes['dayMonth'] ?? ''} text-caption`, month),
+        )
+        if (pressed) card.classList.add(classes['day-picked'] ?? '')
+        return card
+      }
+      days.append(dayCard(true, 'mar', '3', 'nov'), dayCard(false, 'jeu', '5', 'nov'))
+      dayBlock.append(days)
+
+      const timeBlock = el('div', classes['block'] ?? '')
+      timeBlock.append(el('p', classes['label'] ?? '', 'Heure · mardi 3 novembre'))
+      const times = el('div', classes['times'] ?? '')
+      times.setAttribute('role', 'group')
+      times.setAttribute('aria-label', 'Heures disponibles le mardi 3 novembre')
+      const timeChip = (pressed: boolean): HTMLButtonElement => {
+        const chip = button(classes['time'] ?? '', pressed ? 'true' : 'false', '', '10:30')
+        if (pressed) chip.classList.add(classes['time-picked'] ?? '')
+        return chip
+      }
+      times.append(timeChip(false), timeChip(true))
+      timeBlock.append(times)
+      timeBlock.append(
+        el(
+          'p',
+          `${classes['timezoneNote'] ?? ''} text-body-sm text-foreground-tertiary`,
+          'Les horaires sont indiqués en heure de Paris.',
+        ),
+      )
+
+      chooser.append(dayBlock, timeBlock)
+      const probe = el('div', '')
+      probe.id = 'slot-chooser-probe'
+      probe.append(chooser)
+      main.appendChild(probe)
+
+      // Colours compare as rendered pixels, the way `e2e/designTokens.spec.ts` compares them.
+      const pixel = (color: string): string => {
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 1
+        const context = canvas.getContext('2d')
+        if (context === null) throw new Error('no canvas context')
+        context.fillStyle = color
+        context.fillRect(0, 0, 1, 1)
+        return `${context.getImageData(0, 0, 1, 1).data}`
+      }
+      const tokenColor = (name: string): string => {
+        const ref = document.createElement('span')
+        ref.style.color = `var(${name})`
+        document.body.appendChild(ref)
+        const value = getComputedStyle(ref).color
+        ref.remove()
+        return pixel(value)
+      }
+      const color = (element: Element, property: string, token: string): boolean =>
+        pixel(getComputedStyle(element).getPropertyValue(property)) === tokenColor(token)
+
+      const style = (element: Element, property: string): string => getComputedStyle(element).getPropertyValue(property)
+      const num = (element: Element, property: string): number => Number.parseFloat(style(element, property))
+      const dayCards = days.querySelectorAll('button')
+      const pickedDay = dayCards[0] as HTMLElement
+      const unpickedDay = dayCards[1] as HTMLElement
+      const timeChips = times.querySelectorAll('button')
+      const pickedTime = timeChips[1] as HTMLElement
+      const unpickedTime = timeChips[0] as HTMLElement
+      const label = dayBlock.querySelector('p') as HTMLElement
+      const note = timeBlock.querySelector('p:last-child') as HTMLElement
+      const number = pickedDay.querySelector('span:nth-child(2)') as HTMLElement
+      const weekday = pickedDay.querySelector('span:nth-child(1)') as HTMLElement
+      const month = pickedDay.querySelector('span:nth-child(3)') as HTMLElement
+
+      // The two rules the manage page used to carry and must keep: the keyboard focus ring and the
+      // reduced-motion cut, both found in the shipped stylesheet by their class and declaration.
+      let focusRulePresent = false
+      let reducedMotionRulePresent = false
+      const walkRules = (rules: CSSRuleList): void => {
+        for (const rule of Array.from(rules)) {
+          if (rule instanceof CSSStyleRule) {
+            const selector = rule.selectorText
+            const text = rule.style.cssText
+            if (
+              (classes['day'] !== undefined && selector.includes(classes['day'] ?? '@none@')) ||
+              (classes['time'] !== undefined && selector.includes(classes['time'] ?? '@none@'))
+            ) {
+              if (
+                selector.includes(':focus-visible') &&
+                text.includes('--softn-border-active') &&
+                text.includes('2px')
+              ) {
+                focusRulePresent = true
+              }
+            }
+          } else if (rule instanceof CSSMediaRule) {
+            if (rule.conditionText.includes('prefers-reduced-motion')) {
+              for (const inner of Array.from(rule.cssRules)) {
+                if (inner instanceof CSSStyleRule && inner.style.getPropertyValue('transition') === 'none') {
+                  const selectors = inner.selectorText
+                  if (
+                    selectors.includes(classes['day'] ?? '@none@') &&
+                    selectors.includes(classes['time'] ?? '@none@')
+                  ) {
+                    reducedMotionRulePresent = true
+                  }
+                }
+              }
+            }
+          } else if (rule instanceof CSSGroupingRule) walkRules(rule.cssRules)
+        }
+      }
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          walkRules(sheet.cssRules)
+        } catch {
+          /* unreadable sheet: none should be, but never crash the audit */
+        }
+      }
+
+      // The probe stays mounted: the axe run below analyses it in place (each test closes its own
+      // context, so no probe leaks between tests).
+      const reading: ChooserReading = {
+        chooserGap: num(chooser, 'row-gap'),
+        blockGap: num(dayBlock, 'row-gap'),
+        labelFontSize: num(label, 'font-size'),
+        labelWeight: num(label, 'font-weight'),
+        labelIsSecondary: color(label, 'color', '--softn-color-secondary'),
+        daysColumnGap: num(days, 'column-gap'),
+        daysPaddingInline: num(days, 'padding-left'),
+        daysPaddingBlockEnd: num(days, 'padding-bottom'),
+        daysMarginInline: num(days, 'margin-left'),
+        daysOverflowX: style(days, 'overflow-x'),
+        daysScrollbarWidth: style(days, 'scrollbar-width'),
+        dayWidth: pickedDay.getBoundingClientRect().width,
+        dayPaddingBlockStart: num(pickedDay, 'padding-top'),
+        dayPaddingBlockEnd: num(pickedDay, 'padding-bottom'),
+        dayBorderWidth: num(pickedDay, 'border-top-width'),
+        dayRadius: num(pickedDay, 'border-top-left-radius'),
+        pickedDayBorderIsBrandVivid: color(pickedDay, 'border-top-color', '--softn-brand-vivid'),
+        pickedDayBackgroundIsBrandBackground: color(pickedDay, 'background-color', '--softn-brand-background'),
+        unpickedDayBorderIsDefault: color(unpickedDay, 'border-top-color', '--softn-border-default'),
+        unpickedDayBackgroundIsTransparent: pixel(style(unpickedDay, 'background-color')) === pixel('rgba(0, 0, 0, 0)'),
+        dayColorIsColor: color(pickedDay, 'color', '--softn-color'),
+        weekdayColorIsTertiary: color(weekday, 'color', '--softn-color-tertiary'),
+        monthColorIsTertiary: color(month, 'color', '--softn-color-tertiary'),
+        dayNumberFontSize: num(number, 'font-size'),
+        dayNumberWeight: num(number, 'font-weight'),
+        dayNumberLetterSpacingPx: num(number, 'letter-spacing'),
+        timesColumnGap: num(times, 'column-gap'),
+        timeHeight: pickedTime.getBoundingClientRect().height,
+        timeFontSize: num(pickedTime, 'font-size'),
+        timeWeight: num(pickedTime, 'font-weight'),
+        timeRadius: num(pickedTime, 'border-top-left-radius'),
+        pickedTimeBorderIsBrandVivid: color(pickedTime, 'border-top-color', '--softn-brand-vivid'),
+        pickedTimeBackgroundIsBrandBackground: color(pickedTime, 'background-color', '--softn-brand-background'),
+        unpickedTimeBorderIsDefault: color(unpickedTime, 'border-top-color', '--softn-border-default'),
+        unpickedTimeBackgroundIsTransparent:
+          pixel(style(unpickedTime, 'background-color')) === pixel('rgba(0, 0, 0, 0)'),
+        timeColorIsColor: color(pickedTime, 'color', '--softn-color'),
+        noteMarginBlockStart: num(note, 'margin-top'),
+        noteFontSize: num(note, 'font-size'),
+        noteColorIsTertiary: color(note, 'color', '--softn-color-tertiary'),
+        focusRulePresent,
+        reducedMotionRulePresent,
+      }
+      return reading
+    }, classes)
+
+  /** The pre-change manage values, pinned from the module as #115 shipped them. */
+  const expectPreChangeStyles = async (page: Page, reading: ChooserReading): Promise<void> => {
+    const width = page.viewportSize()?.width ?? 1280
+    // .chooser gap: clamp(--softn-space-6, 4vw, --softn-space-8) = clamp(24px, 4vw, 32px).
+    expect(reading.chooserGap, 'chooser gap keeps its clamp').toBeCloseTo(Math.min(Math.max(24, width * 0.04), 32), 1)
+    expect(reading.blockGap, 'block gap is --softn-space-3 (12px)').toBe(12)
+    expect(reading.labelFontSize, 'label font size is --softn-font-size-label (12px)').toBe(12)
+    expect(reading.labelWeight, 'label weight is --softn-font-weight-label (600)').toBe(600)
+    expect(reading.labelIsSecondary, 'label color is --softn-color-secondary').toBe(true)
+
+    expect(reading.daysColumnGap, 'day row gap is --softn-space-2 (8px)').toBe(8)
+    expect(reading.daysPaddingInline, 'day row inline padding is --softn-space-1 (4px)').toBe(4)
+    expect(reading.daysPaddingBlockEnd, 'day row block-end padding is --softn-space-2 (8px)').toBe(8)
+    expect(reading.daysMarginInline, 'day row inline margin is -1 × --softn-space-1 (-4px)').toBe(-4)
+    expect(reading.daysOverflowX, 'the day row scrolls sideways').toBe('auto')
+    expect(reading.daysScrollbarWidth, 'the day row scrollbar is thin').toBe('thin')
+
+    expect(reading.dayWidth, 'day card inline size keeps 4.25rem (68px)').toBe(68)
+    expect(reading.dayPaddingBlockStart, 'day card padding-block-start is --softn-space-2 (8px)').toBe(8)
+    expect(reading.dayPaddingBlockEnd, 'day card padding-block-end is --softn-space-3 (12px)').toBe(12)
+    expect(reading.dayBorderWidth, 'day card border is 1px').toBe(1)
+    expect(reading.dayRadius, 'day card radius is --softn-radius-lg (16px)').toBe(16)
+    expect(reading.pickedDayBorderIsBrandVivid, 'picked day border is --softn-brand-vivid').toBe(true)
+    expect(reading.pickedDayBackgroundIsBrandBackground, 'picked day background is --softn-brand-background').toBe(true)
+    expect(reading.unpickedDayBorderIsDefault, 'unpicked day border is --softn-border-default').toBe(true)
+    expect(reading.unpickedDayBackgroundIsTransparent, 'unpicked day background stays transparent').toBe(true)
+    expect(reading.dayColorIsColor, 'day card color is --softn-color').toBe(true)
+    expect(reading.weekdayColorIsTertiary, 'weekday color is --softn-color-tertiary').toBe(true)
+    expect(reading.monthColorIsTertiary, 'month color is --softn-color-tertiary').toBe(true)
+    expect(reading.dayNumberFontSize, 'day number font size is --softn-font-size-title-lg (24px)').toBe(24)
+    expect(reading.dayNumberWeight, 'day number weight is --softn-font-weight-title-lg (800)').toBe(800)
+    expect(reading.dayNumberLetterSpacingPx, 'day number letter-spacing keeps -0.02em at 24px (-0.48px)').toBeCloseTo(
+      -0.48,
+      2,
+    )
+
+    expect(reading.timesColumnGap, 'times gap is --softn-space-2 (8px)').toBe(8)
+    expect(reading.timeHeight, 'time chip block size is --softn-size-lg (52px)').toBe(52)
+    expect(reading.timeFontSize, 'time chip font size is --softn-font-size-body-md (16px)').toBe(16)
+    expect(reading.timeWeight, 'time chip weight is --softn-font-weight-body-md (400)').toBe(400)
+    expect(reading.timeRadius, 'time chip radius is --softn-radius-pill (100px)').toBe(100)
+    expect(reading.pickedTimeBorderIsBrandVivid, 'picked time border is --softn-brand-vivid').toBe(true)
+    expect(reading.pickedTimeBackgroundIsBrandBackground, 'picked time background is --softn-brand-background').toBe(
+      true,
+    )
+    expect(reading.unpickedTimeBorderIsDefault, 'unpicked time border is --softn-border-default').toBe(true)
+    expect(reading.unpickedTimeBackgroundIsTransparent, 'unpicked time background stays transparent').toBe(true)
+    expect(reading.timeColorIsColor, 'time chip color is --softn-color').toBe(true)
+
+    expect(reading.noteMarginBlockStart, 'timezone note keeps its zero margin').toBe(0)
+    expect(reading.noteFontSize, 'timezone note font size is body-sm (14px)').toBe(14)
+    expect(reading.noteColorIsTertiary, 'timezone note color is --softn-color-tertiary').toBe(true)
+
+    expect(reading.focusRulePresent, 'the day/time :focus-visible ring rule ships (2px, --softn-border-active)').toBe(
+      true,
+    )
+    expect(reading.reducedMotionRulePresent, 'the reduced-motion cut ships for the day and time controls').toBe(true)
+  }
+
+  for (const theme of ['dark', 'light'] as const) {
+    for (const width of [375, 768, 1280] as const) {
+      test(`the chooser stylesheet computes the pre-change manage styles at ${width} px (${theme})`, async ({
+        browser,
+      }) => {
+        const ctx = await browser.newContext({ viewport: { width, height: 800 }, colorScheme: theme })
+        const page: Page = await ctx.newPage()
+        await page.emulateMedia({ colorScheme: theme })
+
+        await page.goto(`/rendez-vous/${tokenFor()}`)
+        await expect(page.getByRole('main')).toBeVisible()
+        await page.evaluate(() => document.fonts.ready)
+
+        const classes = await chooserClasses(page)
+        const reading = await measureChooser(page, classes)
+        await expectPreChangeStyles(page, reading)
+
+        await ctx.close()
+      })
+    }
+
+    test(`axe finds no WCAG 2.1 A/AA violation on the chooser probes (${theme})`, async ({ browser }) => {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: theme })
+      const page: Page = await ctx.newPage()
+      await page.emulateMedia({ colorScheme: theme })
+
+      await page.goto(`/rendez-vous/${tokenFor()}`)
+      await expect(page.getByRole('main')).toBeVisible()
+      await page.evaluate(() => document.fonts.ready)
+
+      const classes = await chooserClasses(page)
+      await measureChooser(page, classes)
+      const results = await new AxeBuilder({ page })
+        .include('#slot-chooser-probe')
+        .withTags([...WCAG_AA_TAGS])
+        .analyze()
+      expect(
+        results.violations.map((violation) => `${violation.id} [${violation.impact ?? '?'}] ${violation.help}`),
+        `WCAG 2.1 A/AA violations on the chooser probe (${theme})`,
+      ).toEqual([])
+
+      await ctx.close()
+    })
+  }
+})
