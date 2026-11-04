@@ -238,87 +238,7 @@
   color: var(--softn-color-secondary);
 }
 
-/* Day strip: one pressable card per offered day, overflowing sideways on a narrow screen. */
-.days {
-  display: flex;
-  gap: var(--softn-space-2);
-  margin: 0 calc(var(--softn-space-1) * -1);
-  padding: 0 var(--softn-space-1) var(--softn-space-2);
-  overflow-x: auto;
-  scrollbar-width: thin;
-}
-
-.day {
-  flex: 0 0 auto;
-  inline-size: 4.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--softn-space-1);
-  padding: var(--softn-space-2) 0 var(--softn-space-3);
-  border: 1px solid var(--softn-border-default);
-  border-radius: var(--softn-radius-lg);
-  background: transparent;
-  color: var(--softn-color);
-  font: inherit;
-  cursor: pointer;
-  transition:
-    border-color var(--softn-duration-micro) var(--softn-easing-out),
-    background-color var(--softn-duration-micro) var(--softn-easing-out);
-}
-
-.day:hover {
-  border-color: var(--softn-border-strong);
-}
-
-.day-picked {
-  border-color: var(--softn-brand-vivid);
-  background: var(--softn-brand-background);
-}
-
-.dayWeekday,
-.dayMonth {
-  color: var(--softn-color-tertiary);
-}
-
-.dayNumber {
-  font-size: var(--softn-font-size-title-lg);
-  font-weight: var(--softn-font-weight-title-lg);
-  letter-spacing: -0.02em;
-}
-
-/* Times: a grid of pressable chips, one line each, only the free ones. */
-.times {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
-  gap: var(--softn-space-2);
-}
-
-.time {
-  block-size: var(--softn-size-lg);
-  border: 1px solid var(--softn-border-default);
-  border-radius: var(--softn-radius-pill);
-  background: transparent;
-  color: var(--softn-color);
-  font: inherit;
-  font-size: var(--softn-font-size-body-md);
-  font-weight: var(--softn-font-weight-body-md);
-  cursor: pointer;
-  transition:
-    border-color var(--softn-duration-micro) var(--softn-easing-out),
-    background-color var(--softn-duration-micro) var(--softn-easing-out);
-}
-
-.time:hover {
-  border-color: var(--softn-border-strong);
-}
-
-.time-picked {
-  border-color: var(--softn-brand-vivid);
-  background: var(--softn-brand-background);
-}
-
-.timezoneNote,
+/* Confirmation summary: the sentence naming the new slot, once a time is picked. */
 .summary {
   margin: 0;
   max-inline-size: 60ch;
@@ -421,8 +341,6 @@
   color: var(--softn-color);
 }
 
-.day:focus-visible,
-.time:focus-visible,
 .reasonChip:focus-visible,
 .outline:focus-visible,
 .danger:focus-visible,
@@ -434,8 +352,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .day,
-  .time,
   .reasonChip,
   .outline,
   .danger,
