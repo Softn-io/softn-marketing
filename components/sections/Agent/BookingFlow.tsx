@@ -1,16 +1,20 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
+import type { BookingSlot } from '@/lib/booking/availability'
+import { groupSlotsByDay } from '@/lib/booking/days'
+import { formatBookingDayLongLabel } from '@/lib/booking/labels'
+import { BOOKING_RULES } from '@/lib/booking/rules'
 import { interpolate } from '@/lib/interpolate'
 import { agent } from '@/locales/fr/agent'
 import { chatbot } from '@/locales/fr/chatbot'
 import { BOOKING_HONEYPOT_FIELD } from '@/schemas/bookingLimits'
+import { SlotChooser } from '@components/booking/SlotChooser/SlotChooser'
 import { Button } from '@components/ui/Button'
 import { AgentMessageText } from './AgentMessageText'
 import { AgentTypingIndicator } from './AgentTypingIndicator'
 import { BookingRecap } from './BookingRecap'
-import { BookingSlots } from './BookingSlots'
 import { agentSpeakerLabel } from './data/agentMessages'
 import {
   BOOKING_QUESTION_STEPS,
@@ -26,6 +30,12 @@ type BookingTextField = {
   readonly label: string
   readonly placeholder?: string
   readonly error?: string
+}
+
+/** Day the visitor picked in the slot chooser, with the availability it was picked against. */
+type SlotDayPick = {
+  readonly dayKey: string
+  readonly slots: readonly BookingSlot[]
 }
 
 /** Text steps of the flow, with the wording the field renders. */
@@ -157,6 +167,9 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
   // One predictable focus move per step, once the question of that step is on screen: the field that
   // asks, the chip that answers, the heading that sums up. Nothing else in the page takes focus, and
   // focus never scrolls: the effect below owns scrolling, so a smooth scroll is not cancelled here.
+  // The slot step's control is the day-then-time chooser, which appears only once the availability
+  // has arrived: the slots are part of the condition, so the move lands on it rather than on the
+  // container that was the only thing there while it was loading.
   useEffect(() => {
     if (!flow.stepReady) return
 
@@ -164,16 +177,18 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
     if (container === null) return
     const target = container.querySelector<HTMLElement>('[data-booking-focus]') ?? container
     target.focus({ preventScroll: true })
-  }, [flow.step, flow.stepReady])
+  }, [flow.slots, flow.step, flow.stepReady])
 
   // Every new message, and every step whose control appears, brings the conversation with it: the
-  // newest line and that control end up fully visible under the sticky header.
+  // newest line and that control end up fully visible under the sticky header. A new availability
+  // counts as the control appearing: the chooser is taller than the question above it, so the page
+  // has to follow again once it is there, or its times stay under the fold.
   useEffect(() => {
     const container = flowRef.current
     if (container === null) return
 
     revealInView(container, prefersReducedMotion())
-  }, [flow.entries.length, flow.step, flow.stepReady])
+  }, [flow.entries.length, flow.slots, flow.step, flow.stepReady])
 
   const textField = TEXT_FIELDS[flow.step]
   const chipField = CHIP_FIELDS[flow.step]
@@ -184,6 +199,17 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
       ? null
       : (textField?.error ??
         (flow.step === BOOKING_STEPS.email ? chatbot.booking.steps.email.error : chatbot.booking.steps.phone.error))
+
+  const slotDays = useMemo(() => groupSlotsByDay(flow.slots, BOOKING_RULES), [flow.slots])
+  const [dayPick, setDayPick] = useState<SlotDayPick | null>(null)
+
+  // The pick only holds for the availability it was made against: a reloaded list (a retry, or the
+  // fresh read that follows a slot taken meanwhile) starts again on its first day, so a day that
+  // emptied in the meantime is never kept.
+  const pickedDayKey = dayPick !== null && dayPick.slots === flow.slots ? dayPick.dayKey : (slotDays[0]?.key ?? null)
+
+  const pickedDayLongLabel = pickedDayKey === null ? '' : formatBookingDayLongLabel(pickedDayKey, BOOKING_RULES)
+  const slotsFailed = flow.error === 'slots-unavailable' || flow.error === 'network' || flow.error === 'rate-limited'
 
   return (
     <section
@@ -293,16 +319,60 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
             ) : null}
 
             {flow.step === BOOKING_STEPS.slot ? (
-              <BookingSlots
-                slots={flow.slots}
-                slotLabels={flow.slotLabels}
-                visibleSlots={flow.visibleSlots}
-                loading={flow.status === 'loading-slots'}
-                error={flow.error}
-                onChoose={flow.chooseSlot}
-                onShowMore={flow.showMoreSlots}
-                onRetry={flow.retry}
-              />
+              flow.status === 'loading-slots' ? (
+                <p className={styles.status} role="status">
+                  {chatbot.booking.slots.loading}
+                </p>
+              ) : slotsFailed ? (
+                <div className={styles.error} role="alert">
+                  <p className={styles.errorText}>
+                    <AgentMessageText
+                      template={chatbot.booking.slots.unavailable}
+                      contactLinkLabel={chatbot.contactPageLinkLabel}
+                    />
+                  </p>
+                  <button type="button" className={styles.quiet} onClick={flow.retry}>
+                    {chatbot.error.retry}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* A slot taken between two confirmations keeps its message and shows the fresh
+                      availability below it: the visitor reads what happened and picks again from what
+                      is really free. */}
+                  {flow.error === 'slot-taken' ? (
+                    <div className={styles.error} role="alert">
+                      <p className={styles.errorText}>{chatbot.error.slotTaken}</p>
+                    </div>
+                  ) : null}
+
+                  {slotDays.length === 0 ? (
+                    <p className={styles.status}>
+                      <AgentMessageText
+                        template={chatbot.booking.slots.none}
+                        contactLinkLabel={chatbot.contactPageLinkLabel}
+                      />
+                    </p>
+                  ) : (
+                    <>
+                      {/* The chat keeps no pressed time: a tap on a time commits the slot at once. */}
+                      <SlotChooser
+                        days={slotDays}
+                        pickedDayKey={pickedDayKey}
+                        pickedSlotStart={null}
+                        dayLabel={chatbot.booking.slots.dayLabel}
+                        timeLabel={interpolate(chatbot.booking.slots.timeLabel, { day: pickedDayLongLabel })}
+                        dayGroupLabel={chatbot.booking.slots.dayGroupLabel}
+                        timeGroupLabel={interpolate(chatbot.booking.slots.timeGroupLabel, { day: pickedDayLongLabel })}
+                        timezoneNote={chatbot.booking.slots.timezoneNote}
+                        focusAnchor
+                        onPickDay={(dayKey) => setDayPick({ dayKey, slots: flow.slots })}
+                        onPickTime={flow.chooseSlot}
+                      />
+                    </>
+                  )}
+                </>
+              )
             ) : null}
 
             {chipField !== undefined ? (

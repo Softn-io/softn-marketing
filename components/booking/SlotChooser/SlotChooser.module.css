@@ -1,0 +1,132 @@
+/*
+ * Shared slot chooser: the day row, then the free times of the picked day.
+ *
+ * Every colour, radius and length comes from a --softn-* token, and the two callers keep their own
+ * copy: this stylesheet owns the control's own rhythm, never the layout of the section around it.
+ * The day row scrolls sideways, so its scroll box clips both axes: the row keeps the room a card's
+ * focus ring needs on every side, 4 px (2 px ring plus its 2 px offset) inline and above, 8 px
+ * below.
+ */
+
+.chooser {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-6), 4vw, var(--softn-space-8));
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+}
+
+.label {
+  margin: 0;
+  font-size: var(--softn-font-size-label);
+  font-weight: var(--softn-font-weight-label);
+  color: var(--softn-color-secondary);
+}
+
+/* Day strip: one pressable card per offered day, overflowing sideways on a narrow screen. */
+.days {
+  display: flex;
+  gap: var(--softn-space-2);
+  margin: 0 calc(var(--softn-space-1) * -1);
+  padding: 0 var(--softn-space-1) var(--softn-space-2);
+  /* The row scrolls sideways, so its scroll box clips vertically too: the ring needs the same
+     4 px (2 px plus its 2 px offset) above a card as at either inline end. */
+  padding-block-start: var(--softn-space-1);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  /* Room a card's focus ring needs (2 px) plus its offset (2 px) at either end of the row: a card
+     scrolled into view keeps that ring inside the scroll box instead of clipped by its edge. */
+  scroll-padding-inline: var(--softn-space-1);
+}
+
+.day {
+  flex: 0 0 auto;
+  inline-size: 4.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--softn-space-1);
+  padding: var(--softn-space-2) 0 var(--softn-space-3);
+  border: 1px solid var(--softn-border-default);
+  border-radius: var(--softn-radius-lg);
+  background: transparent;
+  color: var(--softn-color);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
+    background-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.day:hover {
+  border-color: var(--softn-border-strong);
+}
+
+.day-picked {
+  border-color: var(--softn-brand-vivid);
+  background: var(--softn-brand-background);
+}
+
+.dayWeekday,
+.dayMonth {
+  color: var(--softn-color-tertiary);
+}
+
+.dayNumber {
+  font-size: var(--softn-font-size-title-lg);
+  font-weight: var(--softn-font-weight-title-lg);
+  letter-spacing: -0.02em;
+}
+
+/* Times: a grid of pressable chips, one line each, only the free ones. */
+.times {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--softn-space-2);
+}
+
+.time {
+  block-size: var(--softn-size-lg);
+  border: 1px solid var(--softn-border-default);
+  border-radius: var(--softn-radius-pill);
+  background: transparent;
+  color: var(--softn-color);
+  font: inherit;
+  font-size: var(--softn-font-size-body-md);
+  font-weight: var(--softn-font-weight-body-md);
+  cursor: pointer;
+  transition:
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
+    background-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.time:hover {
+  border-color: var(--softn-border-strong);
+}
+
+.time-picked {
+  border-color: var(--softn-brand-vivid);
+  background: var(--softn-brand-background);
+}
+
+.timezoneNote {
+  margin: 0;
+  max-inline-size: 60ch;
+}
+
+.day:focus-visible,
+.time:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .day,
+  .time {
+    transition: none;
+  }
+}

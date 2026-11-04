@@ -163,17 +163,6 @@
   cursor: not-allowed;
 }
 
-/* Slot chips carry the day and the hour: one type step above the answer chips. */
-.slotChip {
-  font-size: var(--softn-font-size-body-md);
-  line-height: var(--softn-font-line-height-body-md);
-}
-
-.timezoneNote {
-  margin: 0;
-  max-inline-size: 60ch;
-}
-
 /*
  * Step actions: the forward control first, the way out last. They sit on one line and stay centred
  * against each other wherever the row has room for both, and wrap to two flush-left lines on a

@@ -10,6 +10,7 @@ verified:
   - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
   - { by: "human:mel", at: "2026-11-01T02:05:22+01:00" }
   - { by: "human:mel", at: "2026-11-01T04:17:47+01:00" }
+  - { by: "human:mel", at: "2026-11-04T17:43:14+01:00" }
 sources:
   - { id: method, resource: ../method.ts, title: Section méthode }
   - { id: faq, resource: ../faq.ts, title: Questions fréquentes }

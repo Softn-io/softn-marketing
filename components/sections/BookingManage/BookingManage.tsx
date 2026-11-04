@@ -1,16 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { SlotChooser } from '@components/booking/SlotChooser/SlotChooser'
 import { Button } from '@components/ui/Button'
 import { BOOKING_OPEN_QUERY_KEY, SECTION_IDS } from '@/lib/anchors'
-import { bookingDayKeyOfInstant, type BookingSlot } from '@/lib/booking/availability'
-import {
-  formatBookingDayLabel,
-  formatBookingDayLongLabel,
-  formatBookingTimeLabel,
-  formatSlotLabel,
-  type BookingDayLabel,
-} from '@/lib/booking/labels'
+import type { BookingSlot } from '@/lib/booking/availability'
+import { groupSlotsByDay } from '@/lib/booking/days'
+import { formatBookingDayLongLabel, formatSlotLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { interpolate } from '@/lib/interpolate'
 import { bookingManage } from '@/locales/fr/bookingManage'
@@ -51,32 +47,6 @@ export type BookingManageProps = {
   slotLabel?: string
   /** Relative URL of this page, used by the retry link of the unavailable state. */
   retryHref: string
-}
-
-/** One day of the chooser: its key, its compact label and its free slots. */
-type ChooserDay = {
-  readonly key: string
-  readonly label: BookingDayLabel
-  readonly slots: readonly BookingSlot[]
-}
-
-/** Groups the free slots by Paris day, oldest day first. */
-const groupSlotsByDay = (slots: readonly BookingSlot[]): readonly ChooserDay[] => {
-  const grouped = new Map<string, BookingSlot[]>()
-
-  for (const slot of slots) {
-    const key = bookingDayKeyOfInstant(slot.start, BOOKING_RULES)
-    if (key === null) continue
-
-    const daySlots = grouped.get(key)
-    if (daySlots === undefined) grouped.set(key, [slot])
-    else daySlots.push(slot)
-  }
-
-  return [...grouped.entries()].flatMap(([key, daySlots]) => {
-    const label = formatBookingDayLabel(key, BOOKING_RULES)
-    return label === null ? [] : [{ key, label, slots: daySlots }]
-  })
 }
 
 /** Body of one management request: each action carries the token, and its own fields only. */
@@ -212,7 +182,7 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
       }
 
       setSlots(result.payload.slots)
-      const [firstDay] = groupSlotsByDay(result.payload.slots)
+      const [firstDay] = groupSlotsByDay(result.payload.slots, BOOKING_RULES)
       setPickedDay(firstDay?.key ?? null)
       setPickedSlot(null)
     },
@@ -276,9 +246,8 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
     void confirmReschedule()
   }, [actionError, confirmCancel, confirmReschedule, loadSlots, pickedSlot, view])
 
-  const days = useMemo(() => groupSlotsByDay(slots ?? []), [slots])
-  const pickedDayEntry = days.find((day) => day.key === pickedDay) ?? null
-  const pickedDayLongLabel = pickedDayEntry === null ? '' : formatBookingDayLongLabel(pickedDayEntry.key, BOOKING_RULES)
+  const days = useMemo(() => groupSlotsByDay(slots ?? [], BOOKING_RULES), [slots])
+  const pickedDayLongLabel = pickedDay === null ? '' : formatBookingDayLongLabel(pickedDay, BOOKING_RULES)
 
   const currentLabel = view === 'moved' ? (movedLabel ?? slotLabel) : slotLabel
 
@@ -409,55 +378,21 @@ export const BookingManage = ({ token, state, slotLabel, retryHref }: BookingMan
 
             {days.length > 0 && !loadingSlots ? (
               <>
-                <div className={styles.chooserBlock}>
-                  <p className={styles.chooserLabel}>{bookingManage.reschedule.chooser.dayLabel}</p>
-                  <div className={styles.days} role="group" aria-label={bookingManage.reschedule.chooser.dayLabel}>
-                    {days.map((day) => (
-                      <button
-                        key={day.key}
-                        type="button"
-                        className={`${styles.day} ${day.key === pickedDay ? styles['day-picked'] : ''}`}
-                        aria-pressed={day.key === pickedDay}
-                        onClick={() => {
-                          setPickedDay(day.key)
-                          setPickedSlot(null)
-                        }}
-                      >
-                        <span className={`${styles.dayWeekday} text-caption uppercase`}>{day.label.weekday}</span>
-                        <span className={`${styles.dayNumber} font-display`}>{day.label.day}</span>
-                        <span className={`${styles.dayMonth} text-caption`}>{day.label.month}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {pickedDayEntry === null ? null : (
-                  <div className={styles.chooserBlock}>
-                    <p className={styles.chooserLabel}>
-                      {interpolate(bookingManage.reschedule.chooser.timeLabel, { day: pickedDayLongLabel })}
-                    </p>
-                    <div
-                      className={styles.times}
-                      role="group"
-                      aria-label={interpolate(bookingManage.reschedule.chooser.timeLabel, { day: pickedDayLongLabel })}
-                    >
-                      {pickedDayEntry.slots.map((slot) => (
-                        <button
-                          key={slot.start}
-                          type="button"
-                          className={`${styles.time} ${slot.start === pickedSlot?.start ? styles['time-picked'] : ''}`}
-                          aria-pressed={slot.start === pickedSlot?.start}
-                          onClick={() => setPickedSlot(slot)}
-                        >
-                          {formatBookingTimeLabel(slot.start, BOOKING_RULES)}
-                        </button>
-                      ))}
-                    </div>
-                    <p className={`${styles.timezoneNote} text-body-sm text-foreground-tertiary`}>
-                      {bookingManage.reschedule.chooser.timezoneNote}
-                    </p>
-                  </div>
-                )}
+                <SlotChooser
+                  days={days}
+                  pickedDayKey={pickedDay}
+                  pickedSlotStart={pickedSlot?.start ?? null}
+                  dayLabel={bookingManage.reschedule.chooser.dayLabel}
+                  timeLabel={interpolate(bookingManage.reschedule.chooser.timeLabel, { day: pickedDayLongLabel })}
+                  dayGroupLabel={bookingManage.reschedule.chooser.dayLabel}
+                  timeGroupLabel={interpolate(bookingManage.reschedule.chooser.timeLabel, { day: pickedDayLongLabel })}
+                  timezoneNote={bookingManage.reschedule.chooser.timezoneNote}
+                  onPickDay={(dayKey) => {
+                    setPickedDay(dayKey)
+                    setPickedSlot(null)
+                  }}
+                  onPickTime={setPickedSlot}
+                />
 
                 {pickedSlot === null ? null : (
                   <p className={`${styles.summary} text-body-md text-foreground-secondary`}>

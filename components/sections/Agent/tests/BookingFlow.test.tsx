@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { formatSlotLabel } from '@/lib/booking/labels'
+import { BOOKING_RULES } from '@/lib/booking/rules'
 import { agent } from '@/locales/fr/agent'
 import { chatbot } from '@/locales/fr/chatbot'
 import { BookingFlow, type BookingFlowProps } from '../BookingFlow'
@@ -397,20 +399,84 @@ describe('Booking flow steps', () => {
     expect(JSON.stringify(callsTo(fetchMock, '/api/booking'))).not.toContain('consentAt')
   })
 
-  it('shows a few slots at a time and offers the others', async () => {
+  it('shows every free time of the preselected day at once, with the timezone note', async () => {
     renderFlow()
     fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
     typeIn(await screen.findByLabelText(chatbot.booking.steps.need.field), 'Automatiser mes devis')
     send()
 
-    await waitFor(() => expect(slotChips()).toHaveLength(4))
-    expect(screen.getByRole('list', { name: chatbot.booking.slots.listLabel })).toBeTruthy()
+    // The fixture holds one day: every one of its free times is on screen, with no paging left.
+    await waitFor(() => expect(slotChips()).toHaveLength(SLOTS.length))
+    expect(screen.getByRole('group', { name: chatbot.booking.slots.dayGroupLabel })).toBeTruthy()
+    expect(screen.getByText(chatbot.booking.slots.dayLabel)).toBeTruthy()
     expect(screen.getByText(chatbot.booking.slots.timezoneNote)).toBeTruthy()
+  })
 
-    fireEvent.click(screen.getByRole('button', { name: chatbot.booking.slots.more }))
+  it('anchors the slot step on the preselected day card, so the flow keeps the chooser in view', async () => {
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    typeIn(await screen.findByLabelText(chatbot.booking.steps.need.field), 'Automatiser mes devis')
+    send()
 
-    expect(slotChips()).toHaveLength(SLOTS.length)
-    expect(screen.queryByRole('button', { name: chatbot.booking.slots.more })).toBeNull()
+    await waitFor(() => expect(slotChips().length).toBeGreaterThan(0))
+
+    // One anchor only, on the pressed day card: the flow's reveal anchors on it and focus lands
+    // there, as it does on the accept button, the field and the success heading of the other steps.
+    const anchors = [...region().querySelectorAll<HTMLElement>('[data-booking-focus]')]
+    expect(anchors).toHaveLength(1)
+    expect(anchors[0]?.getAttribute('aria-pressed')).toBe('true')
+    expect(document.activeElement).toBe(anchors[0])
+  })
+
+  it('preselects the first day holding a free slot, and picks a time in one tap', async () => {
+    const twoDays = [
+      { start: '2026-11-03T08:30:00.000Z', end: '2026-11-03T09:00:00.000Z' },
+      { start: '2026-11-03T09:00:00.000Z', end: '2026-11-03T09:30:00.000Z' },
+      { start: '2026-11-05T10:00:00.000Z', end: '2026-11-05T10:30:00.000Z' },
+    ] as const
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === '/api/booking/slots') return jsonResponse({ slots: twoDays })
+      if (url === '/api/booking') return jsonResponse({ booked: true })
+      return jsonResponse({ answer: 'Une réponse du modèle.' })
+    })
+    renderFlow()
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    typeIn(await screen.findByLabelText(chatbot.booking.steps.need.field), 'Automatiser mes devis')
+    send()
+
+    const dayGroup = await screen.findByRole('group', { name: chatbot.booking.slots.dayGroupLabel })
+    const firstDay = within(dayGroup).getByRole('button', { name: /mar\s*3\s*nov/ })
+    const secondDay = within(dayGroup).getByRole('button', { name: /jeu\s*5\s*nov/ })
+    expect(firstDay.getAttribute('aria-pressed')).toBe('true')
+    expect(secondDay.getAttribute('aria-pressed')).toBe('false')
+
+    // Only the times of the preselected day are offered, under its own interpolated label.
+    const firstTimes = screen.getByRole('group', { name: 'Heures disponibles le mardi 3 novembre' })
+    expect(
+      within(firstTimes)
+        .getAllByRole('button')
+        .map((time) => time.textContent),
+    ).toEqual(['09:30', '10:00'])
+    expect(screen.getByText(plainSpaces('Heure · mardi 3 novembre'))).toBeTruthy()
+
+    // Another day opens on its own times, and becomes the pressed one.
+    fireEvent.click(secondDay)
+    expect(secondDay.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.queryByRole('group', { name: 'Heures disponibles le mardi 3 novembre' })).toBeNull()
+    const secondTimes = screen.getByRole('group', { name: 'Heures disponibles le jeudi 5 novembre' })
+    expect(
+      within(secondTimes)
+        .getAllByRole('button')
+        .map((time) => time.textContent),
+    ).toEqual(['11:00'])
+
+    // One tap on a time picks the slot and moves the flow on, as a chip did before.
+    fireEvent.click(within(secondTimes).getByRole('button', { name: '11:00' }))
+    await screen.findByLabelText(chatbot.booking.steps.firstName.field)
+    expect(region().textContent).toContain(
+      formatSlotLabel({ start: '2026-11-05T10:00:00.000Z', end: '2026-11-05T10:30:00.000Z' }, BOOKING_RULES),
+    )
   })
 
   it('prefills the field when one answer is chosen from the recap edit link', async () => {
@@ -548,6 +614,50 @@ describe('Booking flow failure and abandon states', () => {
     await waitFor(() => expect(slotsCalls(fetchMock)).toBeGreaterThan(loadsBefore))
     expect(slotChips().length).toBeGreaterThan(0)
     expect(screen.queryByText(chatbot.booking.success.title)).toBeNull()
+  })
+
+  it('starts the fresh availability on its first day after a slot was taken', async () => {
+    const twoDays = [
+      { start: '2026-11-03T08:30:00.000Z', end: '2026-11-03T09:00:00.000Z' },
+      { start: '2026-11-05T10:00:00.000Z', end: '2026-11-05T10:30:00.000Z' },
+    ] as const
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input)
+      if (url === '/api/booking/slots') return jsonResponse({ slots: twoDays })
+      if (url === '/api/booking') return jsonResponse({ error: 'slot-taken' }, 409)
+      return jsonResponse({ answer: 'Une réponse du modèle.' })
+    })
+    renderFlow()
+    await answerUpToRecap({})
+
+    // The visitor changes the slot to the second day before confirming.
+    fireEvent.click(screen.getByRole('button', { name: plainSpaces(chatbot.booking.recap.edit) }))
+    fireEvent.click(screen.getByRole('button', { name: chatbot.booking.steps.slot.field }))
+    const dayGroup = await screen.findByRole('group', { name: chatbot.booking.slots.dayGroupLabel })
+    fireEvent.click(within(dayGroup).getByRole('button', { name: /jeu\s*5\s*nov/ }))
+    fireEvent.click(
+      within(screen.getByRole('group', { name: 'Heures disponibles le jeudi 5 novembre' })).getByRole('button', {
+        name: '11:00',
+      }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.booking.recap.confirm }))
+
+    // The slot was taken: the fresh availability is announced, and it starts again on its first day.
+    await waitFor(() =>
+      expect(screen.getByRole('group', { name: 'Heures disponibles le mardi 3 novembre' })).toBeTruthy(),
+    )
+    expect(screen.getByText(chatbot.error.slotTaken)).toBeTruthy()
+    const freshDays = screen.getByRole('group', { name: chatbot.booking.slots.dayGroupLabel })
+    expect(
+      within(freshDays)
+        .getByRole('button', { name: /mar\s*3\s*nov/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+    expect(
+      within(freshDays)
+        .getByRole('button', { name: /jeu\s*5\s*nov/ })
+        .getAttribute('aria-pressed'),
+    ).toBe('false')
   })
 
   it('keeps the booking error on the recap, with a retry that resends it', async () => {

@@ -119,6 +119,30 @@ describe('BookingManage reschedule', () => {
     await screen.findByRole('group', { name: bookingManage.reschedule.chooser.dayLabel })
   })
 
+  it('names every day button by its visible text, and clears the picked time on a day change', async () => {
+    renderManage()
+
+    fireEvent.click(screen.getByRole('button', { name: bookingManage.reschedule.action }))
+    const dayGroup = await screen.findByRole('group', { name: bookingManage.reschedule.chooser.dayLabel })
+    const days = within(dayGroup).getAllByRole('button')
+    // Each card is named by what it shows (« mar 3 nov »), with no aria-label overriding the text.
+    expect(within(dayGroup).getByRole('button', { name: /mar\s*3\s*nov/ })).toBeTruthy()
+    expect(within(dayGroup).getByRole('button', { name: /jeu\s*5\s*nov/ })).toBeTruthy()
+    expect(days.map((day) => day.getAttribute('aria-label'))).toEqual([null, null])
+    expect(days[0]?.getAttribute('aria-pressed')).toBe('true')
+
+    // A picked time is cleared when another day is opened, and the confirm waits for a new one.
+    fireEvent.click(screen.getByRole('button', { name: '10:00' }))
+    expect(screen.getByRole('button', { name: '10:00' }).getAttribute('aria-pressed')).toBe('true')
+
+    fireEvent.click(within(dayGroup).getByRole('button', { name: /jeu\s*5\s*nov/ }))
+    expect(screen.getByRole('group', { name: 'Heure · jeudi 5 novembre' })).toBeTruthy()
+    expect(
+      (screen.getByRole('button', { name: bookingManage.reschedule.confirm.submit }) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(screen.queryByText(/Votre échange Spark passera/)).toBeNull()
+  })
+
   it('offers a retry when the availability cannot be read, and reads it again on demand', async () => {
     fetchMock.mockResolvedValue(new Response('', { status: 503 }))
     renderManage()

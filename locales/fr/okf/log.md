@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-04
+
+- **Sélecteur de créneau**: Dans `locales/fr/chatbot.ts`, le choix du créneau se fait désormais par jour puis par heure, comme sur la page de gestion : les clés `slots.dayLabel` (« Jour »), `slots.timeLabel` (« Heure · {day} »), `slots.dayGroupLabel` (« Jours disponibles ») et `slots.timeGroupLabel` (« Heures disponibles le {day} ») sont ajoutées, la question `steps.slot.question` devient « Quel jour et quelle heure vous conviennent ? », et les clés `slots.more` (« Voir plus de créneaux ») et `slots.listLabel` (« Créneaux disponibles ») sont supprimées. Les libellés visibles reprennent le texte de la page de gestion ; copie validée par Mel (proposition `docs/content-proposals/booking-slot-chooser-2026-11-04.md`).
+- **Vérification**: Aucun contenu de concept n'est modifié : les dix concepts qui citent `chatbot.ts` (`assistant`, `automatisation`, `delais`, `echange-spark`, `hors-perimetre`, `methode`, `propriete`, `qualite-relecture`, `services`, `tarifs`) sont vérifiés par Mel (`human:mel`, `2026-11-04T17:43:14+01:00`), et l'empreinte de `chatbot.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
 ## 2026-11-02
 
 - **Modification légale**: Dans `locales/fr/legal.ts`, la finalité `purposes.booking` précise désormais que la personne peut déplacer ou annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour, et `collected.booking` mentionne le motif d'annulation facultatif. Texte décidé par Mel (proposition `docs/content-proposals/booking-manage-2026-11-02.md`).

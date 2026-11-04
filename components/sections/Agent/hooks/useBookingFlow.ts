@@ -8,7 +8,6 @@ import { interpolate } from '@/lib/interpolate'
 import { chatbot } from '@/locales/fr/chatbot'
 import {
   BOOKING_HONEYPOT_FIELD,
-  BOOKING_SLOTS_PAGE_SIZE,
   getBookingEmailError,
   getBookingPhoneError,
   isBookingErrorResponse,
@@ -142,8 +141,6 @@ export type BookingFlow = {
   fieldError: 'empty' | 'invalid' | null
   /** Free slots known to the flow, oldest first. */
   slots: readonly BookingSlot[]
-  /** How many slots the slot step shows. */
-  visibleSlots: number
   /** Labels of the free slots, indexed like {@link slots}. */
   slotLabels: readonly string[]
   /** Answers already given, in recap order. */
@@ -185,8 +182,6 @@ export type BookingFlow = {
   skipStep: () => void
   /** Picks one slot. */
   chooseSlot: (slot: BookingSlot) => void
-  /** Shows the next page of free slots. */
-  showMoreSlots: () => void
   /**
    * Reopens one answered step from the recap, prefilled, to change that answer only: submitting it
    * returns to the recap, and every other answer is kept as it was.
@@ -414,7 +409,6 @@ export const useBookingFlow = (): BookingFlow => {
   const [error, setError] = useState<BookingFlowError | null>(null)
   const [fieldError, setFieldError] = useState<'empty' | 'invalid' | null>(null)
   const [slots, setSlots] = useState<readonly BookingSlot[]>([])
-  const [visibleSlots, setVisibleSlots] = useState(BOOKING_SLOTS_PAGE_SIZE)
   const [honeypot, setHoneypot] = useState('')
 
   const abortRef = useRef<AbortController | null>(null)
@@ -488,7 +482,6 @@ export const useBookingFlow = (): BookingFlow => {
       }
 
       setSlots(payload.slots)
-      setVisibleSlots(BOOKING_SLOTS_PAGE_SIZE)
     } catch {
       if (controller.signal.aborted) return
       if (!keepError) setError('network')
@@ -757,7 +750,6 @@ export const useBookingFlow = (): BookingFlow => {
     fieldValue,
     fieldError,
     slots,
-    visibleSlots,
     slotLabels,
     recap,
     editChoices: QUESTION_FIELDS,
@@ -773,7 +765,6 @@ export const useBookingFlow = (): BookingFlow => {
     blurStep,
     skipStep,
     chooseSlot,
-    showMoreSlots: () => setVisibleSlots((current) => current + BOOKING_SLOTS_PAGE_SIZE),
     editStep,
     confirm: () => void confirm(),
     retry,
