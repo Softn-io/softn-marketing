@@ -208,7 +208,7 @@ const auditInPage = ({
     logo: document.querySelector("header a[href='/']"),
     navLink: document.querySelector('header nav a'),
     toggle: document.querySelector('header button'),
-    cta: document.querySelector("header a[href='#reservation']"),
+    cta: document.querySelector("header [data-state] a[href='#assistant']"),
     main: document.querySelector('main'),
     // Hero (#10): eyebrow, the page h1, subtitle, reassurance, the two CTAs, the indicator, its
     // badge, the content container (section padding) and the section itself.

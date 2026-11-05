@@ -182,7 +182,7 @@ const headerBoxes = (page: Page): Promise<HeaderBoxes> =>
     return {
       contentRight,
       toggle: box(toggleSelector) ?? { left: Number.NaN, right: Number.NaN },
-      cta: box("header a[href='#reservation']"),
+      cta: box("header [data-state] a[href='#assistant']"),
     }
   }, `header button[aria-label^='${TOGGLE_PREFIX}']`)
 
@@ -305,7 +305,7 @@ test.describe('header: desktop', () => {
     await expect(heroCta).toBeVisible()
     await expect(wrapper).toHaveAttribute('data-state', 'hidden')
     await expect(wrapper).toHaveJSProperty('inert', true)
-    await expect(page.locator("header a[href='#reservation']")).toBeHidden()
+    await expect(page.locator("header [data-state] a[href='#assistant']")).toBeHidden()
     // Scrolling the hero CTA fully above the viewport reveals the header CTA again.
     await page.evaluate((id) => {
       const el = document.getElementById(id)
@@ -317,7 +317,7 @@ test.describe('header: desktop', () => {
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
   })
 
-  test('revealed header CTA click dispatches no listener, does not throw and sets #reservation', async ({ page }) => {
+  test('revealed header CTA click does not throw and sets #assistant', async ({ page }) => {
     const errors: string[] = []
     page.on('pageerror', (error) => errors.push(error.message))
     await injectSections(page)
@@ -334,7 +334,7 @@ test.describe('header: desktop', () => {
     }, HERO_CTA_ID)
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
     await page.getByRole('link', { name: CTA_LONG }).click()
-    await expect(page).toHaveURL(/#reservation$/)
+    await expect(page).toHaveURL(/#assistant$/)
     expect(errors).toEqual([])
   })
 
@@ -400,7 +400,7 @@ test.describe('header: single CTA label per breakpoint', () => {
     await revealHeaderCta(page)
     await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toBeVisible()
     await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
-    await expect(page.locator("header a[href='#reservation']")).toHaveCount(1)
+    await expect(page.locator("header [data-state] a[href='#assistant']")).toHaveCount(1)
 
     await page.setViewportSize({ width: 1280, height: 800 })
     await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
@@ -493,7 +493,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     // And it is not operable while hidden: focus() on the inert, visibility-hidden link is refused
     // by Chromium (the client-side `inert` plus `visibility: hidden`, not the server markup).
     const focusLanded = await page.evaluate(() => {
-      const link = document.querySelector("header a[href='#reservation']") as HTMLElement | null
+      const link = document.querySelector("header [data-state] a[href='#assistant']") as HTMLElement | null
       if (link === null) throw new Error('header CTA link missing')
       link.focus()
       return document.activeElement === link
@@ -791,7 +791,7 @@ test.describe('header: CTA without JavaScript', () => {
   /*
    * Mel's PR #75 decision: "without JavaScript the CTA is shown via `@media (scripting: none)`" — and
    * shown means laid out like the revealed state and operable: the component contract
-   * (`BookingCta.tsx`: "Without JavaScript it is a plain `#reservation` link") is the baseline. This
+   * (`BookingCta.tsx`: "Without JavaScript it is a plain `#assistant` link") is the baseline. This
    * is the acceptance surface of the D-1 (no `inert` in the server markup) and D-2 (the no-JS rise
    * reset survives the build) fixes; three separate tests so one run exposes every aspect at once.
    */
@@ -857,7 +857,9 @@ test.describe('header: CTA without JavaScript', () => {
       client: document.documentElement.clientWidth,
       headerScroll: (document.querySelector('header') as HTMLElement).scrollWidth,
       headerClient: (document.querySelector('header') as HTMLElement).clientWidth,
-      ctaRight: (document.querySelector("header a[href='#reservation']") as HTMLElement).getBoundingClientRect().right,
+      ctaRight: (
+        document.querySelector("header [data-state] a[href='#assistant']") as HTMLElement
+      ).getBoundingClientRect().right,
       rowRight: (document.querySelector('header > div:last-of-type') as HTMLElement).getBoundingClientRect().right,
     }))
     expect(metrics.scroll, `no document overflow at ${String(width)} without JavaScript`).toBeLessThanOrEqual(
@@ -881,7 +883,7 @@ test.describe('header: CTA without JavaScript', () => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 1280, height: 800 } })
     const page = await context.newPage()
     await page.goto('/preview')
-    const cta = page.locator("header a[href='#reservation']")
+    const cta = page.locator("header [data-state] a[href='#assistant']")
     await expect(cta).toBeVisible()
     // A painted call to action whose wrapper stays `inert` (server-rendered attribute, liftable by
     // no CSS) is a dead button: the whole subtree is unfocusable and unclickable. Without any
@@ -893,7 +895,7 @@ test.describe('header: CTA without JavaScript', () => {
     })
     expect(focusLanded, 'the no-JS header CTA must be focusable').toBe(true)
     await cta.click()
-    await expect(page).toHaveURL(/#reservation$/)
+    await expect(page).toHaveURL(/#assistant$/)
     await context.close()
   })
 
@@ -945,7 +947,7 @@ test.describe('header: CTA without JavaScript', () => {
     await expect(wrapper).toHaveCSS('opacity', '1')
     await expect(wrapper).toHaveCSS('translate', /^(none|matrix\(1, 0, 0, 1, 0, 0\)|0px 0px)$/)
     await expect(wrapper).toHaveCSS('scale', /^(none|1)$/)
-    const cta = page.locator("header a[href='#reservation']")
+    const cta = page.locator("header [data-state] a[href='#assistant']")
     await expect(cta).toBeVisible()
     const focusLanded = await cta.evaluate((el) => {
       ;(el as HTMLElement).focus()
@@ -953,7 +955,7 @@ test.describe('header: CTA without JavaScript', () => {
     })
     expect(focusLanded, 'the no-JS + reduced-motion header CTA must be focusable').toBe(true)
     await cta.click()
-    await expect(page).toHaveURL(/#reservation$/)
+    await expect(page).toHaveURL(/#assistant$/)
     await context.close()
   })
 
@@ -984,7 +986,7 @@ test.describe('header: no horizontal overflow with the CTA revealed', () => {
         const nav = document.querySelector('header nav')
         const logo = document.querySelector('header a[aria-label]')
         const actions = h?.lastElementChild ?? null
-        const cta = document.querySelector("header a[href='#reservation']")
+        const cta = document.querySelector("header [data-state] a[href='#assistant']")
         const rect = (el: Element | null) => {
           if (el === null) return null
           const r = el.getBoundingClientRect()
@@ -1034,7 +1036,7 @@ test.describe('header: booking CTA typography', () => {
       // CSS locator on purpose: while the hero CTA is on screen the ScrollRevealCta keeps this wrapper
       // hidden and inert, and computed typography resolves identically in that state — the contract is
       // about the Button, not about the reveal, which has its own test above.
-      const cta = page.locator("header a[href='#reservation']")
+      const cta = page.locator("header [data-state] a[href='#assistant']")
       await expect(cta).toHaveAttribute('class', /size-sm/)
       await expect(cta).toHaveCSS('font-size', '14px')
       await expect(cta).toHaveCSS('font-weight', '600')
@@ -1127,7 +1129,7 @@ test.describe('header: mobile drawer', () => {
   test('burger replaces the nav below lg and toggles aria-expanded', async ({ page }) => {
     await page.goto('/preview')
     await expect(page.getByRole('navigation', { name: MAIN_NAV })).toBeHidden()
-    await expect(page.locator("header a[href='#reservation']")).toBeHidden()
+    await expect(page.locator("header [data-state] a[href='#assistant']")).toBeHidden()
     const trigger = burger(page)
     await expect(trigger).toBeVisible()
     await expect(trigger).toHaveAttribute('aria-expanded', 'false')
@@ -1291,12 +1293,12 @@ test.describe('header: mobile drawer', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000)
   })
 
-  test('clicking the CTA closes the drawer and goes to #reservation', async ({ page }) => {
+  test('clicking the CTA closes the drawer and goes to #assistant', async ({ page }) => {
     await page.goto('/preview')
     await burger(page).click()
     await drawer(page).getByRole('link', { name: CTA_LONG }).click()
     await expect(drawer(page)).toBeHidden()
-    await expect(page).toHaveURL(/#reservation$/)
+    await expect(page).toHaveURL(/#assistant$/)
   })
 
   test("close control in the burger's spot closes the drawer", async ({ page }) => {
@@ -1443,8 +1445,8 @@ test.describe('header: drawer top row matches the header', () => {
   type DrawerOptions = {
     viewport?: { width: number; height: number }
     reducedMotion?: 'reduce' | 'no-preference'
-    /** Registers a window listener that claims `open-chatbot` and counts the requests. */
-    claimChatbot?: boolean
+    /** Registers a window listener that counts the `assistant-intent` events. */
+    countIntents?: boolean
   }
 
   const openTouchDrawer = async (
@@ -1460,12 +1462,11 @@ test.describe('header: drawer top row matches the header', () => {
       reducedMotion: options.reducedMotion ?? 'no-preference',
     })
     await context.addInitScript((value) => localStorage.setItem('softn-theme', value), scheme)
-    if (options.claimChatbot === true) {
+    if (options.countIntents === true) {
       await context.addInitScript(() => {
-        Reflect.set(window, '__chatbotRequests', 0)
-        window.addEventListener('open-chatbot', (event) => {
-          event.preventDefault()
-          Reflect.set(window, '__chatbotRequests', Number(Reflect.get(window, '__chatbotRequests')) + 1)
+        Reflect.set(window, '__assistantIntents', 0)
+        window.addEventListener('assistant-intent', () => {
+          Reflect.set(window, '__assistantIntents', Number(Reflect.get(window, '__assistantIntents')) + 1)
         })
       })
     }
@@ -1890,10 +1891,10 @@ test.describe('header: drawer top row matches the header', () => {
     })
   }
 
-  test('a failed swipe over the CTA then a tap on it still dispatches open-chatbot once and closes the drawer', async ({
+  test('a failed swipe over the CTA then a tap on it still dispatches the booking intent once and closes the drawer', async ({
     browser,
   }) => {
-    const { context, page, touch } = await openTouchDrawer(browser, 'dark', { claimChatbot: true })
+    const { context, page, touch } = await openTouchDrawer(browser, 'dark', { countIntents: true })
     const cta = drawer(page).getByRole('link', { name: CTA_LONG })
     const point = await centerOf(cta)
     await drag(touch, point.y, point.y + 200, point.x, 25)
@@ -1902,8 +1903,8 @@ test.describe('header: drawer top row matches the header', () => {
     await expect(drawer(page)).toBeVisible()
     await cta.tap()
     await expect(drawer(page)).toBeHidden()
-    await expect.poll(() => page.evaluate(() => Reflect.get(window, '__chatbotRequests'))).toBe(1)
-    await expect(page).not.toHaveURL(/#reservation$/)
+    await expect.poll(() => page.evaluate(() => Reflect.get(window, '__assistantIntents'))).toBe(1)
+    await expect(page).toHaveURL(/#assistant$/)
     await context.close()
   })
 
@@ -2015,7 +2016,7 @@ test.describe('header: contrast in both themes', () => {
       await expect
         .poll(() => page.locator('header [data-state]').evaluate((el) => getComputedStyle(el).opacity))
         .toBe('1')
-      const ratio = await page.locator("header a[href='#reservation']").evaluate((el) => {
+      const ratio = await page.locator("header [data-state] a[href='#assistant']").evaluate((el) => {
         const toRgb = (css: string): [number, number, number] => {
           const canvas = document.createElement('canvas')
           canvas.width = 1
