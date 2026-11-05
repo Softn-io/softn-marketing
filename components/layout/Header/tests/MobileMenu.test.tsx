@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { OPEN_CHATBOT_EVENT } from '@/lib/chatbotEvents'
+import { ASSISTANT_INTENTS, ASSISTANT_INTENT_EVENT, type AssistantIntentDetail } from '@/lib/assistant/intent'
 import { MobileMenu } from '../MobileMenu'
 import { getNavLinks } from '../data/navLinks'
 
@@ -93,8 +93,10 @@ describe('MobileMenu', () => {
       expect(label).not.toBeNull()
       expect(label?.startsWith(link.textContent ?? '')).toBe(true)
     })
-    expect(dialog.querySelector(`a[href="#reservation"]`)?.hasAttribute('aria-label')).toBe(false)
-    expect(dialog.querySelector(`a[href="#reservation"]`)?.textContent).toBe(CTA_LABEL)
+    const cta = within(dialog).getByRole('link', { name: CTA_LABEL })
+    expect(cta.getAttribute('href')).toBe('#assistant')
+    expect(cta.hasAttribute('aria-label')).toBe(false)
+    expect(cta.textContent).toBe(CTA_LABEL)
   })
 
   it('puts the close control, logo and theme toggle inside the dialog and focuses the close control', async () => {
@@ -142,29 +144,27 @@ describe('MobileMenu', () => {
     await waitFor(() => expect(window.location.hash).toBe('#methode'))
   })
 
-  it('closes the drawer then dispatches open-chatbot from the CTA', async () => {
+  it('closes the drawer then dispatches the booking intent from the CTA', async () => {
     const received = vi.fn()
-    const listener = (event: Event) => {
-      event.preventDefault()
-      received()
-    }
-    window.addEventListener(OPEN_CHATBOT_EVENT, listener)
+    const listener = (event: Event) => received((event as CustomEvent<AssistantIntentDetail>).detail)
+    window.addEventListener(ASSISTANT_INTENT_EVENT, listener)
     renderMenu()
     fireEvent.click(burger())
     const dialog = await screen.findByRole('dialog')
-    fireEvent.click(dialog.querySelector(`a[href="#reservation"]`) as Element)
-    await waitFor(() => expect(received).toHaveBeenCalledTimes(1))
+    fireEvent.click(within(dialog).getByRole('link', { name: CTA_LABEL }))
+    await waitFor(() => expect(received).toHaveBeenCalledWith({ intent: ASSISTANT_INTENTS.booking }))
     expect(burger().getAttribute('aria-expanded')).toBe('false')
-    expect(window.location.hash).toBe('')
-    window.removeEventListener(OPEN_CHATBOT_EVENT, listener)
+    expect(window.location.hash).toBe('#assistant')
+    window.removeEventListener(ASSISTANT_INTENT_EVENT, listener)
   })
 
-  it('falls back to #reservation from the CTA when the chatbot does not claim the event', async () => {
+  it('closes the drawer then sets the fragment to the assistant section from the CTA', async () => {
     renderMenu()
     fireEvent.click(burger())
     const dialog = await screen.findByRole('dialog')
-    fireEvent.click(dialog.querySelector(`a[href="#reservation"]`) as Element)
-    await waitFor(() => expect(window.location.hash).toBe('#reservation'))
+    fireEvent.click(within(dialog).getByRole('link', { name: CTA_LABEL }))
+    await waitFor(() => expect(window.location.hash).toBe('#assistant'))
+    expect(burger().getAttribute('aria-expanded')).toBe('false')
   })
 
   it('renders a decorative handle with no text and no accessible role', async () => {
@@ -184,7 +184,7 @@ describe('MobileMenu', () => {
     const dialog = await screen.findByRole('dialog', { name: MENU_LABEL })
     const ignore = (element: Element | null): boolean => element?.closest('[data-base-ui-swipe-ignore]') != null
     expect(ignore(dialog.querySelector(`nav a[href="#services"]`))).toBe(true)
-    expect(ignore(dialog.querySelector(`a[href="#reservation"]`))).toBe(true)
+    expect(ignore(within(dialog).getByRole('link', { name: CTA_LABEL }))).toBe(true)
     expect(ignore(closeButton(dialog))).toBe(false)
     expect(ignore(dialog.querySelector(`a[href="/"]`))).toBe(false)
     expect(ignore(dialog.querySelector('[aria-hidden="true"] > span'))).toBe(false)

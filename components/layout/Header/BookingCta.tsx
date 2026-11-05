@@ -3,7 +3,7 @@
 import type { MouseEvent, ReactNode } from 'react'
 import { Button } from '@components/ui/Button'
 import { SECTION_IDS, goToSection } from '@/lib/anchors'
-import { dispatchOpenChatbot } from '@/lib/chatbotEvents'
+import { ASSISTANT_INTENTS, dispatchAssistantIntent } from '@/lib/assistant/intent'
 
 type BookingCtaProps = {
   children: ReactNode
@@ -21,13 +21,14 @@ const isPlainLeftClick = (event: MouseEvent<HTMLAnchorElement>): boolean =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 /**
- * Booking call to action. Asks the chatbot to open through the `open-chatbot` event; when no
- * listener claims it, scrolls to the booking section. Without JavaScript it is a plain `#reservation` link.
+ * Booking call to action. Links to the assistant section, where the reservation flow lives, so it
+ * works without JavaScript; clicking asks the assistant to open that flow and scrolls the section
+ * into view, whether or not its fragment is already in the URL.
  */
 export const BookingCta = ({ children, className, size, onBeforeActivate }: BookingCtaProps) => {
   const activate = (): void => {
-    const claimed = dispatchOpenChatbot({ source: 'header' })
-    if (!claimed) goToSection(SECTION_IDS.booking)
+    goToSection(SECTION_IDS.agent)
+    dispatchAssistantIntent(ASSISTANT_INTENTS.booking)
   }
 
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
@@ -41,7 +42,7 @@ export const BookingCta = ({ children, className, size, onBeforeActivate }: Book
   }
 
   return (
-    <Button href={`#${SECTION_IDS.booking}`} onClick={handleClick} size={size} className={className}>
+    <Button href={`#${SECTION_IDS.agent}`} onClick={handleClick} size={size} className={className}>
       {children}
     </Button>
   )

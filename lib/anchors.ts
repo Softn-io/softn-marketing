@@ -1,3 +1,5 @@
+import { prefersReducedMotion } from '@/lib/motion'
+
 /** Element ids of the one-page sections targeted by in-page links: stable French slugs of the section topics, shared by the header and the sections. */
 export const SECTION_IDS = {
   main: 'main',
@@ -6,7 +8,6 @@ export const SECTION_IDS = {
   agent: 'assistant',
   thisSite: 'coulisses',
   faq: 'faq',
-  booking: 'reservation',
 } as const
 
 /**
@@ -29,7 +30,17 @@ export type SectionId = (typeof SECTION_IDS)[keyof typeof SECTION_IDS]
 /**
  * Scrolls to a section by updating the URL fragment, which lets the browser apply the page's
  * `scroll-padding-top` and `scroll-behavior` and keeps the address bar in sync.
+ *
+ * When the fragment already names the target, changing it would be a no-op and the browser would
+ * stay where it is: the section is scrolled into view explicitly instead, so a call to action always
+ * reaches its section even while the hash already points there. That explicit scroll is smooth unless
+ * the visitor asked for less motion.
  */
 export const goToSection = (id: SectionId): void => {
-  window.location.hash = id
+  if (window.location.hash !== `#${id}`) {
+    window.location.hash = id
+    return
+  }
+
+  document.getElementById(id)?.scrollIntoView({ block: 'start', behavior: prefersReducedMotion() ? 'auto' : 'smooth' })
 }

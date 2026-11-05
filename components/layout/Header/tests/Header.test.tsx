@@ -23,6 +23,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+/**
+ * The desktop booking call to action: the header's `#assistant` link that is not a navigation one.
+ * It comes after the navigation links in document order.
+ */
+const bookingCta = (): Element | null =>
+  Array.from(document.querySelectorAll(`header a[href="#assistant"]`)).at(-1) ?? null
+
 describe('Header', () => {
   it('renders the skip link to #main as the first focusable element', () => {
     render(<Header />)
@@ -72,7 +79,7 @@ describe('Header', () => {
     links.forEach((link) => {
       expect(link.getAttribute('aria-label')?.startsWith(link.textContent ?? '')).toBe(true)
     })
-    expect(document.querySelector(`header a[href="#reservation"]`)?.hasAttribute('aria-label')).toBe(false)
+    expect(bookingCta()?.hasAttribute('aria-label')).toBe(false)
   })
 
   it('keeps the navigation landmark name distinct from the burger menu name', () => {
@@ -87,15 +94,15 @@ describe('Header', () => {
     expect(screen.getByRole('button', { name: nav.menu.ariaLabel }).className).toContain('lg:hidden')
   })
 
-  it('renders the booking call to action as a #reservation link', () => {
+  it('renders the booking call to action as a #assistant link', () => {
     render(<Header />)
-    const cta = document.querySelector(`header a[href="#reservation"]`)
+    const cta = bookingCta()
     expect(cta).not.toBeNull()
   })
 
   it('renders a short and a full CTA wording toggled at the xl breakpoint', () => {
     render(<Header />)
-    const cta = document.querySelector(`header a[href="#reservation"]`)
+    const cta = bookingCta()
     const spans = Array.from(cta?.querySelectorAll('span') ?? [])
     expect(spans.map((span) => span.textContent)).toEqual([nav.ctaShort, nav.cta])
     expect(spans[0]?.className).toContain('xl:hidden')
