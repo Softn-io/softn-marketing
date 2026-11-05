@@ -91,14 +91,22 @@ const meetAndManageLinks = (meetLink: string, manageLink: string): readonly Html
  * Stage and code of a failed call, in the shape the booking routes already log.
  *
  * The step of the credential chain comes first when one failed — the mail send walks the same keyless
- * chain as the calendar — and the name of the call otherwise; the code and the upstream status
- * follow. Never an upstream body, a name, an address or a link.
+ * chain as the calendar — and the name of the call otherwise; the code, the upstream status and
+ * Google's machine-readable reason follow. Never an upstream body beyond that reason token, nor a
+ * name, an address or a link.
  */
 const failureDetail = (
   call: string,
-  failure: { readonly error: string; readonly status?: number; readonly step?: GoogleAuthStep },
+  failure: {
+    readonly error: string
+    readonly status?: number
+    readonly step?: GoogleAuthStep
+    readonly reason?: string
+  },
 ): string =>
-  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}`
+  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}${
+    failure.reason === undefined ? '' : ` reason=${failure.reason}`
+  }`
 
 /** The guest of one email, or `null` when the event does not carry every part of it. */
 const guestOf = (event: BookingEmailEvent): BookingEmailGuest | null => {
@@ -223,7 +231,13 @@ export const updateEmailContent = (input: {
   }
 }
 
-/** Cancellation email of one booking: subject and both bodies, or `null` when a value is missing. */
+/**
+ * Cancellation email of one booking: subject and both bodies, or `null` when a value is missing.
+ *
+ * The plain-text part prints the raw rebooking address, as it does for every link; the HTML part
+ * renders it behind the validated label of `bookingEmails.cancellation.bookingLinkLabel`, exactly
+ * like the manage link of the other emails.
+ */
 export const cancellationEmailContent = (input: {
   readonly firstName: string
   readonly slot: BookingSlot
@@ -233,7 +247,7 @@ export const cancellationEmailContent = (input: {
   if (values === null) return null
 
   const bookingLink = bookingOpenLink()
-  const { subject, body, preheader } = bookingEmails.cancellation
+  const { subject, body, preheader, bookingLinkLabel } = bookingEmails.cancellation
   const parameters = { ...values, bookingLink }
   const text = interpolate(body, parameters)
 
@@ -242,7 +256,7 @@ export const cancellationEmailContent = (input: {
     text,
     html: htmlBody({
       text,
-      links: [{ url: bookingLink, label: bookingLink }],
+      links: [{ url: bookingLink, label: bookingLinkLabel }],
       preheader: interpolate(preheader, parameters),
       signature: bookingEmails.signature,
     }),

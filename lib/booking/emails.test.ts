@@ -208,6 +208,30 @@ describe('sendBookingConfirmationEmail', () => {
     expect(JSON.stringify(outcome)).not.toContain('Camille')
   })
 
+  it("carries Google's machine-readable reason in the code Mel logs", async () => {
+    gmailMock.sendGmailMessage.mockResolvedValue({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'insufficientPermissions',
+    })
+
+    const outcome = await sendBookingConfirmationEmail({
+      event,
+      slot: SLOT,
+      meetLink: MEET_LINK,
+      manageLink: MANAGE_LINK,
+      rules: BOOKING_RULES,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      detail: 'gmail unauthorized status=403 reason=insufficientPermissions',
+    })
+  })
+
   it('reports a failed mark too, so the caller logs a second code', async () => {
     gmailMock.sendGmailMessage.mockResolvedValue({ ok: false, error: 'timeout' })
     calendarMock.markBookingEmailFailed.mockResolvedValue({ ok: false, error: 'request-failed', status: 500 })
@@ -551,8 +575,14 @@ describe('rendered copy of the four booking emails', () => {
         expect(content.text).toContain('https://softn.io/?rdv#assistant')
         expect(content.text).not.toContain(MEET_LINK)
         expect(content.text).not.toContain(MANAGE_LINK)
-        // Its single link is printed as an address in the HTML too.
-        expect(content.html).toContain('<a href="https://softn.io/?rdv#assistant">https://softn.io/?rdv#assistant</a>')
+        // The plain-text part keeps the raw address, and never the HTML label...
+        expect(content.text).toContain('https://softn.io/?rdv#assistant')
+        expect(content.text).not.toContain(bookingEmails.cancellation.bookingLinkLabel)
+        // ...while the HTML part shows it behind the validated label of the cancellation copy.
+        expect(content.html).toContain(
+          `<a href="https://softn.io/?rdv#assistant">${bookingEmails.cancellation.bookingLinkLabel}</a>`,
+        )
+        expect(content.html).not.toContain('>https://softn.io/?rdv#assistant</a>')
       } else {
         expect(content.text).toContain(MEET_LINK)
         expect(content.text).toContain(MANAGE_LINK)
@@ -565,6 +595,19 @@ describe('rendered copy of the four booking emails', () => {
       }
     })
   }
+
+  it('renders the rebooking link of the cancellation behind its validated label', () => {
+    const content = cancellationEmailContent({ firstName: 'Camille', slot: SLOT, rules: BOOKING_RULES })
+    if (content === null) throw new Error('the cancellation content must build')
+
+    // The copy sentence keeps the address in the plain-text part...
+    expect(content.text).toContain(
+      "Si vous changez d'avis, vous pouvez réserver un nouvel échange quand vous le souhaitez : https://softn.io/?rdv#assistant",
+    )
+    // ...and the HTML part replaces it with the words Mel validated, exactly like the manage link.
+    expect(content.html).toContain('<a href="https://softn.io/?rdv#assistant">Réserver un nouvel échange</a>')
+    expect(content.html).not.toContain('>https://softn.io/?rdv#assistant</a>')
+  })
 
   it('the calendar description fills the manage line of the manage copy, and nothing else', () => {
     const description = invitationDescription({

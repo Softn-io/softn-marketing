@@ -12,7 +12,9 @@
  *
  * `preheader` is the preview text a mail client shows next to the subject. It is part of the copy
  * validated with Mel, kept beside each email; the HTML alternative itself carries the paragraphs
- * only, as the validated proposal asks.
+ * only, as the validated proposal asks. The cancellation email adds one label of its own
+ * (`bookingLinkLabel`): its HTML part renders the rebooking address behind those words, exactly like
+ * the manage link of the other emails, while every plain-text part keeps the raw URL.
  *
  * The reminder is the fourth email: it has no calendar file and is sent by the scheduled job, not
  * by this application's booking routes. Its copy lives here so that job only has to wire it.
@@ -87,6 +89,13 @@ Vous recevez ce message parce que vous avez réservé un échange Spark sur soft
   cancellation: {
     subject: 'Votre échange Spark du {date} est annulé',
     preheader: "L'annulation est enregistrée. Vous pouvez réserver à nouveau quand vous le souhaitez.",
+    /**
+     * Words the rebooking link of the cancellation email shows in its HTML part.
+     *
+     * The plain-text part prints the raw `{bookingLink}` address, as it does for every link; the
+     * HTML part renders it behind these words, exactly like the manage link of the other emails.
+     */
+    bookingLinkLabel: 'Réserver un nouvel échange',
     body: `Bonjour {firstName},
 
 Votre échange Spark prévu le {date} à {time} (heure de Paris) est annulé.
