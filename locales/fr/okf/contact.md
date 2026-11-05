@@ -10,6 +10,8 @@ verified:
   - { by: "human:mel", at: "2026-11-01T00:54:10+01:00" }
   - { by: "human:mel", at: "2026-11-02T23:21:03+01:00" }
   - { by: "human:mel", at: "2026-11-05T13:57:20+01:00" }
+  - { by: "human:mel", at: "2026-11-05T17:58:20+01:00" }
+  
 sources:
   - { id: contact, resource: ../contact.ts, title: Page de contact }
   - { id: legal, resource: ../legal.ts, title: Politique de confidentialité }

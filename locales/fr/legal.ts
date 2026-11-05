@@ -98,7 +98,7 @@ export const legal = {
       baserow:
         "Baserow : enregistrement des demandes de rendez-vous. Service hébergé en Allemagne (Union européenne), par une société établie aux Pays-Bas. Aucun transfert hors de l'Union européenne.",
       google:
-        "Google Calendar et Gmail : agenda des rendez-vous et envoi des e-mails de service (confirmation, mise à jour, annulation, rappel). Données hébergées dans l'Union européenne (paramètre de localisation des données de Google Workspace) ; transferts encadrés par des clauses contractuelles types. Lien Google Meet : hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].",
+        "Google Calendar et Gmail : agenda des rendez-vous et envoi des e-mails de service (confirmation, mise à jour, annulation, rappel). Données hébergées dans l'Union européenne (paramètre de localisation des données de Google Workspace) ; transferts encadrés par des clauses contractuelles types. Google Meet : visioconférence de l'échange. L'échange n'est pas enregistré. Gemini (Google Workspace) peut en produire une transcription et un résumé, qui servent uniquement à préparer le plan d'action ; ces contenus restent dans l'espace Google Workspace de Softn.io, ne sont pas utilisés pour entraîner des modèles et sont conservés pendant 365 jours après l'échange ou, si une mission est engagée, pendant toute la durée du contrat. Le lien de la visioconférence et le traitement en direct de l'appel peuvent avoir lieu hors de l'Union européenne, dans le cadre des clauses contractuelles types de Google.",
       vercel:
         'Vercel : hébergement du site et journaux techniques. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
       umami:

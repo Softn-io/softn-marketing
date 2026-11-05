@@ -1,5 +1,8 @@
 # Journal de la base de connaissances
 
+ ## 2026-11-05:
+- **Modification légale**: Dans `locales/fr/legal.ts`, `processors.google` décrit désormais Google Meet : l'échange n'est pas enregistré, Gemini (Google Workspace) peut en produire une transcription et un résumé conservés dans l'espace Google Workspace de Softn.io, et le traitement en direct de l'appel peut avoir lieu hors de l'Union européenne. Les concepts `assistant` et `contact` sont vérifiés par Mel (`human:mel`, `2026-11-05T17:58:20+01:00`) et l'empreinte de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`.
+
 ## 2026-11-05
 
 - **Mise à jour**: Les e-mails de réservation sont désormais envoyés par Softn.io depuis l'adresse meet@softn.io (confirmation, mise à jour, annulation, rappel), et Google n'envoie plus d'e-mail aux invités. Dans `locales/fr/chatbot.ts`, le message de succès de la réservation annonce un e-mail de confirmation avec l'invitation à ajouter à l'agenda, et invite à vérifier les courriers indésirables ; Textes décidés par Mel (proposition `docs/content-proposals/booking-emails-2026-11-05.md`).
