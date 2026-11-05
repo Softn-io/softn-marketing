@@ -15,7 +15,7 @@ import {
 } from '@/lib/booking/event'
 import { hasJsonContentType, isSameOriginRequest } from '@/lib/booking/guard'
 import { sendBookingConfirmationEmail } from '@/lib/booking/emails'
-import { bookingLeadFields } from '@/lib/booking/lead'
+import { bookingLeadFields, BOOKING_LEAD_REQUIRED_FIELD_CHECKS } from '@/lib/booking/lead'
 import { readBookingLinkSecret } from '@/lib/booking/manageToken'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { readEnv } from '@/lib/env'
@@ -108,7 +108,9 @@ type StoreLeadInput = {
  *
  * A missing table id is reported as `not-configured` without a network call, so a preview or a test
  * without the variable keeps working; the caller only logs the code, because the booking already
- * exists in the calendar.
+ * exists in the calendar. The create verifies the columns of {@link BOOKING_LEAD_REQUIRED_FIELD_CHECKS}
+ * so a misnamed column, which Baserow accepts with a 200 and an empty cell, comes back as
+ * `schema-mismatch` with the id of the row that was created.
  */
 const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLeadInput) => {
   let tableId: string | undefined
@@ -119,7 +121,11 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
   }
   if (tableId === undefined) return { ok: false as const, error: 'not-configured' as const }
 
-  return createBaserowRow({ tableId, fields: bookingLeadFields({ lead, slot, consentOn }) })
+  return createBaserowRow({
+    tableId,
+    fields: bookingLeadFields({ lead, slot, consentOn }),
+    verifyFields: BOOKING_LEAD_REQUIRED_FIELD_CHECKS,
+  })
 }
 
 /**
@@ -136,7 +142,9 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
  * exists answers `slot-taken` or the generic error and leaves no trace. When only the email or
  * Baserow fails the booking stands — the visitor is told it succeeded, the failure is logged as a
  * code, and the event carries a mark for Mel, because the event description already carries their
- * answers.
+ * answers. A create that loses one of the verified columns is a `schema-mismatch`: Baserow did
+ * create the row, so the event is marked as not stored and still keeps the row id, while the
+ * booking and its confirmation stand.
  *
  * @param request Incoming `POST` with the booking request as JSON.
  * @returns `{ booked: true }` on success, or `{ error }` with 400, 403, 409, 415, 429 or 503.
@@ -232,17 +240,31 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   const row = await createBaserowRowWithLeadsTable({ lead, slot, consentOn })
-  if (!row.ok) {
+  if (row.ok) {
+    // The id of the row is kept with the event, best effort, so a later reschedule or cancellation
+    // updates the row without a lookup by personal data. No notification is sent to the visitor.
+    const mark = await storeBookingLeadRowId({ eventId: event.data.eventId, rowId: row.data.id, subjectToken })
+    if (!mark.ok) logFailure(`lead row id not stored: calendar ${googleFailureDetail('events patch', mark)}`)
+  } else if (row.error === 'schema-mismatch' && row.rowId !== undefined) {
+    // Baserow created the row but gave back a verified column without the value that was sent: the
+    // row exists and its cells are incomplete. One code tells Mel what happened; the mark lets her
+    // find the event, and the row id stays on it so a reschedule or a cancellation still finds the
+    // row. The booking stands, the visitor is told so and the confirmation is sent as usual.
+    logFailure('lead not stored: baserow schema-mismatch')
+    const mark = await markBookingLeadNotStored({ eventId: event.data.eventId, subjectToken })
+    if (!mark.ok) logFailure(`lead not stored: calendar ${googleFailureDetail('events patch', mark)}`)
+    const rowIdMark = await storeBookingLeadRowId({
+      eventId: event.data.eventId,
+      rowId: row.rowId,
+      subjectToken,
+    })
+    if (!rowIdMark.ok) logFailure(`lead row id not stored: calendar ${googleFailureDetail('events patch', rowIdMark)}`)
+  } else {
     logFailure(`lead not stored: baserow ${baserowFailureDetail(row)}`)
     // The lead then lives in the calendar only: a mark lets Mel find the events whose row is
     // missing. It is best effort, and a failed mark never changes what the visitor was told.
     const mark = await markBookingLeadNotStored({ eventId: event.data.eventId, subjectToken })
     if (!mark.ok) logFailure(`lead not stored: calendar ${googleFailureDetail('events patch', mark)}`)
-  } else {
-    // The id of the row is kept with the event, best effort, so a later reschedule or cancellation
-    // updates the row without a lookup by personal data. No notification is sent to the visitor.
-    const mark = await storeBookingLeadRowId({ eventId: event.data.eventId, rowId: row.data.id, subjectToken })
-    if (!mark.ok) logFailure(`lead row id not stored: calendar ${googleFailureDetail('events patch', mark)}`)
   }
 
   // Google notifies nobody (`sendUpdates=none`): Softn sends the confirmation itself, with the

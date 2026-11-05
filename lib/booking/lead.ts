@@ -17,7 +17,7 @@
  * (`New`, `Spark Done`) are hers to set by hand and are never written here.
  */
 
-import type { BaserowFields } from '@/lib/baserow'
+import type { BaserowFieldCheck, BaserowFields } from '@/lib/baserow'
 import { bookingManage } from '@/locales/fr/bookingManage'
 import type { BookingCancelReason } from '@/schemas/bookingManageLimits'
 import type { BookingSlot } from './availability'
@@ -39,6 +39,30 @@ export const BOOKING_LEAD_FIELDS = {
   status: 'Status',
   cancelReason: 'Cancel reason',
 } as const
+
+/**
+ * Columns of the leads table whose value a create must give back unchanged, with the comparison
+ * their actual Baserow type needs.
+ *
+ * Baserow accepts a write that names a column it does not know and answers 200 without the value:
+ * the row exists but the cell stays empty. The booking route asks the create to check these columns,
+ * the ones Mel reads first and the ones a reschedule or a cancellation needs. The optional answers
+ * (phone, structure, role), the single select and the cancellation columns are not verified: they
+ * are either optional or written by another path. Names come from {@link BOOKING_LEAD_FIELDS} so the
+ * checks cannot drift from the payload.
+ */
+export const BOOKING_LEAD_REQUIRED_FIELD_CHECKS: readonly BaserowFieldCheck[] = [
+  { field: BOOKING_LEAD_FIELDS.firstName, kind: 'text' },
+  { field: BOOKING_LEAD_FIELDS.lastName, kind: 'text' },
+  { field: BOOKING_LEAD_FIELDS.email, kind: 'email' },
+  { field: BOOKING_LEAD_FIELDS.need, kind: 'text' },
+  // Date with time: Baserow may drop the milliseconds, so the instants are compared, not the strings.
+  { field: BOOKING_LEAD_FIELDS.slot, kind: 'date-time' },
+  { field: BOOKING_LEAD_FIELDS.consent, kind: 'boolean' },
+  // Date without time: the exact calendar day the booking sends.
+  { field: BOOKING_LEAD_FIELDS.consentOn, kind: 'date' },
+  { field: BOOKING_LEAD_FIELDS.source, kind: 'text' },
+]
 
 /** Value stored in the `Source` column of every booking made in the chat. */
 export const BOOKING_LEAD_SOURCE = 'chatbot'
