@@ -94,6 +94,16 @@ const googlePersonalCalendarId = z.preprocess(blankToUndefined, z.email().option
 const bookingLinkSecret = z.preprocess(blankToUndefined, z.string().min(32).optional())
 
 /**
+ * Secret the scheduled reminder workflow presents to `app/api/booking/reminders`.
+ *
+ * The GitHub Actions workflow sends it as a bearer token, the same value being stored as a GitHub
+ * repository secret. At least 32 characters, like the manage-link secret: the strength is in the
+ * value, which the route compares in constant time. Optional: unset, the reminder route fails
+ * closed (503) instead of running unauthenticated. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const cronSecret = z.preprocess(blankToUndefined, z.string().min(32).optional())
+
+/**
  * Deployment environment Vercel sets on every build (`production`, `preview`, `development`).
  * Optional because nobody configures it by hand, and because local runs have no such variable:
  * only the exact value `production` pins the manage link to the canonical site origin. Server-side
@@ -136,8 +146,10 @@ const vercelEnv = z.preprocess(blankToUndefined, optionalString)
  * optional signing secret of the manage link: unset, a booking carries no
  * manage line and every manage token is refused. `VERCEL_ENV` is set by the
  * platform on every deployment, never by hand: it is read to pin the manage
- * link's origin to the canonical site in production. All of them stay
- * server-side and must never be prefixed with `NEXT_PUBLIC_`.
+ * link's origin to the canonical site in production. `CRON_SECRET` is the
+ * optional bearer secret of the reminder route, shared with the GitHub Actions
+ * repository secret of the same name: unset, that route fails closed. All of
+ * them stay server-side and must never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -158,6 +170,7 @@ const EnvSchema = z.object({
   GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: gcpWorkloadIdentityPoolProviderId,
   VERCEL_OIDC_TOKEN: vercelOidcToken,
   BOOKING_LINK_SECRET: bookingLinkSecret,
+  CRON_SECRET: cronSecret,
   VERCEL_ENV: vercelEnv,
 })
 

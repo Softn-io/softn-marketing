@@ -95,7 +95,7 @@ export const chatbot = {
         field: 'Nom',
       },
       email: {
-        question: "Quelle adresse e-mail pour recevoir l'invitation ?",
+        question: "Quelle adresse e-mail pour recevoir l'invitation\u00A0?",
         field: 'E-mail',
         error: 'Veuillez fournir une adresse e-mail valide.',
       },
@@ -140,7 +140,7 @@ export const chatbot = {
     success: {
       title: 'Rendez-vous confirmé',
       message:
-        'Merci {firstName}. Votre échange Spark est confirmé pour le créneau « {slot} ». Vous allez recevoir une invitation par e-mail ou directement dans votre agenda.',
+        "Merci {firstName}. Votre échange Spark est confirmé pour le créneau « {slot} ». Vous allez recevoir un e-mail de confirmation, avec l'invitation à ajouter à votre agenda. Pensez à vérifier vos courriers indésirables s'il tarde.",
       restart: 'Recommencer',
     },
     /** Wording of the calendar event, read by Mel and by the visitor in the invitation. */

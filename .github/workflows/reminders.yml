@@ -1,0 +1,38 @@
+on:
+  # Twice an hour, off the hour: GitHub queues scheduled runs and starts them late
+  # under load, and the route catches up by itself on every call starting within the
+  # next 24 hours.
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+# The job needs no repository permission: it authenticates to the site with a secret
+# of its own.
+permissions: {}
+
+# One run at a time. Without cancel-in-progress, a delayed run waits its turn instead of stopping the run already talking to the site.
+concurrency:
+  group: booking-reminders
+  cancel-in-progress: false
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger the reminder job
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          for attempt in 1 2 3; do
+            if curl --fail-with-body -sS -X POST \
+              --max-time 60 \
+              -H "Authorization: Bearer ${CRON_SECRET}" \
+              https://softn.io/api/booking/reminders; then
+              exit 0
+            fi
+            echo "Attempt ${attempt} failed, retrying in 10 seconds"
+            sleep 10
+          done
+          echo "The reminder job could not be reached"
+          exit 1
