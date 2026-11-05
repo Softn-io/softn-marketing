@@ -244,7 +244,7 @@ describe('fragment in the URL', () => {
   })
 
   it('ignores a fragment that names a section the page does not render', () => {
-    openOn(SECTION_IDS.booking)
+    openOn(SECTION_IDS.main)
     renderNav(ALL)
     expect(resizers).toHaveLength(0)
     expect(currentLinks()).toEqual([])
@@ -339,5 +339,73 @@ describe('fragment resync', () => {
     placeTop(SECTION_IDS.method, 1650)
     expect(resizers).toHaveLength(0)
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('URL fragment sync', () => {
+  it('mirrors the active section into the fragment with replaceState', () => {
+    const replaceState = vi.spyOn(window.history, 'replaceState')
+    renderNav(ALL)
+    intersect(SECTION_IDS.method, true)
+    expect(window.location.hash).toBe(`#${SECTION_IDS.method}`)
+    expect(replaceState).toHaveBeenCalledWith(null, '', `/#${SECTION_IDS.method}`)
+    replaceState.mockRestore()
+  })
+
+  it('never pushes a history entry and never emits a hashchange', () => {
+    const pushState = vi.spyOn(window.history, 'pushState')
+    const onHashChange = vi.fn()
+    window.addEventListener('hashchange', onHashChange)
+    renderNav(ALL)
+    intersect(SECTION_IDS.offers, true)
+    intersect(SECTION_IDS.method, true)
+    expect(pushState).not.toHaveBeenCalled()
+    expect(onHashChange).not.toHaveBeenCalled()
+    window.removeEventListener('hashchange', onHashChange)
+    pushState.mockRestore()
+  })
+
+  it('keeps the path and the query string', () => {
+    window.history.replaceState(null, '', '/preview?x=1')
+    renderNav(ALL)
+    intersect(SECTION_IDS.faq, true)
+    expect(window.location.pathname).toBe('/preview')
+    expect(window.location.search).toBe('?x=1')
+    expect(window.location.hash).toBe(`#${SECTION_IDS.faq}`)
+  })
+
+  it('removes the fragment when no section is active any more', () => {
+    renderNav(ALL)
+    intersect(SECTION_IDS.offers, true)
+    intersect(SECTION_IDS.offers, false)
+    expect(window.location.hash).toBe('')
+  })
+
+  it('leaves the clicked target in the URL while its click lock is held', () => {
+    renderNav(ALL)
+    fireEvent.click(document.querySelector(`a[href="#faq"]`) as Element)
+    // The fragment navigation the browser runs after the click, which jsdom does not perform itself.
+    window.location.hash = SECTION_IDS.faq
+    intersect(SECTION_IDS.method, true)
+    expect(window.location.hash).toBe(`#${SECTION_IDS.faq}`)
+  })
+
+  it('does not write the URL while the page holds the fragment it was opened on', () => {
+    openOn(SECTION_IDS.method)
+    renderNav(ALL)
+    resize()
+    intersect(SECTION_IDS.offers, true)
+    expect(window.location.hash).toBe(`#${SECTION_IDS.method}`)
+  })
+
+  it('matches the settled active section once the hold releases', () => {
+    openOn(SECTION_IDS.method)
+    renderNav(ALL)
+    resize()
+    intersect(SECTION_IDS.offers, true)
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(window.location.hash).toBe(`#${SECTION_IDS.offers}`)
   })
 })
