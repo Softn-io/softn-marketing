@@ -228,3 +228,88 @@ describe('updateBaserowRow', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })
+
+describe('createBaserowRow with verifyFields', () => {
+  const verifyFields = [
+    { field: 'First name', kind: 'text' },
+    { field: 'Slot', kind: 'date-time' },
+    { field: 'Consent', kind: 'boolean' },
+    { field: 'Consent on', kind: 'date' },
+  ] as const
+
+  const fields = {
+    'First name': 'Camille',
+    Slot: '2026-11-05T09:00:00.000Z',
+    Consent: true,
+    'Consent on': '2026-11-01',
+  } as const
+
+  const respondWith = (body: unknown) =>
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    )
+
+  it('accepts a create whose answer gives every verified value back', async () => {
+    respondWith({ id: 42, ...fields })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: true, data: { id: 42 } })
+  })
+
+  it('accepts a date with time returned without its milliseconds', async () => {
+    respondWith({ id: 42, ...fields, Slot: '2026-11-05T09:00:00Z' })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: true, data: { id: 42 } })
+  })
+
+  it('reports a missing verified column as a schema-mismatch that keeps the row id', async () => {
+    respondWith({ id: 42, Slot: fields.Slot, Consent: fields.Consent, 'Consent on': fields['Consent on'] })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: false, error: 'schema-mismatch', rowId: 42 })
+  })
+
+  it('reports a changed text value as a schema-mismatch that keeps the row id', async () => {
+    respondWith({ id: 42, ...fields, 'First name': 'Camille ' })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: false, error: 'schema-mismatch', rowId: 42 })
+  })
+
+  it('reports a null verified value as a schema-mismatch that keeps the row id', async () => {
+    respondWith({ id: 42, ...fields, 'Consent on': null })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: false, error: 'schema-mismatch', rowId: 42 })
+  })
+
+  it('reports a verified value of another type as a schema-mismatch that keeps the row id', async () => {
+    respondWith({ id: 42, ...fields, Consent: 'true' })
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: false, error: 'schema-mismatch', rowId: 42 })
+  })
+
+  it('leaves the answer untouched without a verify list', async () => {
+    respondWith({ id: 42, Email: 'mel@example.fr' })
+
+    const result = await createBaserowRow({ tableId: '123456', fields: { Email: 'mel@example.fr' } })
+
+    expect(result).toEqual({ ok: true, data: { id: 42 } })
+  })
+
+  it('does not verify a failed request', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 400 }))
+
+    const result = await createBaserowRow({ tableId: '123456', fields, verifyFields })
+
+    expect(result).toEqual({ ok: false, error: 'request-failed', status: 400 })
+  })
+})

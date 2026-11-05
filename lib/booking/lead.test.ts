@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { BookingLead } from './event'
 import {
   BOOKING_LEAD_FIELDS,
+  BOOKING_LEAD_REQUIRED_FIELD_CHECKS,
   BOOKING_LEAD_SOURCE,
   BOOKING_LEAD_STATUS_BOOKED,
   BOOKING_LEAD_STATUS_CANCELLED,
@@ -137,5 +138,25 @@ describe('bookingLeadCancellationFields', () => {
 
     expect(payload).not.toContain('New')
     expect(payload).not.toContain('Spark Done')
+  })
+})
+
+describe('BOOKING_LEAD_REQUIRED_FIELD_CHECKS', () => {
+  it('names the columns a create must give back, with the comparison each type needs', () => {
+    expect(BOOKING_LEAD_REQUIRED_FIELD_CHECKS).toEqual([
+      { field: BOOKING_LEAD_FIELDS.firstName, kind: 'text' },
+      { field: BOOKING_LEAD_FIELDS.lastName, kind: 'text' },
+      { field: BOOKING_LEAD_FIELDS.email, kind: 'email' },
+      { field: BOOKING_LEAD_FIELDS.need, kind: 'text' },
+      { field: BOOKING_LEAD_FIELDS.slot, kind: 'date-time' },
+      { field: BOOKING_LEAD_FIELDS.consent, kind: 'boolean' },
+      { field: BOOKING_LEAD_FIELDS.consentOn, kind: 'date' },
+      { field: BOOKING_LEAD_FIELDS.source, kind: 'text' },
+    ])
+  })
+
+  it('only names columns declared in BOOKING_LEAD_FIELDS', () => {
+    const declared = new Set<string>(Object.values(BOOKING_LEAD_FIELDS))
+    for (const check of BOOKING_LEAD_REQUIRED_FIELD_CHECKS) expect(declared.has(check.field)).toBe(true)
   })
 })
