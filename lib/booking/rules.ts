@@ -22,6 +22,8 @@ export type BookingRules = {
   timeZone: string
   /** ISO weekday numbers the studio takes calls on (1 = Monday, 7 = Sunday). */
   weekdays: readonly number[]
+  /** True when the French national public holidays are never offered, whatever the weekday. */
+  excludePublicHolidays: boolean
   /** Working windows of one working day. */
   windows: readonly BookingWindow[]
   /** Length of one discovery call, in minutes. */
@@ -101,6 +103,7 @@ export const manageCancelVerdict = ({ eventStart, now }: BookingManageStartInput
 export const BOOKING_RULES: BookingRules = {
   timeZone: 'Europe/Paris',
   weekdays: [1, 2, 4],
+  excludePublicHolidays: true,
   windows: [
     { start: '10:00', end: '12:00' },
     { start: '14:00', end: '15:30' },

@@ -10,12 +10,14 @@
  * reads its window from the list helper below and writes its own flag, beside the instant the last
  * email of the slot was sent.
  *
- * Two calendars are involved, and they are not the same value. `GOOGLE_CALENDAR_ID` is the calendar
- * the booking writes to: it holds the events, so the daily count reads it and the insert, the
- * management calls and the lead marks write to it. The impersonated owner's own calendar
+ * Three calendars can be involved, and they are not the same value. `GOOGLE_CALENDAR_ID` is the
+ * calendar the booking writes to: it holds the events, so the daily count reads it and the insert,
+ * the management calls and the lead marks write to it. The impersonated owner's own calendar
  * (`GOOGLE_CALENDAR_OWNER`, whose address is also its calendar id) is read for the busy times only,
- * so a busy owner is never booked over. Availability therefore reads both, and the writes stay on
- * one.
+ * so a busy owner is never booked over. The optional `GOOGLE_PERSONAL_CALENDAR_ID` is Mel's personal
+ * calendar, shared with the owner as "See only free/busy": it is read for busy times only, never for
+ * an event detail, and its intervals count on the booking weekdays alone. Availability therefore
+ * reads them all, and the writes stay on one.
  *
  * A supplied event id that is already held is a conflict, not a technical failure: the insert walks
  * the slot's ordered ids ({@link BOOKING_EVENT_ID_ATTEMPTS} of them) and reads the event holding
@@ -539,17 +541,30 @@ const readCalendarId = (): string | null => {
   }
 }
 
+/** Calendar a busy interval comes from: the booking one, the owner's own one or the personal one. */
+type BusyCalendarSource = 'booking' | 'owner' | 'personal'
+
+/** One calendar the free/busy query asks about, with the rule its busy intervals follow. */
+type BusyCalendar = {
+  /** Calendar id, as the free/busy query names it. */
+  readonly id: string
+  /** Calendar the intervals belong to; the personal one only counts on booking weekdays. */
+  readonly source: BusyCalendarSource
+}
+
 /**
- * Calendars the free/busy query asks about: the booking calendar, then the owner's own calendar.
+ * Calendars the free/busy query asks about: the booking calendar, the owner's own calendar and, when
+ * `GOOGLE_PERSONAL_CALENDAR_ID` is set, Mel's personal calendar.
  *
- * Both matter. The booking calendar holds the studio's calls, and the owner's calendar holds
- * everything that makes the owner unavailable, so reading only the first would book over a busy
- * owner. The owner's address is its calendar id, and when the two are the same calendar it is asked
- * for once, not twice.
+ * All of them matter. The booking calendar holds the studio's calls, the owner's calendar holds
+ * everything that makes the owner unavailable, and the personal one holds Mel's own appointments.
+ * Reading only the first would book over a busy owner or a personal event. Each calendar is asked
+ * for once: an id that repeats another keeps the source of its first occurrence, and an unset
+ * personal calendar leaves the request as it was without it.
  *
- * @returns The ids to ask about, or `null` when the environment is incomplete.
+ * @returns The calendars to ask about, or `null` when the environment is incomplete.
  */
-const readBusyCalendarIds = (): readonly string[] | null => {
+const readBusyCalendarIds = (): readonly BusyCalendar[] | null => {
   let environment: ReturnType<typeof readEnv>
   try {
     environment = readEnv()
@@ -557,11 +572,24 @@ const readBusyCalendarIds = (): readonly string[] | null => {
     return null
   }
 
-  const { GOOGLE_CALENDAR_ID: bookingCalendarId, GOOGLE_CALENDAR_OWNER: owner } = environment
+  const {
+    GOOGLE_CALENDAR_ID: bookingCalendarId,
+    GOOGLE_CALENDAR_OWNER: owner,
+    GOOGLE_PERSONAL_CALENDAR_ID: personalCalendarId,
+  } = environment
   if (bookingCalendarId === undefined || owner === undefined) return null
-  if (bookingCalendarId === owner) return [bookingCalendarId]
 
-  return [bookingCalendarId, owner]
+  const calendars: BusyCalendar[] = []
+  const addCalendar = (id: string, source: BusyCalendarSource): void => {
+    if (calendars.some((calendar) => calendar.id === id)) return
+    calendars.push({ id, source })
+  }
+
+  addCalendar(bookingCalendarId, 'booking')
+  addCalendar(owner, 'owner')
+  if (personalCalendarId !== undefined) addCalendar(personalCalendarId, 'personal')
+
+  return calendars
 }
 
 /** One Calendar API call: its URL, its JSON body when it writes, and the method to use. */
@@ -685,23 +713,27 @@ const sameInstant = (left: string | undefined, right: string): boolean => {
 }
 
 /**
- * Reads the busy intervals of the booking calendar and of the owner's own calendar over one window.
+ * Reads the busy intervals of the booking calendar, of the owner's own calendar and, when
+ * configured, of Mel's personal calendar over one window.
  *
- * One query, two items: a calendar the answer does not carry, or one it could not read
+ * One query, one item per calendar: a calendar the answer does not carry, or one it could not read
  * (`errors`), fails the whole call rather than passing as empty, so availability never ignores a
- * calendar it could not read. Both the slot lookup and the pre-booking re-check go through here, so
- * both see the same two calendars.
+ * calendar it could not read. A configured personal calendar that is missing from the answer fails
+ * the call the same way: an unreadable calendar is never treated as empty. Only the free/busy
+ * intervals of the personal calendar are read, never an event detail. Those intervals are tagged so
+ * availability limits them to the booking weekdays. Both the slot lookup and the pre-booking
+ * re-check go through here, so both see the same calendars.
  *
  * @param input Inclusive start and exclusive end of the window.
- * @returns The busy intervals of both calendars, or a non-personal failure code.
+ * @returns The busy intervals of every asked calendar, or a non-personal failure code.
  */
 export const queryBusyIntervals = async ({
   timeMin,
   timeMax,
   subjectToken,
 }: QueryBusyIntervalsInput): Promise<CalendarResult<readonly BusyInterval[]>> => {
-  const calendarIds = readBusyCalendarIds()
-  if (calendarIds === null) return { ok: false, error: 'not-configured' }
+  const calendars = readBusyCalendarIds()
+  if (calendars === null) return { ok: false, error: 'not-configured' }
 
   const response = await requestCalendar({
     url: `${CALENDAR_API_BASE_URL}/freeBusy`,
@@ -710,17 +742,22 @@ export const queryBusyIntervals = async ({
     body: {
       timeMin,
       timeMax,
-      items: calendarIds.map((id) => ({ id })),
+      items: calendars.map(({ id }) => ({ id })),
     },
   })
   if (!response.ok) return response
 
   const intervals: BusyInterval[] = []
-  for (const calendarId of calendarIds) {
-    const calendar = response.data.calendars[calendarId]
-    if (calendar === undefined || calendar.errors !== undefined) return { ok: false, error: 'invalid-response' }
+  for (const calendar of calendars) {
+    const answer = response.data.calendars[calendar.id]
+    if (answer === undefined || answer.errors !== undefined) return { ok: false, error: 'invalid-response' }
 
-    intervals.push(...(calendar.busy ?? []))
+    const busy = answer.busy ?? []
+    if (calendar.source === 'personal') {
+      intervals.push(...busy.map((interval): BusyInterval => ({ ...interval, personal: true })))
+    } else {
+      intervals.push(...busy)
+    }
   }
 
   return { ok: true, data: intervals }

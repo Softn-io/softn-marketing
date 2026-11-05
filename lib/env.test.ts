@@ -101,6 +101,24 @@ describe('readEnv', () => {
     expect(() => readEnv()).toThrow()
   })
 
+  it('treats a blank personal calendar id as unset', () => {
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', '   ')
+
+    expect(readEnv().GOOGLE_PERSONAL_CALENDAR_ID).toBeUndefined()
+  })
+
+  it('keeps the personal calendar id of an address-shaped value', () => {
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', 'melanie.perso@gmail.com')
+
+    expect(readEnv().GOOGLE_PERSONAL_CALENDAR_ID).toBe('melanie.perso@gmail.com')
+  })
+
+  it('rejects a personal calendar id that is not an address', () => {
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', 'melanie-perso')
+
+    expect(() => readEnv()).toThrow()
+  })
+
   it('rejects a project number that is not a number', () => {
     vi.stubEnv('GCP_PROJECT_NUMBER', 'softn-project')
 

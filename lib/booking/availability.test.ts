@@ -24,6 +24,7 @@ import type { BookingRules } from './rules'
 const TEST_RULES: BookingRules = {
   timeZone: 'Europe/Paris',
   weekdays: [1, 2, 3, 4, 5],
+  excludePublicHolidays: false,
   windows: [
     { start: '09:30', end: '12:00' },
     { start: '14:00', end: '17:30' },
@@ -389,5 +390,147 @@ describe('releaseOwnSlot', () => {
 
     expect(slots).toContain(OWN_START)
     expect(slots).not.toContain('2026-06-11T08:30:00.000Z')
+  })
+})
+
+describe('findFreeSlots with the personal calendar and the holidays', () => {
+  /** Mel's weekday pattern: Monday, Tuesday and Thursday only. */
+  const MEL_WEEKDAY_RULES: BookingRules = { ...TEST_RULES, weekdays: [1, 2, 4] }
+
+  const findWith = (rules: BookingRules, input: { busy?: readonly BusyInterval[]; now: string }) =>
+    findFreeSlots({
+      rules,
+      busy: input.busy ?? [],
+      bookedCallsPerDay: {},
+      now: new Date(input.now),
+    })
+
+  it('blocks the slots a personal interval overlaps on a Monday, buffer included', () => {
+    // 10:00-10:30 Paris on Monday 15 June: the 15-minute buffer removes the 09:30, 10:00 and 10:30
+    // slots, exactly like the same interval read from the booking or the owner calendar.
+    const busy: BusyInterval[] = [
+      { start: '2026-06-15T08:00:00.000Z', end: '2026-06-15T08:30:00.000Z', personal: true },
+    ]
+    const slots = onDay(find({ now: WEDNESDAY_MORNING, busy }), '2026-06-15')
+
+    expect(starts(slots)).not.toContain('2026-06-15T07:30:00.000Z')
+    expect(starts(slots)).not.toContain('2026-06-15T08:00:00.000Z')
+    expect(starts(slots)).not.toContain('2026-06-15T08:30:00.000Z')
+    expect(starts(slots)).toContain('2026-06-15T09:00:00.000Z')
+  })
+
+  it('gives a personal interval on a day off the booking weekdays no effect on any slot', () => {
+    // A Wednesday is not a booking weekday of MEL_WEEKDAY_RULES: the interval protects no slot, so
+    // the answer is the same with and without it.
+    const personalWednesday: BusyInterval = {
+      start: '2026-06-10T08:00:00.000Z',
+      end: '2026-06-10T08:30:00.000Z',
+      personal: true,
+    }
+
+    expect(findWith(MEL_WEEKDAY_RULES, { now: WEDNESDAY_MORNING, busy: [personalWednesday] })).toEqual(
+      findWith(MEL_WEEKDAY_RULES, { now: WEDNESDAY_MORNING }),
+    )
+  })
+
+  it('keeps a personal interval that crosses midnight from a Wednesday into a Thursday, and it blocks', () => {
+    // Wednesday 22:00 Paris to Thursday 10:00 Paris: the Thursday part is bookable, so the interval
+    // stays whole and the 09:30 and 10:00 slots of the Thursday are removed, buffer included.
+    const busy: BusyInterval[] = [
+      { start: '2026-06-10T20:00:00.000Z', end: '2026-06-11T08:00:00.000Z', personal: true },
+    ]
+    const slots = starts(onDay(findWith(MEL_WEEKDAY_RULES, { now: WEDNESDAY_MORNING, busy }), '2026-06-11'))
+
+    expect(slots).not.toContain('2026-06-11T07:30:00.000Z')
+    expect(slots).not.toContain('2026-06-11T08:00:00.000Z')
+    expect(slots).toContain('2026-06-11T08:30:00.000Z')
+    // A day the interval does not touch keeps its slots.
+    expect(starts(onDay(findWith(MEL_WEEKDAY_RULES, { now: WEDNESDAY_MORNING, busy }), '2026-06-15'))).toContain(
+      '2026-06-15T07:30:00.000Z',
+    )
+  })
+
+  it('applies the booking and owner intervals whatever the weekday filter does', () => {
+    // The same crossing interval, untagged because it comes from the owner calendar: the weekday
+    // filter only limits the personal calendar, so the Thursday part is blocked the same way.
+    const crossing: BusyInterval = { start: '2026-06-10T20:00:00.000Z', end: '2026-06-11T08:00:00.000Z' }
+    const slots = starts(onDay(findWith(MEL_WEEKDAY_RULES, { now: WEDNESDAY_MORNING, busy: [crossing] }), '2026-06-11'))
+
+    expect(slots).not.toContain('2026-06-11T07:30:00.000Z')
+    expect(slots).not.toContain('2026-06-11T08:00:00.000Z')
+  })
+
+  it('offers nothing on Easter Monday 2026 and keeps the neighbouring Tuesday', () => {
+    const easterNow = '2026-03-30T06:00:00.000Z'
+    const excluded = findWith({ ...TEST_RULES, excludePublicHolidays: true }, { now: easterNow })
+    const included = findWith(TEST_RULES, { now: easterNow })
+
+    expect(onDay(excluded, '2026-04-06')).toEqual([])
+    expect(starts(onDay(included, '2026-04-06'))).toContain('2026-04-06T07:30:00.000Z')
+    expect(onDay(excluded, '2026-04-07')).not.toEqual([])
+  })
+
+  it('offers nothing on Ascension Thursday 2026 and keeps the Tuesday before', () => {
+    const ascensionNow = '2026-04-27T06:00:00.000Z'
+    const excluded = findWith({ ...TEST_RULES, excludePublicHolidays: true }, { now: ascensionNow })
+    const included = findWith(TEST_RULES, { now: ascensionNow })
+
+    expect(onDay(excluded, '2026-05-14')).toEqual([])
+    expect(onDay(included, '2026-05-14')).not.toEqual([])
+    expect(onDay(excluded, '2026-05-12')).not.toEqual([])
+  })
+
+  it('changes no slot when a personal interval cannot be read on a booking weekday', () => {
+    // The calendar boundary refuses such intervals before `findFreeSlots` sees one, so this is
+    // defence in depth: an interval nobody can read neither blocks nor frees anything.
+    const unreadable: BusyInterval[] = [
+      { start: 'not-a-date', end: '2026-06-11T08:30:00.000Z', personal: true },
+      { start: '2026-06-11T08:00:00.000Z', end: '2026-06-11T08:00:00.000Z', personal: true },
+      { start: '2026-06-11T08:30:00.000Z', end: '2026-06-11T08:00:00.000Z', personal: true },
+    ]
+    const baseline = find({ now: WEDNESDAY_MORNING })
+
+    expect(baseline).not.toEqual([])
+    expect(find({ now: WEDNESDAY_MORNING, busy: unreadable })).toEqual(baseline)
+  })
+
+  it('refuses a slot on a holiday and a slot a personal interval overlaps', () => {
+    const holidayRules: BookingRules = { ...TEST_RULES, excludePublicHolidays: true }
+    const easterNow = '2026-03-30T06:00:00.000Z'
+    const easterMondaySlot = { start: '2026-04-06T07:30:00.000Z', end: '2026-04-06T08:00:00.000Z' }
+
+    expect(
+      isSlotBookable(
+        { rules: holidayRules, busy: [], bookedCallsPerDay: {}, now: new Date(easterNow) },
+        easterMondaySlot,
+      ),
+    ).toBe(false)
+    expect(
+      isSlotBookable(
+        { rules: TEST_RULES, busy: [], bookedCallsPerDay: {}, now: new Date(easterNow) },
+        easterMondaySlot,
+      ),
+    ).toBe(true)
+
+    // Thursday is a booking weekday: the personal interval protects its slots, buffer included.
+    const personalThursday: BusyInterval = {
+      start: '2026-06-11T08:00:00.000Z',
+      end: '2026-06-11T08:30:00.000Z',
+      personal: true,
+    }
+    const thursdaySlot = { start: '2026-06-11T07:30:00.000Z', end: '2026-06-11T08:00:00.000Z' }
+
+    expect(
+      isSlotBookable(
+        { rules: MEL_WEEKDAY_RULES, busy: [personalThursday], bookedCallsPerDay: {}, now: new Date(WEDNESDAY_MORNING) },
+        thursdaySlot,
+      ),
+    ).toBe(false)
+    expect(
+      isSlotBookable(
+        { rules: MEL_WEEKDAY_RULES, busy: [], bookedCallsPerDay: {}, now: new Date(WEDNESDAY_MORNING) },
+        thursdaySlot,
+      ),
+    ).toBe(true)
   })
 })
