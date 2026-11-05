@@ -20,6 +20,7 @@ import type { BookingRules } from './rules'
 const TEST_RULES: BookingRules = {
   timeZone: 'Europe/Paris',
   weekdays: [1, 2, 3, 4, 5],
+  excludePublicHolidays: false,
   windows: [{ start: '09:30', end: '12:00' }],
   slotMinutes: 30,
   bufferMinutes: 15,

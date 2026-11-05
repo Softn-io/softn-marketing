@@ -4,17 +4,26 @@
  *
  * Two invariants matter here. Working hours are Paris wall-clock times, so every slot is built from
  * the local time and then resolved to an instant: the same 09:30 stays 09:30 across both daylight
- * saving changes. Busy intervals never touch the rules, they only remove slots.
+ * saving changes. Busy intervals never change the rules, they only remove slots, and the personal
+ * ones are limited to the days the rules make bookable.
  */
 
+import { isFrenchPublicHoliday } from './holidays'
 import type { BookingRules } from './rules'
 
-/** One busy interval of the owner's calendar, as ISO 8601 instants. */
+/** One busy interval reported by a calendar, as ISO 8601 instants. */
 export type BusyInterval = {
   /** Start of the interval, included. */
   readonly start: string
   /** End of the interval, excluded. */
   readonly end: string
+  /**
+   * True when the interval comes from the personal calendar.
+   *
+   * Such an interval only removes slots of the days the rules make bookable. Absent, the interval
+   * comes from the booking or the owner calendar and applies on every day.
+   */
+  readonly personal?: true
 }
 
 /** One bookable slot, as ISO 8601 instants in UTC. */
@@ -32,7 +41,10 @@ export type BookingDayKey = string
 export type FindFreeSlotsInput = {
   /** Working hours, call length, notice, horizon and daily maximum. */
   rules: BookingRules
-  /** Intervals already taken in the owner's calendar, before the buffer is applied. */
+  /**
+   * Intervals already taken in the calendars, before the buffer is applied. A personal interval
+   * only counts on the days the rules make bookable.
+   */
   busy: readonly BusyInterval[]
   /**
    * Calls already booked per day, keyed by {@link BookingDayKey}. A day at `rules.maxCallsPerDay`
@@ -210,13 +222,51 @@ const overlaps = (slotStart: number, slotEnd: number, interval: { start: number;
   slotStart < interval.end && slotEnd > interval.start
 
 /**
+ * True when one personal interval touches at least one day the rules make bookable.
+ *
+ * The days are read in the rules' time zone. An interval that crosses midnight from a day off into
+ * a working day stays whole, so its working-day part keeps blocking; a day the rules do not offer
+ * has no slot to protect, which is why an interval entirely on such a day is dropped. An interval
+ * whose bounds or days cannot be read is kept: an unreadable calendar must never free a slot.
+ *
+ * @param interval Interval reported by the personal calendar.
+ * @param rules Rules holding the time zone and the bookable weekdays.
+ * @param formatter Wall-clock formatter of the rules' time zone.
+ * @returns True when the interval removes slots of at least one bookable day, or when it cannot be read.
+ */
+const touchesBookingWeekday = (
+  interval: BusyInterval,
+  rules: BookingRules,
+  formatter: Intl.DateTimeFormat,
+): boolean => {
+  const start = instantOfIso(interval.start)
+  const end = instantOfIso(interval.end)
+  if (start === null || end === null || end <= start) return true
+
+  const firstDay = dayOf(formatter, start)
+  if (firstDay === null) return true
+
+  const dayCount = Math.ceil((end - start) / MILLISECONDS_PER_DAY) + 1
+  for (let offset = 0; offset < dayCount; offset += 1) {
+    const day = addDays(firstDay, offset)
+    const dayStart = instantOfWallClock(formatter, { ...day, hour: 0, minute: 0, second: 0 })
+    if (dayStart === null) return true
+    if (dayStart >= end) return false
+    if (rules.weekdays.includes(isoWeekdayOf(day))) return true
+  }
+
+  return true
+}
+
+/**
  * Free slots of the booking window, oldest first.
  *
- * A slot is free when it fits entirely inside a working window of a working weekday, starts at
- * least `rules.minimumNoticeHours` after `now`, stays inside the `rules.horizonDays` horizon, is
- * clear of every buffered busy interval, and the day is below `rules.maxCallsPerDay` calls. Slots
- * are generated from Paris wall-clock times, so both daylight saving changes keep the published
- * hours.
+ * A slot is free when it fits entirely inside a working window of a working weekday that is not a
+ * French public holiday when the rules exclude them, starts at least `rules.minimumNoticeHours`
+ * after `now`, stays inside the `rules.horizonDays` horizon, is clear of every buffered busy
+ * interval, and the day is below `rules.maxCallsPerDay` calls. A personal busy interval only counts
+ * on the days the rules make bookable. Slots are generated from Paris wall-clock times, so both
+ * daylight saving changes keep the published hours.
  *
  * The function is pure and never throws: it is the only place that decides what a visitor may pick,
  * and the booking route re-runs it before writing anything.
@@ -236,7 +286,10 @@ export const findFreeSlots = ({
   if (!Number.isFinite(nowMs)) return []
 
   const noticeMs = nowMs + rules.minimumNoticeHours * MILLISECONDS_PER_HOUR
-  const blocked = withBuffer(busy, rules.bufferMinutes)
+  const applicableBusy = busy.filter(
+    (interval) => interval.personal !== true || touchesBookingWeekday(interval, rules, formatter),
+  )
+  const blocked = withBuffer(applicableBusy, rules.bufferMinutes)
   const firstDay = dayOf(formatter, nowMs)
   if (firstDay === null) return []
 
@@ -248,7 +301,10 @@ export const findFreeSlots = ({
 
     const day = addDays(firstDay, offset)
     if (!rules.weekdays.includes(isoWeekdayOf(day))) continue
-    if ((bookedCallsPerDay[dayKeyOf(day)] ?? 0) >= rules.maxCallsPerDay) continue
+
+    const dayKey = dayKeyOf(day)
+    if (rules.excludePublicHolidays && isFrenchPublicHoliday(dayKey)) continue
+    if ((bookedCallsPerDay[dayKey] ?? 0) >= rules.maxCallsPerDay) continue
 
     for (const window of rules.windows) {
       const windowStartMinutes = minutesOfTime(window.start)

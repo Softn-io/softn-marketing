@@ -79,6 +79,14 @@ const googleCalendarOwner = z.preprocess(blankToUndefined, z.email().optional())
 const googleCalendarId = z.preprocess(blankToUndefined, z.email().optional())
 
 /**
+ * Mel's personal calendar, shared with the Workspace owner as "See only free/busy" and read for its
+ * busy times only: no event detail is ever fetched, returned or logged. An address rather than a
+ * keyword, like the booking calendar. Optional: unset, the free/busy query asks about the booking
+ * and owner calendars only, unchanged. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const googlePersonalCalendarId = z.preprocess(blankToUndefined, z.email().optional())
+
+/**
  * Secret that signs the manage link of a booking, at least 32 characters (a keyed digest of a short
  * payload, so the strength is in the secret itself). Optional: unset, a booking still succeeds but
  * carries no manage line, and every manage link is refused. Server-side only, never `NEXT_PUBLIC_`.
@@ -119,7 +127,10 @@ const vercelEnv = z.preprocess(blankToUndefined, optionalString)
  * calendar through Workload Identity Federation, and `BASEROW_LEADS_TABLE_ID`
  * says where the lead is stored. The owner is the user the service account
  * impersonates; the calendar id says where the events are written, so a
- * dedicated secondary calendar can hold the bookings. No service-account key is stored: the subject
+ * dedicated secondary calendar can hold the bookings. `GOOGLE_PERSONAL_CALENDAR_ID`
+ * is Mel's personal calendar, shared with the Workspace owner as "See only
+ * free/busy": the free/busy query reads its busy times only, never an event
+ * detail, and limits them to the booking weekdays. No service-account key is stored: the subject
  * token is Vercel's OIDC token, read from the request header (or, in
  * development, from `VERCEL_OIDC_TOKEN`). `BOOKING_LINK_SECRET` is the
  * optional signing secret of the manage link: unset, a booking carries no
@@ -141,6 +152,7 @@ const EnvSchema = z.object({
   GOOGLE_SERVICE_ACCOUNT_EMAIL: googleServiceAccountEmail,
   GOOGLE_CALENDAR_OWNER: googleCalendarOwner,
   GOOGLE_CALENDAR_ID: googleCalendarId,
+  GOOGLE_PERSONAL_CALENDAR_ID: googlePersonalCalendarId,
   GCP_PROJECT_NUMBER: gcpProjectNumber,
   GCP_WORKLOAD_IDENTITY_POOL_ID: gcpWorkloadIdentityPoolId,
   GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID: gcpWorkloadIdentityPoolProviderId,

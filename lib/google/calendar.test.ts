@@ -9,6 +9,7 @@ import { BOOKING_EVENT_ID_ATTEMPTS, bookingEventId, bookingEventIdAttempt } from
 const TEST_RULES: BookingRules = {
   timeZone: 'Europe/Paris',
   weekdays: [1, 2, 3, 4, 5],
+  excludePublicHolidays: false,
   windows: [{ start: '09:30', end: '12:00' }],
   slotMinutes: 30,
   bufferMinutes: 15,
@@ -80,6 +81,8 @@ beforeEach(() => {
   vi.stubEnv('GCP_PROJECT_NUMBER', '123456789012')
   vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_ID', 'vercel')
   vi.stubEnv('GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID', 'softn-site')
+  // The personal calendar stays out of these assertions unless a test configures it.
+  vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', '')
 })
 
 afterEach(() => {
@@ -905,5 +908,183 @@ describe('markBookingLeadNotStored', () => {
       error: 'not-configured',
     })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('queryBusyIntervals with the personal calendar', () => {
+  const PERSONAL = 'melanie.perso@gmail.com'
+
+  it('asks the booking and owner calendars alone when the personal id is unset', async () => {
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    withToken(() =>
+      jsonResponse({
+        calendars: {
+          'abc123@group.calendar.google.com': {
+            busy: [{ start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' }],
+          },
+          'melanie@softn.io': {},
+        },
+      }),
+    )
+    const { queryBusyIntervals } = await import('./calendar')
+
+    const result = await queryBusyIntervals({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      data: [{ start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' }],
+    })
+
+    const [call] = calendarCalls()
+    expect(JSON.parse(String(call?.init?.body))).toEqual({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      items: [{ id: 'abc123@group.calendar.google.com' }, { id: 'melanie@softn.io' }],
+    })
+  })
+
+  it('asks for three calendars in order and tags only the personal intervals', async () => {
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', PERSONAL)
+    withToken(() =>
+      jsonResponse({
+        calendars: {
+          'abc123@group.calendar.google.com': {
+            busy: [{ start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' }],
+          },
+          'melanie@softn.io': {
+            busy: [{ start: '2026-06-11T09:00:00Z', end: '2026-06-11T09:30:00Z' }],
+          },
+          [PERSONAL]: {
+            busy: [{ start: '2026-06-11T14:00:00Z', end: '2026-06-11T15:00:00Z' }],
+          },
+        },
+      }),
+    )
+    const { queryBusyIntervals } = await import('./calendar')
+
+    const result = await queryBusyIntervals({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      data: [
+        { start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' },
+        { start: '2026-06-11T09:00:00Z', end: '2026-06-11T09:30:00Z' },
+        { start: '2026-06-11T14:00:00Z', end: '2026-06-11T15:00:00Z', personal: true },
+      ],
+    })
+
+    const [call] = calendarCalls()
+    expect(JSON.parse(String(call?.init?.body))).toEqual({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      items: [{ id: 'abc123@group.calendar.google.com' }, { id: 'melanie@softn.io' }, { id: PERSONAL }],
+    })
+    // The personal calendar is read through this one free/busy call, never through an event detail.
+    expect(calendarCalls()).toHaveLength(1)
+    expect(call?.url).toBe('https://www.googleapis.com/calendar/v3/freeBusy')
+  })
+
+  it('asks for the personal id once when it repeats the owner calendar', async () => {
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', 'melanie@softn.io')
+    withToken(() =>
+      jsonResponse({
+        calendars: {
+          'abc123@group.calendar.google.com': {},
+          'melanie@softn.io': {
+            busy: [{ start: '2026-06-11T09:00:00Z', end: '2026-06-11T09:30:00Z' }],
+          },
+        },
+      }),
+    )
+    const { queryBusyIntervals } = await import('./calendar')
+
+    const result = await queryBusyIntervals({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      data: [{ start: '2026-06-11T09:00:00Z', end: '2026-06-11T09:30:00Z' }],
+    })
+
+    const [call] = calendarCalls()
+    expect(JSON.parse(String(call?.init?.body)).items).toEqual([
+      { id: 'abc123@group.calendar.google.com' },
+      { id: 'melanie@softn.io' },
+    ])
+  })
+
+  it('asks for the personal id once when it repeats the booking calendar', async () => {
+    vi.stubEnv('GOOGLE_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', 'abc123@group.calendar.google.com')
+    withToken(() =>
+      jsonResponse({
+        calendars: {
+          'abc123@group.calendar.google.com': {
+            busy: [{ start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' }],
+          },
+          'melanie@softn.io': {},
+        },
+      }),
+    )
+    const { queryBusyIntervals } = await import('./calendar')
+
+    const result = await queryBusyIntervals({
+      timeMin: '2026-06-11T00:00:00Z',
+      timeMax: '2026-06-12T00:00:00Z',
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      data: [{ start: '2026-06-11T07:30:00Z', end: '2026-06-11T08:00:00Z' }],
+    })
+
+    const [call] = calendarCalls()
+    expect(JSON.parse(String(call?.init?.body)).items).toEqual([
+      { id: 'abc123@group.calendar.google.com' },
+      { id: 'melanie@softn.io' },
+    ])
+  })
+
+  it('fails closed when the personal calendar is missing from the answer', async () => {
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', PERSONAL)
+    withToken(() => jsonResponse({ calendars: { 'melanie@softn.io': {} } }))
+    const { queryBusyIntervals } = await import('./calendar')
+
+    expect(await queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'invalid-response',
+    })
+  })
+
+  it('fails closed when the personal calendar answers with an error of its own', async () => {
+    vi.stubEnv('GOOGLE_PERSONAL_CALENDAR_ID', PERSONAL)
+    withToken(() =>
+      jsonResponse({
+        calendars: {
+          'melanie@softn.io': {},
+          [PERSONAL]: { errors: [{ reason: 'notFound' }] },
+        },
+      }),
+    )
+    const { queryBusyIntervals } = await import('./calendar')
+
+    expect(await queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'invalid-response',
+    })
   })
 })
