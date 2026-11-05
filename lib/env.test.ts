@@ -122,6 +122,21 @@ describe('readEnv', () => {
     expect(readEnv().BOOKING_LINK_SECRET).toBeUndefined()
   })
 
+  it('keeps a reminder secret of at least 32 characters, and treats a blank one as unset', () => {
+    vi.stubEnv('CRON_SECRET', 'c'.repeat(32))
+
+    expect(readEnv().CRON_SECRET).toBe('c'.repeat(32))
+
+    vi.stubEnv('CRON_SECRET', '   ')
+    expect(readEnv().CRON_SECRET).toBeUndefined()
+  })
+
+  it('rejects a reminder secret that is too short', () => {
+    vi.stubEnv('CRON_SECRET', 'too-short')
+
+    expect(() => readEnv()).toThrow('CRON_SECRET')
+  })
+
   it('reads the deployment marker Vercel sets, and treats a blank one as unset', () => {
     vi.stubEnv('VERCEL_ENV', 'production')
     expect(readEnv().VERCEL_ENV).toBe('production')

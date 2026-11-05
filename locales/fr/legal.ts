@@ -68,6 +68,9 @@ export const legal = {
       ai: {
         title: 'Assistant virtuel',
       },
+      emails: {
+        title: 'E-mails de service',
+      },
       changes: {
         title: 'Modifications',
       },
@@ -84,7 +87,7 @@ export const legal = {
     },
     purposes: {
       booking:
-        "Organiser l'échange découverte, envoyer l'invitation, préparer le plan d'action, et permettre à la personne de déplacer ou d'annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour. Base légale : consentement de la personne, recueilli avant toute saisie dans l'assistant.",
+        "Organiser l'échange découverte, envoyer les e-mails de service liés au rendez-vous (confirmation, mise à jour, annulation et rappel), préparer le plan d'action, et permettre à la personne de déplacer ou d'annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour. Base légale : consentement de la personne, recueilli avant toute saisie dans l'assistant.",
       technical: 'Assurer le fonctionnement et la sécurité du site. Base légale : intérêt légitime.',
       audience: "Mesurer l'audience du site. Base légale : consentement, recueilli par le bandeau de cookies.",
       note: '[À FAIRE VALIDER : bases légales proposées à confirmer par la relecture RGPD.]',
@@ -95,7 +98,7 @@ export const legal = {
       baserow:
         "Baserow : enregistrement des demandes de rendez-vous. Service hébergé en Allemagne (Union européenne), par une société établie aux Pays-Bas. Aucun transfert hors de l'Union européenne.",
       google:
-        "Google Calendar : agenda des rendez-vous et envoi de l'invitation. Données hébergées dans l'Union européenne (paramètre de localisation des données de Google Workspace) ; transferts encadrés par des clauses contractuelles types. Lien Google Meet : hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].",
+        "Google Calendar et Gmail : agenda des rendez-vous et envoi des e-mails de service (confirmation, mise à jour, annulation, rappel). Données hébergées dans l'Union européenne (paramètre de localisation des données de Google Workspace) ; transferts encadrés par des clauses contractuelles types. Google Meet : visioconférence de l'échange. L'échange n'est pas enregistré. Gemini (Google Workspace) peut en produire une transcription et un résumé, qui servent uniquement à préparer le plan d'action ; ces contenus restent dans l'espace Google Workspace de Softn.io, ne sont pas utilisés pour entraîner des modèles et sont conservés pendant 365 jours après l'échange ou, si une mission est engagée, pendant toute la durée du contrat. Le lien de la visioconférence et le traitement en direct de l'appel peuvent avoir lieu hors de l'Union européenne, dans le cadre des clauses contractuelles types de Google.",
       vercel:
         'Vercel : hébergement du site et journaux techniques. Hébergement et garanties de transfert : [À COMPLÉTER PAR MEL après vérification].',
       umami:
@@ -118,6 +121,9 @@ export const legal = {
     },
     ai: {
       body: "L'assistant virtuel du site fonctionne dans un périmètre défini et ne prend aucune décision concernant les personnes. Pour générer ses réponses, il envoie les questions du visiteur, ainsi que l'historique de la conversation en cours, à Mistral AI, qui agit en qualité de sous-traitant. Aucun compte n'est créé et Softn.io ne conserve pas ces échanges. Il est demandé de ne pas saisir de données personnelles dans les questions. Les informations saisies ne servent pas à entraîner un modèle d'intelligence artificielle.",
+    },
+    emails: {
+      body: "Après une réservation, un déplacement ou une annulation, ainsi qu'environ 24 heures avant l'échange, Softn.io vous envoie un e-mail de service : confirmation, mise à jour, annulation ou rappel. Ces messages sont envoyés avec Gmail (Google Workspace) depuis l'adresse meet@softn.io, et ne servent qu'à organiser l'échange. Les données utilisées sont votre prénom, votre adresse e-mail, le créneau choisi et les liens de connexion et de gestion du rendez-vous. Elles ne servent jamais à de la prospection ni à l'envoi de lettres d'information. Le message comporte un fichier d'agenda (hors rappel), sans suivi d'ouverture ni de clic. Si vous répondez à un de ces messages, votre réponse est lue dans la boîte de réception de Softn.io.",
     },
     changes: {
       body: 'Cette page peut évoluer. La date de dernière mise à jour figure en haut.',

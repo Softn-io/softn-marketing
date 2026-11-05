@@ -29,7 +29,7 @@ export const bookingManage = {
   recap: {
     date: 'Date',
     format: 'Format',
-    formatValue: "30 min, en visio. Le lien est dans l'invitation.",
+    formatValue: "30 min, en visio. Le lien est dans l'e-mail de confirmation.",
   },
   reschedule: {
     action: 'Choisir un autre créneau',
@@ -55,7 +55,7 @@ export const bookingManage = {
     success: {
       title: 'Rendez-vous déplacé',
       message:
-        'Votre échange Spark est maintenant fixé au créneau « {slot} ». Une invitation mise à jour vient de vous être envoyée.',
+        "Votre échange Spark est maintenant fixé au créneau « {slot} ». Vous allez recevoir un e-mail avec l'invitation mise à jour.",
     },
   },
   cancel: {
@@ -78,7 +78,7 @@ export const bookingManage = {
     success: {
       title: 'Rendez-vous annulé',
       message:
-        "Votre échange Spark est annulé. Un message de confirmation d'annulation vient de vous être envoyé. Si vous changez d'avis, vous pourrez réserver un nouvel échange quand vous le souhaitez.",
+        "Votre échange Spark est annulé. Vous allez recevoir un e-mail de confirmation d'annulation. Si vous changez d'avis, vous pourrez réserver un nouvel échange quand vous le souhaitez.",
       bookAgain: 'Réserver un nouvel échange Spark',
     },
   },
@@ -102,7 +102,7 @@ export const bookingManage = {
     invalid: {
       title: 'Lien non valide',
       message:
-        "Ce lien ne permet pas d'afficher un rendez-vous. Utilisez le lien de l'invitation que vous avez reçue, ou écrivez-moi via le {contactLink}.",
+        "Ce lien ne permet pas d'afficher un rendez-vous. Utilisez le lien de l'e-mail ou de l'invitation que vous avez reçus, ou écrivez-moi via le {contactLink}.",
     },
   },
   /** Failures a request or the availability can answer, mapped from their codes. */

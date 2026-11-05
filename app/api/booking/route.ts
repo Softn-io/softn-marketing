@@ -14,6 +14,7 @@ import {
   type BookingLead,
 } from '@/lib/booking/event'
 import { hasJsonContentType, isSameOriginRequest } from '@/lib/booking/guard'
+import { sendBookingConfirmationEmail } from '@/lib/booking/emails'
 import { bookingLeadFields } from '@/lib/booking/lead'
 import { readBookingLinkSecret } from '@/lib/booking/manageToken'
 import { BOOKING_RULES } from '@/lib/booking/rules'
@@ -52,13 +53,16 @@ const rateLimitFailureDetail = (failure: RateLimitFailure): string =>
 
 /**
  * Diagnostic detail of a Google failure: the step of the credential chain that failed (or the call
- * itself when the chain is not what broke), its code, and the upstream status when one answered.
+ * itself when the chain is not what broke), its code, the upstream status when one answered and
+ * Google's machine-readable reason when the answer carried one.
  *
- * The shape matches the rate-limit detail below. It never carries an upstream body: those can echo
- * the request, and none of them is read.
+ * The shape matches the rate-limit detail below. It never carries an upstream body beyond that
+ * reason token: those can echo the request.
  */
 const googleFailureDetail = (call: string, failure: CalendarFailure): string =>
-  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}`
+  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}${
+    failure.reason === undefined ? '' : ` reason=${failure.reason}`
+  }`
 
 /** Diagnostic detail of a Baserow failure: the code, plus the upstream status when one answered. */
 const baserowFailureDetail = (failure: BaserowFailure): string =>
@@ -126,11 +130,13 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
  * calendar: a bot learns nothing from the answer.
  *
  * The slot is re-checked against the calendar before anything is written, then the event is created
- * with a Meet link, a signed manage link and an invitation to the visitor, and only then the lead is
- * stored in Baserow; the id of the new row is written back to the event, best effort. Every failure
- * before the event exists answers `slot-taken` or the generic error and leaves no trace. When only
- * Baserow fails the booking stands — the visitor is told it succeeded and the failure is logged as a
- * code, because the event description already carries their answers.
+ * with a Meet link, a signed manage link and its guest, and then two best-effort writes follow: the
+ * confirmation email Softn sends itself, with the calendar file of the booking, and the lead in
+ * Baserow; the id of the new row is written back to the event. Every failure before the event
+ * exists answers `slot-taken` or the generic error and leaves no trace. When only the email or
+ * Baserow fails the booking stands — the visitor is told it succeeded, the failure is logged as a
+ * code, and the event carries a mark for Mel, because the event description already carries their
+ * answers.
  *
  * @param request Incoming `POST` with the booking request as JSON.
  * @returns `{ booked: true }` on success, or `{ error }` with 400, 403, 409, 415, 429 or 503.
@@ -208,6 +214,7 @@ export const POST = async (request: Request): Promise<Response> => {
   const event = await insertBookingEvent({
     slot,
     attendeeEmail: lead.email,
+    guest: { firstName: lead.firstName, lastName: lead.lastName },
     title: bookingEventTitle(lead),
     // Each attempt of the event id builds its own description: the manage URL it carries is signed
     // for that id.
@@ -236,6 +243,28 @@ export const POST = async (request: Request): Promise<Response> => {
     // updates the row without a lookup by personal data. No notification is sent to the visitor.
     const mark = await storeBookingLeadRowId({ eventId: event.data.eventId, rowId: row.data.id, subjectToken })
     if (!mark.ok) logFailure(`lead row id not stored: calendar ${googleFailureDetail('events patch', mark)}`)
+  }
+
+  // Google notifies nobody (`sendUpdates=none`): Softn sends the confirmation itself, with the
+  // calendar file that adds the call to the guest's calendar. A failed email never undoes the
+  // booking and never changes the answer: the event is marked and Mel reads one code here.
+  const confirmation = await sendBookingConfirmationEmail({
+    event: {
+      eventId: event.data.eventId,
+      iCalUid: event.data.iCalUid,
+      guestFirstName: lead.firstName,
+      guestLastName: lead.lastName,
+      guestEmail: lead.email,
+    },
+    slot,
+    meetLink: event.data.hangoutLink,
+    manageLink: bookingManageUrlOfEvent({ origin, eventId: event.data.eventId, expiresAt: slot.start }) ?? undefined,
+    rules: BOOKING_RULES,
+    subjectToken,
+  })
+  if (!confirmation.ok) {
+    logFailure(`email not sent: ${confirmation.detail}`)
+    if (confirmation.markDetail !== undefined) logFailure(`email mark not stored: ${confirmation.markDetail}`)
   }
 
   return json({ booked: true }, 200)

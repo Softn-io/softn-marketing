@@ -5,8 +5,8 @@
       "reviewedAt": "2026-10-28T01:42:38+01:00"
     },
     "chatbot.ts": {
-      "sha256": "cae04d5ee5d45c8a4337d9b0205b2ab135db09e2e84dd11c3e014dbcf3f1a632",
-      "reviewedAt": "2026-11-04T17:43:14+01:00"
+      "sha256": "e60b220fe083d739ce5fe9f782d88ea76d7ae7783c641d0911e57b9ff7cfd41d",
+      "reviewedAt": "2026-11-05T13:57:20+01:00"
     },
     "contact.ts": {
       "sha256": "ec31b59d61d5eebfe564dcfe357d0274f090af5cd5f2382c2fc57636577ec722",
@@ -21,8 +21,8 @@
       "reviewedAt": "2026-10-28T01:42:38+01:00"
     },
     "legal.ts": {
-      "sha256": "579e7c8bf06b289b305a670590aa0603b25a1206df83f78a900d0934cb7b6821",
-      "reviewedAt": "2026-11-02T23:21:03+01:00"
+      "sha256": "1fdf29411fbbaf067e7eb7046013583e5303a21323f48b27512d1417fc1c920a",
+      "reviewedAt": "2026-11-05T17:58:20+01:00"
     },
     "method.ts": {
       "sha256": "0a09a602e9fb429ecf3525e27decced7d2dc5c27c07106dfdab4c2d5d70212a4",

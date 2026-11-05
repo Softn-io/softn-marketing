@@ -17,6 +17,7 @@
 
 import { z } from 'zod'
 import { readEnv } from '@/lib/env'
+import { readGoogleErrorReason } from './errorReason'
 
 /** Security Token Service of Google Cloud, where the subject token is exchanged. */
 const STS_ENDPOINT = 'https://sts.googleapis.com/v1/token'
@@ -58,6 +59,16 @@ export const GOOGLE_BOOKING_SCOPES = [
   'https://www.googleapis.com/auth/calendar.freebusy',
 ] as const
 
+/**
+ * OAuth scope of the Gmail send call, delegated to the service account in the Workspace admin
+ * console beside the two calendar scopes.
+ *
+ * Requested for the Gmail call alone: the calendar calls keep {@link GOOGLE_BOOKING_SCOPES}, so a
+ * token that may send mail is never minted for them. `gmail.send` sends on the impersonated user's
+ * behalf and reads nothing.
+ */
+export const GOOGLE_GMAIL_SEND_SCOPES = ['https://www.googleapis.com/auth/gmail.send'] as const
+
 /** Non-personal failure codes of the Google calls, mapped to locale copy by the caller. */
 export type GoogleFailureCode = 'not-configured' | 'unauthorized' | 'request-failed' | 'timeout' | 'invalid-response'
 
@@ -74,13 +85,16 @@ export type GoogleAuthStep = 'sts' | 'signJwt' | 'delegation-token'
  *
  * `status` is the numeric status of the upstream answer, absent when no answer came back (timeout,
  * network). `step` names the credential step that failed, on the calls that go through the chain.
- * Neither ever carries an upstream body: those are never read, because they can echo the request.
+ * `reason` is Google's machine-readable reason (`error.errors[0].reason`, or `error.status` when the
+ * answer carries none), read from the failed body by {@link readGoogleErrorReason} and never a
+ * message: an upstream body can echo the request, so only that token leaves the boundary.
  */
 export type GoogleFailure = {
   readonly ok: false
   readonly error: GoogleFailureCode
   readonly status?: number
   readonly step?: GoogleAuthStep
+  readonly reason?: string
 }
 
 /** Outcome of a Google call: its data, or a failure that carries no upstream detail. */
@@ -214,7 +228,7 @@ const readJsonBody = async (response: Response): Promise<unknown> => {
   }
 }
 
-/** Turns a failed status into its non-personal code, without ever reading the body. */
+/** Turns a failed status into its non-personal code; the body is read for its reason alone. */
 const failureForStatus = (status: number): GoogleFailureCode =>
   status === 401 || status === 403 ? 'unauthorized' : 'request-failed'
 
@@ -229,7 +243,8 @@ type GoogleCallInput<T> = {
 /**
  * Runs one call with its own timeout and validates its answer.
  *
- * A failed status is dropped on the status alone: the error body is never read, returned or logged.
+ * A failed status keeps its machine-readable reason ({@link readGoogleErrorReason}) and nothing else
+ * of the body: never a message, never a field the caller would have to interpret.
  */
 const callGoogle = async <T>({ url, body, headers, schema }: GoogleCallInput<T>): Promise<GoogleResult<T>> => {
   let response: Response
@@ -245,7 +260,15 @@ const callGoogle = async <T>({ url, body, headers, schema }: GoogleCallInput<T>)
     return { ok: false, error: isGoogleTimeoutError(error) ? 'timeout' : 'request-failed' }
   }
 
-  if (!response.ok) return { ok: false, error: failureForStatus(response.status), status: response.status }
+  if (!response.ok) {
+    const reason = await readGoogleErrorReason(response)
+    return {
+      ok: false,
+      error: failureForStatus(response.status),
+      status: response.status,
+      ...(reason === undefined ? {} : { reason }),
+    }
+  }
 
   const parsed = schema.safeParse(await readJsonBody(response))
   if (!parsed.success) return { ok: false, error: 'invalid-response' }
@@ -298,20 +321,26 @@ type SignCalendarAssertionInput = {
   federatedToken: string
   /** Current time, in seconds since the epoch. */
   issuedAt: number
+  /**
+   * Scopes the assertion asks for, the caller's own. The delegated scopes travel here and
+   * nowhere else, so the mail call's token can send mail and cannot read a calendar.
+   */
+  scopes: readonly string[]
 }
 
 /**
  * Has the service account sign the assertion the Calendar API accepts.
  *
  * The payload carries the delegation this booking needs: `iss` is the service account, `sub` is the
- * calendar owner, and `scope` is the two calendar scopes. The key never leaves Google: IAM
- * Credentials signs with its system-managed key, which is what makes the flow keyless.
+ * calendar owner, and `scope` is exactly the scopes the caller asked for. The key never leaves
+ * Google: IAM Credentials signs with its system-managed key, which is what makes the flow keyless.
  */
 const signCalendarAssertion = async ({
   serviceAccountEmail,
   owner,
   federatedToken,
   issuedAt,
+  scopes,
 }: SignCalendarAssertionInput): Promise<GoogleResult<string>> => {
   const signed = await callGoogle({
     url: `${IAM_CREDENTIALS_ENDPOINT}/projects/-/serviceAccounts/${encodeURIComponent(serviceAccountEmail)}:signJwt`,
@@ -321,7 +350,7 @@ const signCalendarAssertion = async ({
       payload: JSON.stringify({
         iss: serviceAccountEmail,
         sub: owner,
-        scope: GOOGLE_BOOKING_SCOPES.join(' '),
+        scope: scopes.join(' '),
         aud: TOKEN_ENDPOINT,
         iat: issuedAt,
         exp: issuedAt + ASSERTION_LIFETIME_SECONDS,
@@ -361,7 +390,14 @@ const requestCalendarToken = async (
   }
 
   if (!response.ok) {
-    return { ok: false, error: failureForStatus(response.status), status: response.status, step: 'delegation-token' }
+    const reason = await readGoogleErrorReason(response)
+    return {
+      ok: false,
+      error: failureForStatus(response.status),
+      status: response.status,
+      step: 'delegation-token',
+      ...(reason === undefined ? {} : { reason }),
+    }
   }
 
   const parsed = AccessTokenResponseSchema.safeParse(await readJsonBody(response))
@@ -374,7 +410,10 @@ const requestCalendarToken = async (
 export type GetAccessTokenInput = {
   /** Subject token of the current request, from {@link readSubjectToken}. */
   subjectToken: string | undefined
-  /** Scopes requested on the calendar. Defaults to {@link GOOGLE_BOOKING_SCOPES}. */
+  /**
+   * Scopes the returned token may carry. Defaults to {@link GOOGLE_BOOKING_SCOPES}; the mail call
+   * passes its own, so the two never share a token.
+   */
   scopes?: readonly string[]
 }
 
@@ -384,11 +423,13 @@ export type GetAccessTokenInput = {
  * The environment is read at call time and a missing project, pool, provider, service account,
  * owner or subject token answers `not-configured` without any network call, so a build, a preview or
  * a test without the federation keeps working and fails closed. A token already issued for the same
- * identity is reused until shortly before it expires, and that identity is the owner: the calendar
- * the events go to never enters the key. The subject token itself is never stored. No upstream body is read, and nothing of this chain is logged.
+ * identity and the same scopes is reused until shortly before it expires, and that identity is the
+ * owner: the calendar the events go to never enters the key. The subject token itself is never
+ * stored. Of an upstream error body, only the machine-readable reason is kept, for the caller's log
+ * line. Nothing of this chain is logged from here.
  *
  * @param input Subject token of the request, and optional scopes.
- * @returns The bearer token for the Calendar API, or a non-personal failure code.
+ * @returns The bearer token for the asked scopes, or a non-personal failure code.
  */
 export const getAccessToken = async ({
   subjectToken,
@@ -412,6 +453,7 @@ export const getAccessToken = async ({
     owner: config.owner,
     federatedToken: federated.data,
     issuedAt: Math.floor(Date.now() / 1000),
+    scopes,
   })
   if (!signed.ok) return signed
 
