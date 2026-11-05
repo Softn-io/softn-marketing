@@ -23,10 +23,16 @@
  * the same instant answers `slot-taken`. When the whole list is exhausted the failure is the generic
  * one, never a personal detail.
  *
- * Two rules hold everywhere in this module. A response body is only ever handed to a Zod schema: the
- * upstream error bodies are never read, returned nor logged, because they can echo the request. And
- * every failure leaves as a `Result` with a non-personal code, so a caller decides what the visitor
- * reads and nothing upstream leaks into a log line.
+ * Two rules hold everywhere in this module. A response body is only ever handed to a Zod schema, or,
+ * on a failure, read for the machine-readable reason of Google's error envelope — never a message,
+ * never a field that could echo the request. And every failure leaves as a `Result` with a
+ * non-personal code, so a caller decides what the visitor reads and nothing upstream leaks into a
+ * log line beyond that reason token.
+ *
+ * One exception to the "answer as it is" walk, and it is a narrow one: the private-property marks
+ * retry a rate-limited answer with a bounded backoff (`markRetry.ts`), because they are internal
+ * best-effort writes with nothing to duplicate. The insert, the reschedule patch, the deletion and
+ * the mail send never retry.
  */
 
 import { randomUUID } from 'node:crypto'
@@ -47,7 +53,9 @@ import {
   type GoogleFailure,
   type GoogleFailureCode,
 } from './auth'
+import { readGoogleErrorReason } from './errorReason'
 import { BOOKING_EVENT_ID_ATTEMPTS, bookingEventIdAttempt } from './eventId'
+import { retryMarkPatch, type MarkRetryOptions } from './markRetry'
 
 /** Calendar API v3 base URL. */
 const CALENDAR_API_BASE_URL = 'https://www.googleapis.com/calendar/v3'
@@ -163,8 +171,9 @@ const REMINDER_EVENTS_MAX_PAGES = 10
 export type CalendarFailureCode = GoogleFailureCode | 'slot-taken' | 'not-found'
 
 /**
- * Failure of a calendar call: its code, the upstream status when a response answered, and the
- * credential step when the chain is what failed. Never an upstream body.
+ * Failure of a calendar call: its code, the upstream status when a response answered, the credential
+ * step when the chain is what failed, and Google's machine-readable reason when the answer carried
+ * one. Never an upstream body.
  */
 export type CalendarFailure = Omit<GoogleFailure, 'error'> & { readonly error: CalendarFailureCode }
 
@@ -437,7 +446,7 @@ export type CancelBookingEventInput = {
 }
 
 /** Arguments of {@link markBookingLeadNotStored}. */
-export type MarkBookingLeadNotStoredInput = {
+export type MarkBookingLeadNotStoredInput = MarkRetryOptions & {
   /** Event whose lead could not be stored. */
   eventId: string
   /** Subject token of the current request, from {@link readSubjectToken}. */
@@ -445,7 +454,7 @@ export type MarkBookingLeadNotStoredInput = {
 }
 
 /** Arguments of {@link storeBookingLeadRowId}. */
-export type StoreBookingLeadRowIdInput = {
+export type StoreBookingLeadRowIdInput = MarkRetryOptions & {
   /** Event whose row now exists. */
   eventId: string
   /** Numeric id of the row in the leads table. */
@@ -455,7 +464,7 @@ export type StoreBookingLeadRowIdInput = {
 }
 
 /** Arguments of {@link markBookingEmailFailed}. */
-export type MarkBookingEmailFailedInput = {
+export type MarkBookingEmailFailedInput = MarkRetryOptions & {
   /** Event whose booking email could not be sent. */
   eventId: string
   /** Kind of message that failed, written as the mark's value. */
@@ -502,7 +511,7 @@ export type ReminderCandidate = {
 }
 
 /** Arguments of {@link markBookingReminderSent}. */
-export type MarkBookingReminderSentInput = {
+export type MarkBookingReminderSentInput = MarkRetryOptions & {
   /** Event the reminder was sent for. */
   eventId: string
   /** Slot start the reminder was sent for, written as the flag's value. */
@@ -512,7 +521,7 @@ export type MarkBookingReminderSentInput = {
 }
 
 /** Arguments of {@link storeBookingEmailSentAt}. */
-export type StoreBookingEmailSentAtInput = {
+export type StoreBookingEmailSentAtInput = MarkRetryOptions & {
   /** Event whose confirmation or update has just left. */
   eventId: string
   /** Instant the message was sent, as an ISO 8601 string. */
@@ -583,8 +592,10 @@ const readFailureForStatus = (status: number): CalendarFailureCode =>
  * Runs one authorized Calendar API call and hands back the raw answer.
  *
  * The token is fetched first, so a missing configuration fails before any request. The upstream
- * status decides the failure code; the body of a failed response is never read. Keeping the raw
- * response here is what lets a call with an empty success body share this path with the JSON ones.
+ * status decides the failure code, and the failed body is read for its machine-readable reason
+ * alone ({@link readGoogleErrorReason}) — never a message, never a field the caller would have to
+ * interpret. Keeping the raw response here is what lets a call with an empty success body share this
+ * path with the JSON ones.
  */
 const callCalendarApi = async ({
   url,
@@ -613,7 +624,15 @@ const callCalendarApi = async ({
     return { ok: false, error: isGoogleTimeoutError(error) ? 'timeout' : 'request-failed' }
   }
 
-  if (!response.ok) return { ok: false, error: mapStatus(response.status), status: response.status }
+  if (!response.ok) {
+    const reason = await readGoogleErrorReason(response)
+    return {
+      ok: false,
+      error: mapStatus(response.status),
+      status: response.status,
+      ...(reason === undefined ? {} : { reason }),
+    }
+  }
 
   return { ok: true, data: response }
 }
@@ -1077,28 +1096,30 @@ export const cancelBookingEvent = async ({
  *
  * Best effort, and `sendUpdates=none` so the visitor is not emailed about an internal mark.
  * `events.patch` merges private properties, so the id lands beside the slot, the consent and the
- * lead mark instead of replacing them.
+ * lead mark instead of replacing them. A rate-limited answer is retried with backoff
+ * ({@link retryMarkPatch}); any other failure is returned as it is.
  *
  * @param input Event id, row id and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
  */
-export const storeBookingLeadRowId = async ({
-  eventId,
-  rowId,
-  subjectToken,
-}: StoreBookingLeadRowIdInput): Promise<CalendarResult<true>> => {
+export const storeBookingLeadRowId = async (input: StoreBookingLeadRowIdInput): Promise<CalendarResult<true>> => {
+  const { eventId, rowId, subjectToken } = input
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const response = await requestCalendar({
-    url: markUrl(calendarId, eventId),
-    schema: EventPatchResponseSchema,
-    subjectToken,
-    method: 'PATCH',
-    body: {
-      extendedProperties: { private: { [BOOKING_LEAD_ROW_ID_PROPERTY]: String(rowId) } },
-    },
-  })
+  const response = await retryMarkPatch(
+    () =>
+      requestCalendar({
+        url: markUrl(calendarId, eventId),
+        schema: EventPatchResponseSchema,
+        subjectToken,
+        method: 'PATCH',
+        body: {
+          extendedProperties: { private: { [BOOKING_LEAD_ROW_ID_PROPERTY]: String(rowId) } },
+        },
+      }),
+    input,
+  )
   if (!response.ok) return response
 
   return { ok: true, data: true }
@@ -1111,27 +1132,30 @@ export const storeBookingLeadRowId = async ({
  * events whose row is missing. `events.patch` merges private properties, so the mark is added
  * beside the slot and the consent instead of replacing them, and `sendUpdates=none` keeps Google
  * from notifying anybody about an internal mark. A failure here is never reported to the visitor
- * and never changes the answer: it is one code in the log line of the caller.
+ * and never changes the answer: it is one code in the log line of the caller. A rate-limited answer
+ * is retried with backoff ({@link retryMarkPatch}); any other failure is returned as it is.
  *
  * @param input Event id, the calendar of this deployment and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
  */
-export const markBookingLeadNotStored = async ({
-  eventId,
-  subjectToken,
-}: MarkBookingLeadNotStoredInput): Promise<CalendarResult<true>> => {
+export const markBookingLeadNotStored = async (input: MarkBookingLeadNotStoredInput): Promise<CalendarResult<true>> => {
+  const { eventId, subjectToken } = input
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const response = await requestCalendar({
-    url: markUrl(calendarId, eventId),
-    schema: EventPatchResponseSchema,
-    subjectToken,
-    method: 'PATCH',
-    body: {
-      extendedProperties: { private: { [BOOKING_LEAD_STORED_PROPERTY]: 'false' } },
-    },
-  })
+  const response = await retryMarkPatch(
+    () =>
+      requestCalendar({
+        url: markUrl(calendarId, eventId),
+        schema: EventPatchResponseSchema,
+        subjectToken,
+        method: 'PATCH',
+        body: {
+          extendedProperties: { private: { [BOOKING_LEAD_STORED_PROPERTY]: 'false' } },
+        },
+      }),
+    input,
+  )
   if (!response.ok) return response
 
   return { ok: true, data: true }
@@ -1145,28 +1169,30 @@ export const markBookingLeadNotStored = async ({
  * `events.patch` merges private properties, so the mark is added beside the slot, the consent and
  * the guest name instead of replacing them, and no notification is sent to anybody. A failure here
  * is never reported to the visitor and never changes the answer: it is one code in the log line of
- * the caller.
+ * the caller. A rate-limited answer is retried with backoff ({@link retryMarkPatch}); any other
+ * failure is returned as it is.
  *
  * @param input Event id, the kind of message that failed and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
  */
-export const markBookingEmailFailed = async ({
-  eventId,
-  email,
-  subjectToken,
-}: MarkBookingEmailFailedInput): Promise<CalendarResult<true>> => {
+export const markBookingEmailFailed = async (input: MarkBookingEmailFailedInput): Promise<CalendarResult<true>> => {
+  const { eventId, email, subjectToken } = input
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const response = await requestCalendar({
-    url: markUrl(calendarId, eventId),
-    schema: EventPatchResponseSchema,
-    subjectToken,
-    method: 'PATCH',
-    body: {
-      extendedProperties: { private: { [BOOKING_EMAIL_FAILED_PROPERTY]: email } },
-    },
-  })
+  const response = await retryMarkPatch(
+    () =>
+      requestCalendar({
+        url: markUrl(calendarId, eventId),
+        schema: EventPatchResponseSchema,
+        subjectToken,
+        method: 'PATCH',
+        body: {
+          extendedProperties: { private: { [BOOKING_EMAIL_FAILED_PROPERTY]: email } },
+        },
+      }),
+    input,
+  )
   if (!response.ok) return response
 
   return { ok: true, data: true }
@@ -1181,28 +1207,31 @@ export const markBookingEmailFailed = async ({
  * instant, and `sendUpdates=none` keeps Google from notifying anybody about an internal mark.
  *
  * The flag names the slot the reminder was sent for, so a reschedule re-arms the reminder by itself:
- * the new start no longer matches the flag, without the reschedule path clearing anything.
+ * the new start no longer matches the flag, without the reschedule path clearing anything. A
+ * rate-limited answer is retried with backoff ({@link retryMarkPatch}); any other failure is returned
+ * as it is.
  *
  * @param input Event id, the slot the reminder was sent for and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
  */
-export const markBookingReminderSent = async ({
-  eventId,
-  slotStart,
-  subjectToken,
-}: MarkBookingReminderSentInput): Promise<CalendarResult<true>> => {
+export const markBookingReminderSent = async (input: MarkBookingReminderSentInput): Promise<CalendarResult<true>> => {
+  const { eventId, slotStart, subjectToken } = input
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const response = await requestCalendar({
-    url: markUrl(calendarId, eventId),
-    schema: EventPatchResponseSchema,
-    subjectToken,
-    method: 'PATCH',
-    body: {
-      extendedProperties: { private: { [BOOKING_REMINDER_SENT_PROPERTY]: slotStart } },
-    },
-  })
+  const response = await retryMarkPatch(
+    () =>
+      requestCalendar({
+        url: markUrl(calendarId, eventId),
+        schema: EventPatchResponseSchema,
+        subjectToken,
+        method: 'PATCH',
+        body: {
+          extendedProperties: { private: { [BOOKING_REMINDER_SENT_PROPERTY]: slotStart } },
+        },
+      }),
+    input,
+  )
   if (!response.ok) return response
 
   return { ok: true, data: true }
@@ -1216,28 +1245,30 @@ export const markBookingReminderSent = async ({
  * reading of the event's `updated`, which every internal patch and every hand edit by Mel moves
  * without any email being sent; `sendUpdates=none` keeps Google from notifying anybody about it. A
  * failure here is never reported to the visitor and never changes the answer: it only means the
- * reminder has no grace to observe, which is still better than no reminder at all.
+ * reminder has no grace to observe, which is still better than no reminder at all. A rate-limited
+ * answer is retried with backoff ({@link retryMarkPatch}); any other failure is returned as it is.
  *
  * @param input Event id, the instant the message was sent and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
  */
-export const storeBookingEmailSentAt = async ({
-  eventId,
-  sentAt,
-  subjectToken,
-}: StoreBookingEmailSentAtInput): Promise<CalendarResult<true>> => {
+export const storeBookingEmailSentAt = async (input: StoreBookingEmailSentAtInput): Promise<CalendarResult<true>> => {
+  const { eventId, sentAt, subjectToken } = input
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const response = await requestCalendar({
-    url: markUrl(calendarId, eventId),
-    schema: EventPatchResponseSchema,
-    subjectToken,
-    method: 'PATCH',
-    body: {
-      extendedProperties: { private: { [BOOKING_EMAIL_SENT_PROPERTY]: sentAt } },
-    },
-  })
+  const response = await retryMarkPatch(
+    () =>
+      requestCalendar({
+        url: markUrl(calendarId, eventId),
+        schema: EventPatchResponseSchema,
+        subjectToken,
+        method: 'PATCH',
+        body: {
+          extendedProperties: { private: { [BOOKING_EMAIL_SENT_PROPERTY]: sentAt } },
+        },
+      }),
+    input,
+  )
   if (!response.ok) return response
 
   return { ok: true, data: true }

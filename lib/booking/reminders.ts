@@ -80,11 +80,14 @@ export type RunBookingRemindersInput = {
 
 /**
  * Diagnostic detail of a Google failure, in the shape the booking routes already log: the step of
- * the credential chain that failed when one did, the name of the call otherwise, its code and the
- * upstream status when one answered. Never an upstream body, a name, an address or a slot.
+ * the credential chain that failed when one did, the name of the call otherwise, its code, the
+ * upstream status when one answered and Google's machine-readable reason when the answer carried
+ * one. Never an upstream body beyond that reason token, nor a name, an address or a slot.
  */
 const failureDetail = (call: string, failure: CalendarFailure): string =>
-  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}`
+  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}${
+    failure.reason === undefined ? '' : ` reason=${failure.reason}`
+  }`
 
 /** True when two instants name the same moment; an absent or unreadable flag never does. */
 const sameInstant = (left: string | undefined, right: string): boolean => {

@@ -154,9 +154,10 @@ const mimePart = (headers: readonly string[], content: string): string =>
 /**
  * One link of an HTML body: the URL the copy shows, and the words the guest reads.
  *
- * A link whose label is the URL itself is the address the copy prints; the manage link carries the
- * validated label of `bookingManage.calendarEvent.linkLabel` instead, because a signed URL is long
- * and says nothing. Both are escaped, the `href` and the label alike.
+ * A link whose label is the URL itself is the address the copy prints, as the Meet link is; a long
+ * link carries the label the copy validated instead, like the manage link
+ * (`bookingManage.calendarEvent.linkLabel`) and the rebooking link of the cancellation's HTML part
+ * (`bookingEmails.cancellation.bookingLinkLabel`). Both are escaped, the `href` and the label alike.
  */
 export type HtmlLink = {
   /** URL the anchor points at, matched in the body text. */

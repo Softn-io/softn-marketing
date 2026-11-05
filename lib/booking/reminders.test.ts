@@ -234,6 +234,19 @@ describe('runBookingReminders', () => {
     expect(listed(await run()).details).toEqual(['reminder not sent: delegation-token unauthorized status=403'])
   })
 
+  it("logs Google's machine-readable reason beside the code", async () => {
+    calendarMock.markBookingReminderSent.mockResolvedValue({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'forbiddenForNonOrganizer',
+    })
+
+    expect(listed(await run()).details).toEqual([
+      'reminder flag not stored: events patch unauthorized status=403 reason=forbiddenForNonOrganizer (duplicate possible)',
+    ])
+  })
+
   it('reports a failed failure-mark too, and still leaves the call unreminded', async () => {
     gmailMock.sendGmailMessage.mockResolvedValue({ ok: false, error: 'timeout' })
     calendarMock.markBookingEmailFailed.mockResolvedValue({ ok: false, error: 'not-configured' })

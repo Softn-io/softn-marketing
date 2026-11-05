@@ -401,6 +401,26 @@ describe('POST /api/booking/manage reschedule', () => {
     )
   })
 
+  it('logs the reason of a refused patch, without any personal data', async () => {
+    calendarMock.rescheduleBookingEvent.mockResolvedValue({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'forbiddenForNonOrganizer',
+    })
+
+    const response = await POST(request({ action: 'reschedule', token: tokenFor(), slot: newSlot.start }))
+
+    expect(response.status).toBe(503)
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(logged).toContain(
+      '[booking] manage: calendar unavailable: events patch unauthorized status=403 reason=forbiddenForNonOrganizer',
+    )
+    for (const personal of [EVENT_ID, newSlot.start, tokenFor(), 'marie@example.fr']) {
+      expect(logged).not.toContain(personal)
+    }
+  })
+
   it('keeps the moved answer when only Baserow fails, and logs one code without personal data', async () => {
     baserowMock.updateBaserowRow.mockResolvedValue({ ok: false, error: 'request-failed', status: 403 })
 

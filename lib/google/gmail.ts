@@ -9,15 +9,16 @@
  * the authenticated user, which is the impersonated owner.
  *
  * No SDK and no new dependency: the credential chain of the calendar is reused, with the Gmail
- * scope added for this call only. A response body is only ever handed to a Zod schema, and a failed
- * status leaves as a non-personal code: the upstream body is never read, returned nor logged,
- * because it can echo the request.
+ * scope added for this call only. A response body is only ever handed to a Zod schema, or, on a
+ * failure, read for the machine-readable reason of Google's error envelope — never a message, never
+ * a field that could echo the request.
  *
  * Docs read for this call: `https://developers.google.com/workspace/gmail/api/guides/sending`
  * (endpoint, `raw` field, base64url encoding, `me` user id).
  */
 
 import { z } from 'zod'
+import { readGoogleErrorReason } from './errorReason'
 import {
   getAccessToken,
   GOOGLE_GMAIL_SEND_SCOPES,
@@ -38,7 +39,7 @@ const SendMessageResponseSchema = z.object({
   id: z.string().min(1),
 })
 
-/** Failure of a Gmail call: the shared Google codes, an upstream status, and never a body. */
+/** Failure of a Gmail call: the shared Google codes, an upstream status, its reason, never a body. */
 export type GmailFailure = Omit<GoogleFailure, 'error'> & { readonly error: GoogleFailureCode }
 
 /** Outcome of a Gmail call: its data, or a failure that carries no upstream detail. */
@@ -91,7 +92,15 @@ export const sendGmailMessage = async ({
     return { ok: false, error: isGoogleTimeoutError(error) ? 'timeout' : 'request-failed' }
   }
 
-  if (!response.ok) return { ok: false, error: failureForStatus(response.status), status: response.status }
+  if (!response.ok) {
+    const reason = await readGoogleErrorReason(response)
+    return {
+      ok: false,
+      error: failureForStatus(response.status),
+      status: response.status,
+      ...(reason === undefined ? {} : { reason }),
+    }
+  }
 
   let payload: unknown
   try {

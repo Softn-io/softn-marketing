@@ -88,7 +88,7 @@ describe('sendGmailMessage', () => {
     expect(signedScope()).toBe('https://www.googleapis.com/auth/gmail.send')
   })
 
-  it('maps a refusal to unauthorized and a broken call to its code, without reading the body', async () => {
+  it('maps a refusal to unauthorized and a broken call to its code', async () => {
     withToken(() => new Response('not json at all', { status: 403 }))
     const refused = await import('./gmail')
     expect(await refused.sendGmailMessage({ message: 'm', subjectToken: SUBJECT_TOKEN })).toEqual({
@@ -106,6 +106,41 @@ describe('sendGmailMessage', () => {
       error: 'request-failed',
       status: 502,
     })
+  })
+
+  it('keeps the machine-readable reason of a refusal', async () => {
+    withToken(() =>
+      jsonResponse(
+        {
+          error: {
+            errors: [{ domain: 'usageLimits', reason: 'userRateLimitExceeded', message: 'User Rate Limit Exceeded' }],
+            code: 403,
+          },
+        },
+        403,
+      ),
+    )
+    const { sendGmailMessage } = await import('./gmail')
+
+    expect(await sendGmailMessage({ message: 'm', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'userRateLimitExceeded',
+    })
+  })
+
+  it('never retries a rate-limited send: a second message is not the answer to a lost one', async () => {
+    withToken(() => jsonResponse({ error: { errors: [{ reason: 'rateLimitExceeded' }], code: 429 } }, 429))
+    const { sendGmailMessage } = await import('./gmail')
+
+    expect(await sendGmailMessage({ message: 'm', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 429,
+      reason: 'rateLimitExceeded',
+    })
+    expect(gmailCalls()).toHaveLength(1)
   })
 
   it('refuses an answer that carries no message id', async () => {

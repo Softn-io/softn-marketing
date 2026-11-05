@@ -23,7 +23,38 @@ const SUBJECT_TOKEN = 'subject-token-value'
 const jsonResponse = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 
+/** One error answer of Google, as the Calendar API documents it (`errors[0].reason` included). */
+const errorResponse = (reason: string, status = 403): Response =>
+  jsonResponse(
+    {
+      error: {
+        errors: [{ domain: 'calendar', reason, message: 'Shared properties can only be changed by the organizer.' }],
+        code: status,
+      },
+    },
+    status,
+  )
+
 const fetchMock = vi.fn<typeof fetch>()
+
+/**
+ * Records the retry delays instead of waiting, so no test ever sleeps for real.
+ *
+ * The mark patches accept this through their own input; a test fixes `random` beside it whenever it
+ * asserts an exact delay.
+ */
+const recordingSleep = (): {
+  readonly sleep: (milliseconds: number) => Promise<void>
+  readonly delays: readonly number[]
+} => {
+  const delays: number[] = []
+  return {
+    sleep: async (milliseconds) => {
+      delays.push(milliseconds)
+    },
+    delays,
+  }
+}
 
 /** Endpoints of the keyless credential chain, which is always answered the same way here. */
 const CHAIN_ENDPOINTS = ['https://sts.googleapis.com/v1/token', 'https://oauth2.googleapis.com/token']
@@ -262,7 +293,7 @@ describe('queryBusyIntervals', () => {
     })
   })
 
-  it('never reads the body of a failed answer', async () => {
+  it('keeps no reason from a failed answer whose body is not a Google error', async () => {
     withToken(() => new Response('not json at all', { status: 500 }))
     const { queryBusyIntervals } = await import('./calendar')
 
@@ -270,6 +301,29 @@ describe('queryBusyIntervals', () => {
       ok: false,
       error: 'request-failed',
       status: 500,
+    })
+  })
+
+  it("keeps Google's machine-readable reason of a refused answer, message dropped", async () => {
+    withToken(() => errorResponse('forbiddenForNonOrganizer'))
+    const { queryBusyIntervals } = await import('./calendar')
+
+    expect(await queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'forbiddenForNonOrganizer',
+    })
+  })
+
+  it('drops a reason whose shape is not that of a reason token', async () => {
+    withToken(() => errorResponse('forbidden for non organizer'))
+    const { queryBusyIntervals } = await import('./calendar')
+
+    expect(await queryBusyIntervals({ timeMin: 'a', timeMax: 'b', subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
     })
   })
 
@@ -485,6 +539,19 @@ describe('insertBookingEvent', () => {
     const [call] = calendarCalls()
     const url = new URL(String(call?.url))
     expect(url.pathname).toBe('/calendar/v3/calendars/abc123%40group.calendar.google.com/events')
+  })
+
+  it('never retries a rate-limited insert: a second event is not the answer to a lost one', async () => {
+    withToken(() => errorResponse('rateLimitExceeded', 429))
+    const { insertBookingEvent } = await import('./calendar')
+
+    expect(await insertBookingEvent(input())).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 429,
+      reason: 'rateLimitExceeded',
+    })
+    expect(calendarCalls()).toHaveLength(1)
   })
 
   it('fails closed on any other error status', async () => {
@@ -886,7 +953,7 @@ describe('rescheduleBookingEvent', () => {
     })
   })
 
-  it('reports an upstream failure as its code, without reading the body', async () => {
+  it('reports an upstream failure as its code', async () => {
     withToken(() => new Response('not json at all', { status: 412 }))
     const { rescheduleBookingEvent } = await import('./calendar')
 
@@ -899,6 +966,22 @@ describe('rescheduleBookingEvent', () => {
         subjectToken: SUBJECT_TOKEN,
       }),
     ).toEqual({ ok: false, error: 'request-failed', status: 412 })
+  })
+
+  it('never retries a rate-limited reschedule: only the private marks do', async () => {
+    withToken(() => errorResponse('rateLimitExceeded', 429))
+    const { rescheduleBookingEvent } = await import('./calendar')
+
+    expect(
+      await rescheduleBookingEvent({
+        eventId: EVENT_ID,
+        slot,
+        description: 'd',
+        rules: TEST_RULES,
+        subjectToken: SUBJECT_TOKEN,
+      }),
+    ).toEqual({ ok: false, error: 'request-failed', status: 429, reason: 'rateLimitExceeded' })
+    expect(calendarCalls()).toHaveLength(1)
   })
 
   it('refuses an unreadable slot before any network call', async () => {
@@ -948,6 +1031,19 @@ describe('cancelBookingEvent', () => {
       status: 410,
     })
   })
+
+  it('never retries a rate-limited deletion: only the private marks do', async () => {
+    withToken(() => errorResponse('rateLimitExceeded', 429))
+    const { cancelBookingEvent } = await import('./calendar')
+
+    expect(await cancelBookingEvent({ eventId: EVENT_ID, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 429,
+      reason: 'rateLimitExceeded',
+    })
+    expect(calendarCalls()).toHaveLength(1)
+  })
 })
 
 describe('storeBookingLeadRowId', () => {
@@ -979,6 +1075,155 @@ describe('storeBookingLeadRowId', () => {
       error: 'request-failed',
       status: 404,
     })
+  })
+
+  it('names the reason of a refused patch, so a live 403 is diagnosable', async () => {
+    withToken(() => errorResponse('forbiddenForNonOrganizer'))
+    const { storeBookingLeadRowId } = await import('./calendar')
+
+    expect(await storeBookingLeadRowId({ eventId: 'softnabc', rowId: 42, subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'forbiddenForNonOrganizer',
+    })
+    // A refusal that is not a rate limit is answered at once: one attempt, no wait.
+    expect(calendarCalls()).toHaveLength(1)
+  })
+
+  it('retries a 429 with the first backoff delay, then stores the id', async () => {
+    let attempt = 0
+    withToken(() => {
+      attempt += 1
+      return attempt === 1 ? errorResponse('rateLimitExceeded', 429) : jsonResponse({ id: 'softnabc' })
+    })
+    const { storeBookingLeadRowId } = await import('./calendar')
+    const { sleep, delays } = recordingSleep()
+
+    const result = await storeBookingLeadRowId({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: SUBJECT_TOKEN,
+      sleep,
+      random: () => 0.5,
+    })
+
+    expect(result).toEqual({ ok: true, data: true })
+    expect(calendarCalls()).toHaveLength(2)
+    expect(delays).toEqual([500])
+  })
+
+  it.each(['rateLimitExceeded', 'userRateLimitExceeded'])(
+    'retries a 403 answered %s, then stores the id',
+    async (reason) => {
+      let attempt = 0
+      withToken(() => {
+        attempt += 1
+        return attempt === 1 ? errorResponse(reason) : jsonResponse({ id: 'softnabc' })
+      })
+      const { storeBookingLeadRowId } = await import('./calendar')
+      const { sleep, delays } = recordingSleep()
+
+      const result = await storeBookingLeadRowId({
+        eventId: 'softnabc',
+        rowId: 42,
+        subjectToken: SUBJECT_TOKEN,
+        sleep,
+        random: () => 0.5,
+      })
+
+      expect(result).toEqual({ ok: true, data: true })
+      expect(calendarCalls()).toHaveLength(2)
+      expect(delays).toEqual([500])
+    },
+  )
+
+  it('waits about 500 ms then about 1500 ms, jittered and bounded under 2.5 s', async () => {
+    withToken(() => errorResponse('rateLimitExceeded', 429))
+    const { storeBookingLeadRowId } = await import('./calendar')
+    const low = recordingSleep()
+    const high = recordingSleep()
+
+    await storeBookingLeadRowId({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: SUBJECT_TOKEN,
+      sleep: low.sleep,
+      random: () => 0,
+    })
+    expect(low.delays).toEqual([400, 1200])
+
+    vi.resetModules()
+    fetchMock.mockReset()
+    withToken(() => errorResponse('rateLimitExceeded', 429))
+    const again = await import('./calendar')
+    await again.storeBookingLeadRowId({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: SUBJECT_TOKEN,
+      sleep: high.sleep,
+      random: () => 1,
+    })
+    expect(high.delays).toEqual([600, 1800])
+    expect(high.delays.reduce((total, delay) => total + delay, 0)).toBeLessThan(2500)
+  })
+
+  it('stops after two retries and answers the last failure, its reason kept', async () => {
+    withToken(() => errorResponse('userRateLimitExceeded', 429))
+    const { storeBookingLeadRowId } = await import('./calendar')
+    const { sleep, delays } = recordingSleep()
+
+    const result = await storeBookingLeadRowId({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: SUBJECT_TOKEN,
+      sleep,
+      random: () => 0.5,
+    })
+
+    expect(result).toEqual({ ok: false, error: 'request-failed', status: 429, reason: 'userRateLimitExceeded' })
+    expect(calendarCalls()).toHaveLength(3)
+    expect(delays).toEqual([500, 1500])
+  })
+
+  it.each([
+    ['forbiddenForNonOrganizer', 403],
+    ['quotaExceeded', 403],
+    ['insufficientPermissions', 401],
+  ] as const)('never retries a %s refusal, at status %i', async (reason, status) => {
+    withToken(() => errorResponse(reason, status))
+    const { storeBookingLeadRowId } = await import('./calendar')
+    const { sleep, delays } = recordingSleep()
+
+    const result = await storeBookingLeadRowId({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: SUBJECT_TOKEN,
+      sleep,
+      random: () => 0.5,
+    })
+
+    expect(result).toEqual({ ok: false, error: 'unauthorized', status, reason })
+    expect(calendarCalls()).toHaveLength(1)
+    expect(delays).toEqual([])
+  })
+
+  it('never retries a broken call', async () => {
+    withToken(() => new Response('not json at all', { status: 500 }))
+    const { storeBookingLeadRowId } = await import('./calendar')
+    const { sleep, delays } = recordingSleep()
+
+    expect(
+      await storeBookingLeadRowId({
+        eventId: 'softnabc',
+        rowId: 42,
+        subjectToken: SUBJECT_TOKEN,
+        sleep,
+        random: () => 0.5,
+      }),
+    ).toEqual({ ok: false, error: 'request-failed', status: 500 })
+    expect(calendarCalls()).toHaveLength(1)
+    expect(delays).toEqual([])
   })
 })
 

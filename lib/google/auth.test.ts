@@ -210,7 +210,7 @@ describe('getAccessToken', () => {
     expect(fetchMock.mock.calls.length).toBeGreaterThan(afterFirst)
   })
 
-  it('maps a refused exchange to unauthorized, without reading the body', async () => {
+  it('maps a refused exchange to unauthorized', async () => {
     fetchMock.mockResolvedValue(new Response('not json at all', { status: 403 }))
     const { getAccessToken } = await import('./auth')
 
@@ -221,6 +221,24 @@ describe('getAccessToken', () => {
       step: 'sts',
     })
     expect(callsTo('iamcredentials.googleapis.com')).toEqual([])
+  })
+
+  it('keeps the reason of a refused exchange, so a live 400 is diagnosable', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        { error: { errors: [{ reason: 'invalidSubjectToken', message: 'Invalid subject token.' }], code: 400 } },
+        400,
+      ),
+    )
+    const { getAccessToken } = await import('./auth')
+
+    expect(await getAccessToken({ subjectToken: SUBJECT_TOKEN })).toEqual({
+      ok: false,
+      error: 'request-failed',
+      status: 400,
+      step: 'sts',
+      reason: 'invalidSubjectToken',
+    })
   })
 
   it('maps a refused signing call to unauthorized and stops there', async () => {

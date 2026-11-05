@@ -98,6 +98,113 @@ cancellation are refused with `compose guest-missing`, mark the event `softnEmai
 non-personal code. This is self-healing: it stops as soon as the slot has passed, and every booking
 made after the deployment is emailed normally.
 
+## Known Google errors
+
+Every failed Google call now logs Google's machine-readable reason when the answer carries one — the
+`reason` of the first entry of `error.errors`, or `error.status` when the answer has none — as in
+`calendar unavailable: events patch unauthorized status=403 reason=forbiddenForNonOrganizer`. The
+reason is the only part of an error body that is ever read: the human-readable `message` is never
+read, logged or returned (`lib/google/errorReason.ts`). The token is kept only when it is a short word
+of letters, so an underscored `error.status` such as `PERMISSION_DENIED` is dropped rather than logged.
+The private-property marks answer a rate limit with a bounded retry, documented below.
+
+### What the documentation states
+
+Sources, read through Context7 (library ids `/websites/developers_google_workspace_calendar_api`,
+`/websites/developers_google_workspace_calendar_api_v3_reference`,
+`/websites/developers_google_workspace_gmail_api`):
+
+- `https://developers.google.com/workspace/calendar/api/guides/errors` — the documented 403 reasons:
+  `forbiddenForNonOrganizer` (an update is trying to set a **shared** event property on a copy that is
+  not the organizer's; the same page suggests `events.patch` when no shared property is meant to
+  change), `quotaExceeded` ("Calendar usage limits exceeded"), `rateLimitExceeded` ("can return either
+  403 or 429"), `userRateLimitExceeded`.
+- `https://developers.google.com/workspace/calendar/api/guides/quota` — the Calendar API has, beside
+  the per-project and per-user quotas, **operational limits** that "might be limited at any time. For
+  example, if you attempt to write to a single calendar in quick succession".
+- `https://developers.google.com/workspace/calendar/api/v3/reference/events/patch` — `events.patch`
+  consumes three quota units; `sendUpdates` is documented as a guest-notification selector only
+  (`all`, `externalOnly`, `none`), with no documented default for an omitted value and no documented
+  failure attached to any of its values.
+- `https://developers.google.com/workspace/calendar/api/guides/extended-properties` — `private`
+  extended properties are specific to the `calendarId`/`eventId` of the request and are the preferred
+  write of a patch; `https://developers.google.com/workspace/calendar/api/concepts/inviting-attendees-to-events`
+  — they are never shared with an attendee's copy.
+- `https://developers.google.com/workspace/gmail/api/guides/handle-errors` — the Gmail 403 reasons are
+  `rateLimitExceeded`, `userRateLimitExceeded` and the mail-sending limits (answered 429).
+
+### Retry of the private-property marks
+
+The marks written back to an event (`softnLeadRowId`, `softnLeadStored`, `softnEmailFailed`,
+`softnEmailSentAt`, `softnReminderSentFor`, all through `events.patch`) are internal best-effort
+writes: a lost one costs a bookkeeping fact, never the booking. Those calls, and only those, retry a
+rate-limited answer with exponential backoff, as Google documents it:
+
+- `https://developers.google.com/workspace/calendar/api/guides/errors` — `rateLimitExceeded` "can
+  return either 403 or 429 error codes — currently they are functionally similar and should be
+  responded to in the same way, by using exponential backoff".
+- `https://developers.google.com/workspace/calendar/api/guides/quota` — for time-based quota errors
+  the docs recommend a **truncated exponential backoff**, with a `random_number_milliseconds` jitter
+  "to avoid cases in which many clients are synchronized … and all retry at once".
+
+The rule implemented in `lib/google/markRetry.ts`: a **429**, or a **403 whose machine-readable reason
+is `rateLimitExceeded` or `userRateLimitExceeded`**, is retried **at most twice**, waiting about
+**500 ms** then about **1500 ms**, each jittered by at most ±20 %, so the extra wait of one call stays
+under 2.5 s. A success ends the walk at once. Any other answer — another reason such as
+`forbiddenForNonOrganizer` or `quotaExceeded`, a 401, a 500, a timeout, an unreadable body — is
+returned on the first attempt exactly as before, reason included, and the caller logs it as it always
+did. `quotaExceeded` is deliberately not retried: it reports a calendar usage limit that a short wait
+does not clear, and Google's own backoff guidance is for time-based limits.
+
+Nothing else of the booking is retried: the insert, the reschedule patch, the deletion and the Gmail
+send have side effects a second attempt could duplicate (a second event, a second email) or undo, and
+the visitor waits on them, so their failures are answered as they are.
+
+### What the documentation does not state
+
+- No page read above says that `sendUpdates=none` on `events.patch`, or on any event write, can
+  produce a 403 — for a service account or for any other caller. The patch behaviour is therefore left
+  as it is, and only the diagnostics changed.
+- `forbiddenForServiceAccounts` and `insufficientPermissions` are not listed among the Calendar error
+  reasons read above; they are generic Google API reasons, kept here as hypotheses only.
+- Nothing read above links a **Gmail (consumer) attendee** to a 403 on the organizer's own copy of the
+  event.
+
+### Hypotheses on the 403 of the row-id patch (not documented)
+
+1. `rateLimitExceeded` or `quotaExceeded` — operational limits. One booking writes the same calendar in
+   quick succession: `freeBusy`, the events list, the insert, then the row-id patch seconds later, and
+   `events.patch` alone is documented as consuming three quota units. Both reasons are documented 403s
+   and both are transient, which fits a failure that left the Baserow row created but the event
+   unmarked — and fits Mel's retest (2026-11-05), which saw no 403 and a Baserow row created, then
+   updated after a reschedule and a cancellation: an intermittent failure, not a permanent refusal.
+2. `forbiddenForNonOrganizer` — documented only for **shared** properties on a copy that is not the
+   organizer's. The row-id patch sends `extendedProperties.private` alone, which the docs call private
+   to the organizer's copy, so the documented case does not match exactly; it stays plausible only if
+   Google answers it for a broader class of writes on this calendar.
+3. `insufficientPermissions` — a scope or Workspace-admin delegation problem would normally fail the
+   insert too, and the insert succeeded on the same request with the same token, so this is unlikely.
+4. Something else entirely, which the reason token will name — including a patch that Google refuses
+   while accepting the insert for a reason no page read above documents.
+
+### Consequence chain Mel observed
+
+A failed row-id patch leaves `softnLeadRowId` absent from the event. A later reschedule or cancellation
+reads the event, finds no row id, and logs `lead not updated: baserow not-configured`, so Baserow keeps
+its stale row while the calendar moves (`app/api/booking/manage/route.ts`). That is why a Gmail guest's
+reschedule **and** cancellation left Baserow untouched, while a non-Google guest whose patch succeeded
+had the id stored and its later updates reached Baserow: the root cause is the 403 at booking time, not
+the manage calls.
+
+### What the next live test should look for
+
+- The booking log line of the failed patch, now ending in `reason=<token>`; that token names the cause.
+  A mark that a retry saved logs nothing at all: the retry is silent, and only a failure that outlived
+  both retries reaches the log, still with the last answer's reason.
+- On a later reschedule or cancellation of the same booking, whether the log says
+  `lead not updated: baserow not-configured` (id missing, patch failed at booking) or carries a Baserow
+  status (id present, Baserow itself refused).
+
 ## Open points for Mel
 
 - Gmail's data location is not confirmed. `docs/rgpd/processors.md` records the Google Gmail row as

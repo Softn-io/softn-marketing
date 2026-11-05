@@ -357,6 +357,23 @@ describe('POST /api/booking order', () => {
     )
   })
 
+  it('logs the reason of the refusal when a Google call answers a machine-readable one', async () => {
+    calendarMock.storeBookingLeadRowId.mockResolvedValue({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'forbiddenForNonOrganizer',
+    })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[booking] lead row id not stored: calendar events patch unauthorized status=403 reason=forbiddenForNonOrganizer',
+    )
+  })
+
   it('records the Paris calendar date of the stamped consent', async () => {
     // The instant the route stamps decides the day: late in a UTC day is already the next day in
     // Paris, which is why the row stores the Paris date and not the UTC one.

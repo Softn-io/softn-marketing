@@ -82,12 +82,16 @@ const rateLimitFailureDetail = (failure: RateLimitFailure): string =>
 
 /**
  * Diagnostic detail of a Google failure: the step of the credential chain that failed (or the call
- * itself when the chain is not what broke), its code, and the upstream status when one answered.
+ * itself when the chain is not what broke), its code, the upstream status when one answered and
+ * Google's machine-readable reason when the answer carried one.
  *
- * The shape matches the rate-limit detail below. It never carries an upstream body or a slot.
+ * The shape matches the rate-limit detail below. It never carries an upstream body beyond that
+ * reason token, and never a slot.
  */
 const googleFailureDetail = (call: string, failure: CalendarFailure): string =>
-  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}`
+  `${failure.step ?? call} ${failure.error}${failure.status === undefined ? '' : ` status=${failure.status}`}${
+    failure.reason === undefined ? '' : ` reason=${failure.reason}`
+  }`
 
 /** Diagnostic detail of a Baserow failure: the code, plus the upstream status when one answered. */
 const baserowFailureDetail = (failure: BaserowFailure): string =>
