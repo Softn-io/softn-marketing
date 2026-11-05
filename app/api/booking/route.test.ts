@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import { findFreeSlots } from '@/lib/booking/availability'
 import { BOOKING_RULES } from '@/lib/booking/rules'
-import { BOOKING_LEAD_FIELDS, BOOKING_LEAD_STATUS_BOOKED } from '@/lib/booking/lead'
+import { BOOKING_LEAD_FIELDS, BOOKING_LEAD_REQUIRED_FIELD_CHECKS, BOOKING_LEAD_STATUS_BOOKED } from '@/lib/booking/lead'
 import { POST } from './route'
 
 const calendarMock = vi.hoisted(() => ({
@@ -278,6 +278,7 @@ describe('POST /api/booking order', () => {
         [BOOKING_LEAD_FIELDS.source]: 'chatbot',
         [BOOKING_LEAD_FIELDS.status]: BOOKING_LEAD_STATUS_BOOKED,
       },
+      verifyFields: BOOKING_LEAD_REQUIRED_FIELD_CHECKS,
     })
 
     // The id of the new row is kept with the event, without notifying the attendee.
@@ -512,6 +513,7 @@ describe('POST /api/booking order', () => {
         [BOOKING_LEAD_FIELDS.phone]: '06 12 34 56 78',
         [BOOKING_LEAD_FIELDS.companyType]: 'PME',
       }),
+      verifyFields: BOOKING_LEAD_REQUIRED_FIELD_CHECKS,
     })
     const fields = baserowMock.createBaserowRow.mock.calls[0]?.[0] as { fields: Record<string, unknown> }
     expect(fields.fields[BOOKING_LEAD_FIELDS.role]).toBeUndefined()
@@ -560,5 +562,56 @@ describe('POST /api/booking manage link origin', () => {
     const description = descriptionOfLastInsert()
     expect(description).toContain('https://softn.io/rendez-vous/')
     expect(description).not.toContain('evil.example')
+  })
+})
+
+describe('POST /api/booking schema-mismatch', () => {
+  it('keeps the booking, logs one code, marks the event and keeps the row id', async () => {
+    baserowMock.createBaserowRow.mockResolvedValue({ ok: false, error: 'schema-mismatch', rowId: 42 })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    expect(calendarMock.insertBookingEvent).toHaveBeenCalledTimes(1)
+
+    // Exactly one diagnostic line, and it carries the code only: never a name, an address or a need.
+    expect(errorSpy).toHaveBeenCalledTimes(1)
+    const logged = String(errorSpy.mock.calls[0]?.[0])
+    expect(logged).toBe('[booking] lead not stored: baserow schema-mismatch')
+    for (const personal of ['Marie', 'Dupont', 'marie@example.fr', 'Automatiser']) {
+      expect(logged).not.toContain(personal)
+    }
+
+    // The row exists, so the event is marked as incomplete and still keeps its id: a reschedule or a
+    // cancellation finds it without a lookup by personal data.
+    expect(calendarMock.markBookingLeadNotStored).toHaveBeenCalledWith({
+      eventId: 'softnabc',
+      subjectToken: undefined,
+    })
+    expect(calendarMock.storeBookingLeadRowId).toHaveBeenCalledWith({
+      eventId: 'softnabc',
+      rowId: 42,
+      subjectToken: undefined,
+    })
+
+    // The booking stands and its confirmation is sent as usual.
+    expect(emailMock.sendBookingConfirmationEmail).toHaveBeenCalledTimes(1)
+  })
+
+  it('still answers success and sends the confirmation when the marks fail', async () => {
+    baserowMock.createBaserowRow.mockResolvedValue({ ok: false, error: 'schema-mismatch', rowId: 42 })
+    calendarMock.markBookingLeadNotStored.mockResolvedValue({ ok: false, error: 'unauthorized' })
+    calendarMock.storeBookingLeadRowId.mockResolvedValue({ ok: false, error: 'request-failed', status: 500 })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    expect(emailMock.sendBookingConfirmationEmail).toHaveBeenCalledTimes(1)
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(logged).toContain('[booking] lead not stored: baserow schema-mismatch')
+    expect(logged).toContain('[booking] lead not stored: calendar events patch unauthorized')
+    expect(logged).toContain('[booking] lead row id not stored: calendar events patch request-failed status=500')
   })
 })
