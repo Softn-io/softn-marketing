@@ -4,6 +4,7 @@ import type { MouseEvent, ReactNode } from 'react'
 import { Button } from '@components/ui/Button'
 import { SECTION_IDS, goToSection } from '@/lib/anchors'
 import { ASSISTANT_INTENTS, dispatchAssistantIntent } from '@/lib/assistant/intent'
+import { isPlainLeftClick } from '@/lib/pointer'
 
 type BookingCtaProps = {
   children: ReactNode
@@ -16,9 +17,6 @@ type BookingCtaProps = {
    */
   onBeforeActivate?: (activate: () => void) => void
 }
-
-const isPlainLeftClick = (event: MouseEvent<HTMLAnchorElement>): boolean =>
-  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 /**
  * Booking call to action. Links to the assistant section, where the reservation flow lives, so it

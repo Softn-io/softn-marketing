@@ -2,13 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@components/ui/Button'
+import { prefersReducedMotion } from '@/lib/motion'
 import { chatbot } from '@/locales/fr/chatbot'
-import {
-  prefersReducedMotion,
-  type BookingEditChoice,
-  type BookingRecapRow,
-  type BookingStep,
-} from './hooks/useBookingFlow'
+import { type BookingEditChoice, type BookingRecapRow, type BookingStep } from './hooks/useBookingFlow'
 import styles from './styles/Booking.module.css'
 
 /**

@@ -8,6 +8,7 @@ import { Logo } from '@components/ui/Logo'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
 import { nav } from '@/locales/fr/hero'
 import { goToSection } from '@/lib/anchors'
+import { isPlainLeftClick } from '@/lib/pointer'
 import { useActiveSectionContext } from './context/ActiveSectionContext'
 import { SectionLink } from './SectionLink'
 import { BookingCta } from './BookingCta'
@@ -28,9 +29,6 @@ const readDesktopMediaQuery = (): string | undefined => {
   const minWidth = getComputedStyle(document.documentElement).getPropertyValue('--softn-breakpoint-lg').trim()
   return minWidth === '' ? undefined : `(min-width: ${minWidth})`
 }
-
-const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
-  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 /**
  * Burger button and full-screen navigation drawer shown below the `lg` breakpoint.

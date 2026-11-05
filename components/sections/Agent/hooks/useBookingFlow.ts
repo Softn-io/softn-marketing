@@ -368,10 +368,6 @@ const buildScript = ({
   return entries
 }
 
-// The flow's components import the motion preference from this module: its single implementation
-// lives in `lib/motion`, shared with the rest of the site.
-export { prefersReducedMotion }
-
 /**
  * Owns the booking flow: its answers, its step, its transcript, its pacing and its requests.
  *

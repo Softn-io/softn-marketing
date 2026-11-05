@@ -6,6 +6,7 @@ import type { MouseEvent, RefObject } from 'react'
 import { Button } from '@components/ui/Button'
 import { SECTION_IDS } from '@/lib/anchors'
 import { interpolate } from '@/lib/interpolate'
+import { isPlainLeftClick } from '@/lib/pointer'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
 import { offers } from '@/locales/fr/offers'
 import { OFFER_TONES, type OfferId, type OfferTone } from './OfferCard'
@@ -36,10 +37,6 @@ const TONE_TEXT: Record<OfferTone, string> = {
 const GAINS_HEADING_ID = 'offer-sheet-gains'
 const PHASES_HEADING_ID = 'offer-sheet-phases'
 const WHO_HEADING_ID = 'offer-sheet-who'
-
-/** Modifier keys and non-primary buttons keep the native link behaviour (new tab, download, context menu). */
-const isPlainLeftClick = (event: MouseEvent<HTMLElement>): boolean =>
-  event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
 type OfferSheetContentProps = {
   offerId: OfferId

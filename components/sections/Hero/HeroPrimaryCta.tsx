@@ -4,6 +4,7 @@ import type { MouseEvent } from 'react'
 import { Button } from '@components/ui/Button'
 import { HERO_CTA_ID, SECTION_IDS, goToSection } from '@/lib/anchors'
 import { ASSISTANT_INTENTS, dispatchAssistantIntent } from '@/lib/assistant/intent'
+import { isPlainLeftClick } from '@/lib/pointer'
 import { hero } from '@/locales/fr/hero'
 
 /**
@@ -19,8 +20,7 @@ import { hero } from '@/locales/fr/hero'
 export const HeroPrimaryCta = () => {
   const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     dispatchAssistantIntent(ASSISTANT_INTENTS.booking)
-    const isPlainLeftClick = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
-    if (!event.defaultPrevented && isPlainLeftClick && window.location.hash === `#${SECTION_IDS.agent}`) {
+    if (!event.defaultPrevented && isPlainLeftClick(event) && window.location.hash === `#${SECTION_IDS.agent}`) {
       goToSection(SECTION_IDS.agent)
     }
   }

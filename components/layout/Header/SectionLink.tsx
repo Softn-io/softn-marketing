@@ -1,6 +1,7 @@
 'use client'
 
 import type { MouseEvent, ReactNode } from 'react'
+import { isPlainLeftClick } from '@/lib/pointer'
 import type { NavLink } from './data/navLinks'
 import { useActiveSectionContext } from './context/ActiveSectionContext'
 
@@ -29,8 +30,7 @@ export const SectionLink = ({ link, className, children, onClick }: SectionLinkP
       onClick(event)
       return
     }
-    const isPlainLeftClick = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
-    if (!event.defaultPrevented && isPlainLeftClick) select(link.id)
+    if (!event.defaultPrevented && isPlainLeftClick(event)) select(link.id)
   }
 
   return (

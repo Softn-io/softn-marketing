@@ -7,6 +7,7 @@ import { groupSlotsByDay } from '@/lib/booking/days'
 import { formatBookingDayLongLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { interpolate } from '@/lib/interpolate'
+import { prefersReducedMotion } from '@/lib/motion'
 import { agent } from '@/locales/fr/agent'
 import { chatbot } from '@/locales/fr/chatbot'
 import { BOOKING_HONEYPOT_FIELD } from '@/schemas/bookingLimits'
@@ -16,13 +17,7 @@ import { AgentMessageText } from './AgentMessageText'
 import { AgentTypingIndicator } from './AgentTypingIndicator'
 import { BookingRecap } from './BookingRecap'
 import { agentSpeakerLabel } from './data/agentMessages'
-import {
-  BOOKING_QUESTION_STEPS,
-  BOOKING_STEPS,
-  prefersReducedMotion,
-  useBookingFlow,
-  type BookingStep,
-} from './hooks/useBookingFlow'
+import { BOOKING_QUESTION_STEPS, BOOKING_STEPS, useBookingFlow, type BookingStep } from './hooks/useBookingFlow'
 import styles from './styles/Booking.module.css'
 
 /** Text field of a step: its visible label, its example and the error of its format. */

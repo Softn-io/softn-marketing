@@ -6,6 +6,7 @@ import type { BookingSlot } from '@/lib/booking/availability'
 import type { BookingDayGroup } from '@/lib/booking/days'
 import { formatBookingTimeLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
+import { prefersReducedMotion } from '@/lib/motion'
 import styles from './SlotChooser.module.css'
 
 /** Props of {@link SlotChooser}. */
@@ -38,12 +39,6 @@ export type SlotChooserProps = {
   /** Called with the slot the visitor picks. */
   onPickTime: (slot: BookingSlot) => void
 }
-
-/** True when the visitor asked the system for less motion: the row then jumps instead of scrolling. */
-const prefersReducedMotion = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /** Reads a computed length in pixels; anything unreadable (`auto`, an empty value) counts as none. */
 const lengthInPixels = (value: string): number => {
