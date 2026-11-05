@@ -2208,8 +2208,12 @@ test.describe('booking flow: the success step', () => {
       expect(restartRect.height, 'the control keeps a 44 px minimum target').toBeGreaterThanOrEqual(44)
       expect(restartRect.x, 'the control starts at the flow content left edge').toBeCloseTo(regionRect.x, 0)
 
-      // The success message carries Mel's final sentence, both channels announced.
-      await expect(flowLines(page).last()).toContainText('par e-mail ou directement dans votre agenda')
+      // The success message carries Mel's final sentences: the e-mail to expect, and the spam
+      // reminder when it is late. The tail is read from the locale, after the slot placeholder.
+      const [, successTail = ''] = chatbot.booking.success.message
+        .replace('{firstName}', ANSWERS.firstName)
+        .split('{slot}')
+      await expect(flowLines(page).last()).toContainText(successTail)
       expect(calls.bookingCalls).toHaveLength(1)
     })
   }
