@@ -3,6 +3,13 @@
  * event creation, the management of one event (read, reschedule, cancel) and the best-effort marks
  * written back to the event, each with its own timeout.
  *
+ * Google notifies no guest anymore (`sendUpdates=none`): Softn sends the confirmation, the update
+ * and the cancellation itself (`lib/booking/emails.ts`), and this client carries what those emails
+ * need — the event's `iCalUID`, its `sequence`, its Meet link, the guest and the counters kept in
+ * the event's private properties — plus the mark of a message that never left. The reminder job
+ * reads its window from the list helper below and writes its own flag, beside the instant the last
+ * email of the slot was sent.
+ *
  * Two calendars are involved, and they are not the same value. `GOOGLE_CALENDAR_ID` is the calendar
  * the booking writes to: it holds the events, so the daily count reads it and the insert, the
  * management calls and the lead marks write to it. The impersonated owner's own calendar
@@ -79,8 +86,75 @@ export const BOOKING_LEAD_ROW_ID_PROPERTY = 'softnLeadRowId'
 /** Private property set on an event whose lead never reached Baserow. */
 export const BOOKING_LEAD_STORED_PROPERTY = 'softnLeadStored'
 
+/**
+ * Private properties holding the guest's name parts, written at booking.
+ *
+ * The update and the cancellation emails are sent from a later request, which knows nothing but
+ * the event: they greet the guest by their first name, and their calendar file rebuilds the event
+ * title, so the two name parts travel with the event. Private properties are the organizer's copy
+ * only — a guest's own copy never carries them — and the name is already in the title and the e-mail
+ * in the attendee list.
+ */
+export const BOOKING_GUEST_FIRST_NAME_PROPERTY = 'softnGuestFirstName'
+
+/** Second half of {@link BOOKING_GUEST_FIRST_NAME_PROPERTY}. */
+export const BOOKING_GUEST_LAST_NAME_PROPERTY = 'softnGuestLastName'
+
+/**
+ * Private property holding the sequence of the last calendar file sent for the event.
+ *
+ * The rule is 0 at booking and +1 at each change, and the counter is what makes it exact: Google's
+ * own `sequence` also moves for changes no email was sent about (Mel editing the event by hand), so
+ * only a counter this application owns can number its files.
+ */
+export const BOOKING_EMAIL_SEQUENCE_PROPERTY = 'softnEmailSequence'
+
+/**
+ * Private property marking an event whose booking email could not be sent.
+ *
+ * Its value is the kind of message that failed ({@link BookingEmailKind}), so Mel can find the
+ * guest who never got their confirmation, their update, their cancellation or their reminder.
+ */
+export const BOOKING_EMAIL_FAILED_PROPERTY = 'softnEmailFailed'
+
+/**
+ * Private property holding the instant the confirmation or the update email of the current slot
+ * was sent, as an ISO 8601 string.
+ *
+ * The reminder job waits a short grace after it, so a booking made just inside the reminder window
+ * never receives the confirmation and the reminder within minutes of each other. The mail path
+ * writes it once the message has really left, which is why it is preferred over the event's own
+ * `updated`: every internal mark — the lead row id, a failure mark, the reminder flag itself —
+ * moves `updated` without any email being sent, and a hand edit by Mel moves it too.
+ */
+export const BOOKING_EMAIL_SENT_PROPERTY = 'softnEmailSentAt'
+
+/**
+ * Private property holding the slot start the last reminder was sent for, as the calendar holds it.
+ *
+ * It is the reminder job's duplicate guard: a run skips an event whose flag names the slot it is
+ * about to remind about. Keyed on the slot rather than on a boolean, a reschedule re-arms the
+ * reminder on its own — the patch writes a new start, the flag still names the old one — without
+ * the reschedule path having to clear anything.
+ */
+export const BOOKING_REMINDER_SENT_PROPERTY = 'softnReminderSentFor'
+
+/** The four emails of a booking, as the failure mark and the mail paths name them. */
+export type BookingEmailKind = 'confirmation' | 'update' | 'cancellation' | 'reminder'
+
 /** Largest page the events list may return; a longer one is refused rather than undercounted. */
 const EVENTS_PAGE_SIZE = 2500
+
+/** Page size of the reminder window list: the API default, well below its 2500 ceiling. */
+const REMINDER_EVENTS_PAGE_SIZE = 250
+
+/**
+ * Largest number of pages one reminder run reads.
+ *
+ * A 24-hour window holds a handful of calls at the booking rules' daily cap; a list that long means
+ * the query is wrong, and the run fails closed rather than reminding from a partial list.
+ */
+const REMINDER_EVENTS_MAX_PAGES = 10
 
 /**
  * Failure codes of the calendar calls: the Google codes, plus the two the calendar itself reports —
@@ -148,14 +222,65 @@ const EventsListResponseSchema = z.object({
   nextPageToken: z.string().optional(),
 })
 
-/** Answer of the event creation: the id of the event that now exists. */
+/**
+ * Answer of the reminder window list, restricted to the fields the job reads.
+ *
+ * The query already filters on the booking tag; the status and the guest fields travel because a
+ * reminder is sent from this answer alone, without a second read of every event.
+ */
+const ReminderEventsResponseSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        status: z.enum(['confirmed', 'tentative', 'cancelled']),
+        // An event of a whole day carries a `date` instead of a `dateTime`: it is left out below,
+        // not refused by the schema, which would fail the whole run for one foreign event.
+        start: z.object({ dateTime: z.string().min(1).optional() }).optional(),
+        iCalUID: z.string().min(1).optional(),
+        hangoutLink: z.string().min(1).optional(),
+        attendees: z.array(z.object({ email: z.string().min(1) })).optional(),
+        extendedProperties: z
+          .object({
+            private: z.record(z.string(), z.string()).optional(),
+          })
+          .optional(),
+      }),
+    )
+    .optional(),
+  nextPageToken: z.string().optional(),
+})
+
+/**
+ * Fields of an event answer the booking emails read.
+ *
+ * Each one is optional on purpose: an answer that does not carry one is not a broken calendar call,
+ * it is an event the emails cannot describe. The insert and the patch still answer `ok`, and the
+ * mail path fails closed and marks the event instead. `iCalUID` identifies the event across
+ * calendaring systems and becomes the `UID` of the calendar file, `sequence` is the event's own
+ * iCalendar sequence and `hangoutLink` its Meet address.
+ */
+const EventAnswerFieldsSchema = {
+  iCalUID: z.string().min(1).optional(),
+  sequence: z.number().int().min(0).optional(),
+  hangoutLink: z.string().min(1).optional(),
+}
+
+/** Answer of the event creation: the id of the event that now exists, and what the emails need. */
 const EventInsertResponseSchema = z.object({
   id: z.string().min(1),
+  ...EventAnswerFieldsSchema,
 })
 
 /** Answer of the event patch used by the management and the best-effort marks. */
 const EventPatchResponseSchema = z.object({
   id: z.string().min(1),
+})
+
+/** Answer of the reschedule patch: the patched event, as the update email reads it. */
+const EventUpdateResponseSchema = z.object({
+  id: z.string().min(1),
+  ...EventAnswerFieldsSchema,
 })
 
 /**
@@ -164,13 +289,16 @@ const EventPatchResponseSchema = z.object({
  * A cancelled event may carry neither a start nor an end: the API promises the details only on the
  * organizer's own copy, and nothing but the id on a copy that only saw a deletion. The status
  * therefore decides what the rest of the answer may be used for.
- */
-const BookingEventResponseSchema = z.object({
+ */ const BookingEventResponseSchema = z.object({
   id: z.string().min(1),
   status: z.enum(['confirmed', 'tentative', 'cancelled']),
   start: z.object({ dateTime: z.string().min(1) }).optional(),
   end: z.object({ dateTime: z.string().min(1) }).optional(),
   description: z.string().optional(),
+  hangoutLink: z.string().min(1).optional(),
+  iCalUID: z.string().min(1).optional(),
+  sequence: z.number().int().min(0).optional(),
+  attendees: z.array(z.object({ email: z.string().min(1) })).optional(),
   extendedProperties: z
     .object({
       private: z.record(z.string(), z.string()).optional(),
@@ -206,6 +334,8 @@ export type InsertBookingEventInput = {
   slot: BookingSlot
   /** Address the invitation is sent to, the only attendee. */
   attendeeEmail: string
+  /** Guest's name, kept in the event's private properties for the later emails and their files. */
+  guest: { readonly firstName: string; readonly lastName: string }
   /** Event title, from the locale. */
   title: string
   /**
@@ -219,6 +349,16 @@ export type InsertBookingEventInput = {
   rules: BookingRules
   /** Subject token of the current request, from {@link readSubjectToken}. */
   subjectToken: string | undefined
+}
+
+/** One created event, as the confirmation email reads it. */
+export type InsertedBookingEvent = {
+  /** Id of the event, as the calendar holds it. */
+  readonly eventId: string
+  /** `iCalUID` of the event, the `UID` of every calendar file of the booking; absent without one. */
+  readonly iCalUid: string | undefined
+  /** Meet link of the event, absent when the answer did not carry one. */
+  readonly hangoutLink: string | undefined
 }
 
 /** Arguments of {@link readBookingEvent}. */
@@ -243,6 +383,18 @@ export type BookingEvent = {
   readonly description: string | undefined
   /** Numeric id of the event's leads row, absent when the row never reached the event. */
   readonly leadRowId: string | undefined
+  /** `iCalUID` of the event, the `UID` of every calendar file of the booking; absent without one. */
+  readonly iCalUid: string | undefined
+  /** Meet link of the event, which the update email offers the guest; absent when unset. */
+  readonly hangoutLink: string | undefined
+  /** Guest's first name, written at booking; absent on an event booked before the emails existed. */
+  readonly guestFirstName: string | undefined
+  /** Guest's last name, written at booking; absent on an event booked before the emails existed. */
+  readonly guestLastName: string | undefined
+  /** Address of the event's first attendee, which the guest emails are sent to. */
+  readonly guestEmail: string | undefined
+  /** Counter of the last calendar file sent, absent until one is written. */
+  readonly emailSequence: string | undefined
 }
 
 /** Arguments of {@link rescheduleBookingEvent}. */
@@ -253,10 +405,27 @@ export type RescheduleBookingEventInput = {
   slot: BookingSlot
   /** Description to write, built for this event id so its manage link is fresh and valid. */
   description: string
+  /**
+   * Counter the event's calendar file carries, written with the new slot.
+   *
+   * The caller numbers the update email's file with it; the patch stores it so the next change of
+   * the same booking counts on from there. Absent, the counter is left as it is.
+   */
+  emailSequence?: number
   /** Rules holding the time zone the event is anchored in. */
   rules: BookingRules
   /** Subject token of the current request, from {@link readSubjectToken}. */
   subjectToken: string | undefined
+}
+
+/** One rescheduled event, as the update email reads it. */
+export type RescheduledBookingEvent = {
+  /** Id of the patched event. */
+  readonly eventId: string
+  /** `iCalUID` of the event; absent when the answer did not carry one. */
+  readonly iCalUid: string | undefined
+  /** Sequence the event carries after the patch; absent when the answer did not carry one. */
+  readonly sequence: number | undefined
 }
 
 /** Arguments of {@link cancelBookingEvent}. */
@@ -281,6 +450,73 @@ export type StoreBookingLeadRowIdInput = {
   eventId: string
   /** Numeric id of the row in the leads table. */
   rowId: number
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  subjectToken: string | undefined
+}
+
+/** Arguments of {@link markBookingEmailFailed}. */
+export type MarkBookingEmailFailedInput = {
+  /** Event whose booking email could not be sent. */
+  eventId: string
+  /** Kind of message that failed, written as the mark's value. */
+  email: BookingEmailKind
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  subjectToken: string | undefined
+}
+
+/** Arguments of {@link listBookingReminderCandidates}. */
+export type ListBookingReminderCandidatesInput = {
+  /** Inclusive start of the window, normally now: a call that already started is not reminded. */
+  timeMin: string
+  /** Exclusive end of the window: a call starting at or after it is left to a later run. */
+  timeMax: string
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  subjectToken: string | undefined
+}
+
+/**
+ * One booked call of the reminder window, as the job reads it.
+ *
+ * Everything a reminder needs travels here, from one paginated list: the mail path is called once
+ * per candidate, without a second read of each event.
+ */
+export type ReminderCandidate = {
+  /** Id of the event, as the calendar holds it. */
+  readonly eventId: string
+  /** Start of the call, as the calendar holds it. */
+  readonly start: string
+  /** `iCalUID` of the event, absent when the answer did not carry one. */
+  readonly iCalUid: string | undefined
+  /** Meet link of the event, absent when the answer did not carry one. */
+  readonly hangoutLink: string | undefined
+  /** Guest's first name, written at booking. */
+  readonly guestFirstName: string | undefined
+  /** Guest's last name, written at booking. */
+  readonly guestLastName: string | undefined
+  /** Address of the event's first attendee, which the reminder is sent to. */
+  readonly guestEmail: string | undefined
+  /** Slot start the last reminder was sent for, absent when none was sent. */
+  readonly remindedFor: string | undefined
+  /** Instant the confirmation or update of this slot was sent, absent when it never was. */
+  readonly emailSentAt: string | undefined
+}
+
+/** Arguments of {@link markBookingReminderSent}. */
+export type MarkBookingReminderSentInput = {
+  /** Event the reminder was sent for. */
+  eventId: string
+  /** Slot start the reminder was sent for, written as the flag's value. */
+  slotStart: string
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  subjectToken: string | undefined
+}
+
+/** Arguments of {@link storeBookingEmailSentAt}. */
+export type StoreBookingEmailSentAtInput = {
+  /** Event whose confirmation or update has just left. */
+  eventId: string
+  /** Instant the message was sent, as an ISO 8601 string. */
+  sentAt: string
   /** Subject token of the current request, from {@link readSubjectToken}. */
   subjectToken: string | undefined
 }
@@ -406,6 +642,20 @@ const requestCalendarWithoutBody = async (input: CalendarApiRequestInput): Promi
   return response.ok ? { ok: true, data: true } : response
 }
 
+/**
+ * URL of one private-property patch: the event of the booking calendar, with `sendUpdates=none`.
+ *
+ * Every mark this module writes — the lead row id, the "lead not stored" flag, the failure mark,
+ * the reminder flag, the sent instant — is internal, so no guest is ever notified about it. Google
+ * documents no default for an omitted `sendUpdates` on `events.patch` (only the deprecated
+ * `sendNotifications` defaulted to `false`), so the premise that Google mails nobody is written out
+ * rather than assumed.
+ */
+const markUrl = (calendarId: string, eventId: string): string =>
+  `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${new URLSearchParams(
+    { sendUpdates: 'none' },
+  ).toString()}`
+
 /** True when two ISO instants name the same moment; an absent or unreadable one never does. */
 const sameInstant = (left: string | undefined, right: string): boolean => {
   if (left === undefined) return false
@@ -509,13 +759,85 @@ export const countBookedCallsPerDay = async ({
 }
 
 /**
+ * Lists the booked calls of one window, one page at a time.
+ *
+ * The query walks the pages the API hands back with `pageToken` (the documented way to page through
+ * an events list), asking for the fields a reminder reads. Listing the instances of recurring events
+ * (`singleEvents`) and filtering on the booking tag keeps a personal appointment out of the result.
+ * A cancelled event never reaches the job — the API leaves deleted events out of a list — and the
+ * status is checked anyway: a reminder to a guest whose call no longer exists is worse than a
+ * skipped one. An event without a `dateTime` start, one of a whole day, is left out for the same
+ * reason.
+ *
+ * @param input Inclusive start and exclusive end of the window, as ISO 8601 instants.
+ * @returns The calls of the window, or a non-personal failure code.
+ */
+export const listBookingReminderCandidates = async ({
+  timeMin,
+  timeMax,
+  subjectToken,
+}: ListBookingReminderCandidatesInput): Promise<CalendarResult<readonly ReminderCandidate[]>> => {
+  const calendarId = readCalendarId()
+  if (calendarId === null) return { ok: false, error: 'not-configured' }
+
+  const search = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: 'true',
+    maxResults: String(REMINDER_EVENTS_PAGE_SIZE),
+    privateExtendedProperty: `${BOOKING_EVENT_TAG.property}=${BOOKING_EVENT_TAG.value}`,
+    fields: 'items(id,status,start,iCalUID,hangoutLink,attendees,extendedProperties),nextPageToken',
+  })
+
+  const candidates: ReminderCandidate[] = []
+  let pageToken: string | undefined
+
+  for (let page = 0; page < REMINDER_EVENTS_MAX_PAGES; page += 1) {
+    if (pageToken !== undefined) search.set('pageToken', pageToken)
+
+    const response = await requestCalendar({
+      url: `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events?${search.toString()}`,
+      schema: ReminderEventsResponseSchema,
+      subjectToken,
+    })
+    if (!response.ok) return response
+
+    for (const event of response.data.items ?? []) {
+      const start = event.start?.dateTime
+      if (event.status === 'cancelled' || start === undefined) continue
+
+      const privateProperties = event.extendedProperties?.private
+      candidates.push({
+        eventId: event.id,
+        start,
+        iCalUid: event.iCalUID,
+        hangoutLink: event.hangoutLink,
+        guestFirstName: privateProperties?.[BOOKING_GUEST_FIRST_NAME_PROPERTY],
+        guestLastName: privateProperties?.[BOOKING_GUEST_LAST_NAME_PROPERTY],
+        guestEmail: event.attendees?.[0]?.email,
+        remindedFor: privateProperties?.[BOOKING_REMINDER_SENT_PROPERTY],
+        emailSentAt: privateProperties?.[BOOKING_EMAIL_SENT_PROPERTY],
+      })
+    }
+
+    pageToken = response.data.nextPageToken
+    if (pageToken === undefined) return { ok: true, data: candidates }
+  }
+
+  return { ok: false, error: 'invalid-response' }
+}
+
+/**
  * Creates the booking event, with its Google Meet link and its invited attendee.
  *
  * The event id is the first free id of the slot ({@link bookingEventIdAttempt}), so the calendar
  * itself refuses a second event for the same slot: a concurrent confirmation is answered
- * `slot-taken` instead of booking the same slot twice. `sendUpdates=all` has Google email the
- * invitation, and `conferenceDataVersion=1` is what makes the Meet conference stay on the event. The
- * slot and the consent instant travel in the event's private properties, where no guest reads them.
+ * `slot-taken` instead of booking the same slot twice. `sendUpdates=none` keeps Google from
+ * emailing the guest — Softn sends the confirmation itself — while Google still syncs the event
+ * into a Google guest's calendar. `conferenceDataVersion=1` is what makes the Meet conference stay
+ * on the event, and its `hangoutLink` comes back in the answer. The slot, the consent instant, the
+ * guest's name parts and the first calendar-file counter travel in the event's private properties,
+ * where no guest reads them.
  *
  * A conflict on an id means an earlier booking of the slot still holds it. The event holding the id
  * is read: a cancelled one, or one whose real start has moved elsewhere, frees the id, and the walk
@@ -523,18 +845,19 @@ export const countBookedCallsPerDay = async ({
  * taken, whichever writer got there first. The comparison is made on the real start, never on the
  * private property, because Mel also moves events by hand in Google Calendar.
  *
- * @param input Slot, attendee, locale wording, consent instant and rules.
- * @returns The created event id, or a non-personal failure code.
+ * @param input Slot, attendee, guest name, locale wording, consent instant and rules.
+ * @returns The created event — id, `iCalUID` and Meet link — or a non-personal failure code.
  */
 export const insertBookingEvent = async ({
   slot,
   attendeeEmail,
+  guest,
   title,
   descriptionOfEvent,
   consentAt,
   rules,
   subjectToken,
-}: InsertBookingEventInput): Promise<CalendarResult<{ eventId: string }>> => {
+}: InsertBookingEventInput): Promise<CalendarResult<InsertedBookingEvent>> => {
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
@@ -542,7 +865,7 @@ export const insertBookingEvent = async ({
   const endWallClock = bookingWallClockOfInstant(slot.end, rules)
   if (startWallClock === null || endWallClock === null) return { ok: false, error: 'invalid-response' }
 
-  const search = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: 'all' })
+  const search = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: 'none' })
 
   for (let attempt = 0; attempt < BOOKING_EVENT_ID_ATTEMPTS; attempt += 1) {
     const eventId = bookingEventIdAttempt(slot.start, attempt)
@@ -570,6 +893,10 @@ export const insertBookingEvent = async ({
             [BOOKING_EVENT_TAG.property]: BOOKING_EVENT_TAG.value,
             [BOOKING_SLOT_PROPERTY]: slot.start,
             [BOOKING_CONSENT_PROPERTY]: consentAt,
+            [BOOKING_GUEST_FIRST_NAME_PROPERTY]: guest.firstName,
+            [BOOKING_GUEST_LAST_NAME_PROPERTY]: guest.lastName,
+            // Booking is the first calendar file of the booking, so its rule gives SEQUENCE 0.
+            [BOOKING_EMAIL_SEQUENCE_PROPERTY]: '0',
           },
         },
         conferenceData: {
@@ -577,7 +904,16 @@ export const insertBookingEvent = async ({
         },
       },
     })
-    if (response.ok) return { ok: true, data: { eventId: response.data.id } }
+    if (response.ok) {
+      return {
+        ok: true,
+        data: {
+          eventId: response.data.id,
+          iCalUid: response.data.iCalUID,
+          hangoutLink: response.data.hangoutLink,
+        },
+      }
+    }
     if (response.error !== 'slot-taken') return response
 
     const held = await readBookingEvent({ eventId, subjectToken })
@@ -640,31 +976,40 @@ export const readBookingEvent = async ({
       end: event.end?.dateTime,
       description: event.description,
       leadRowId: privateProperties[BOOKING_LEAD_ROW_ID_PROPERTY],
+      iCalUid: event.iCalUID,
+      hangoutLink: event.hangoutLink,
+      guestFirstName: privateProperties[BOOKING_GUEST_FIRST_NAME_PROPERTY],
+      guestLastName: privateProperties[BOOKING_GUEST_LAST_NAME_PROPERTY],
+      // The sole attendee is the guest the invitation was sent to.
+      guestEmail: event.attendees?.[0]?.email,
+      emailSequence: privateProperties[BOOKING_EMAIL_SEQUENCE_PROPERTY],
     },
   }
 }
 
 /**
- * Moves one booking event to a new slot and emails the updated invitation.
+ * Moves one booking event to a new slot; Softn's update email carries the news itself.
  *
- * The patch names only what changes: the start, the end, the private slot instant and the
- * description with a fresh manage link. Every other field — the attendee, the Meet conference, the
- * consent and the lead mark — is left out and survives the patch, per patch semantics. The
- * description is rebuilt by the caller (answers included), because the link in it holds the event id
- * and would otherwise point at an expired page. `conferenceDataVersion=1` is set because the
- * documentation requires it on every modification of an event that carries conference data, and
- * `sendUpdates=all` is what has Google email the update to the attendee.
+ * The patch names only what changes: the start, the end, the private slot instant, the
+ * calendar-file counter and the description with a fresh manage link. Every other field — the
+ * attendee, the Meet conference, the consent, the guest name and the lead mark — is left out and
+ * survives the patch, per patch semantics. The description is rebuilt by the caller (answers
+ * included), because the link in it holds the event id and would otherwise point at an expired
+ * page. `conferenceDataVersion=1` is set because the documentation requires it on every
+ * modification of an event that carries conference data, and `sendUpdates=none` keeps Google from
+ * emailing the guest a second time.
  *
- * @param input Event id, new slot, description and rules.
- * @returns The patched event id, or a non-personal failure code.
+ * @param input Event id, new slot, description, optional file counter and rules.
+ * @returns The patched event — its id, its `iCalUID` and the sequence its answer carries.
  */
 export const rescheduleBookingEvent = async ({
   eventId,
   slot,
   description,
+  emailSequence,
   rules,
   subjectToken,
-}: RescheduleBookingEventInput): Promise<CalendarResult<{ eventId: string }>> => {
+}: RescheduleBookingEventInput): Promise<CalendarResult<RescheduledBookingEvent>> => {
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
@@ -672,32 +1017,41 @@ export const rescheduleBookingEvent = async ({
   const endWallClock = bookingWallClockOfInstant(slot.end, rules)
   if (startWallClock === null || endWallClock === null) return { ok: false, error: 'invalid-response' }
 
-  const search = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: 'all' })
+  const search = new URLSearchParams({ conferenceDataVersion: '1', sendUpdates: 'none' })
 
   const response = await requestCalendar({
     url: `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${search.toString()}`,
-    schema: EventPatchResponseSchema,
+    schema: EventUpdateResponseSchema,
     subjectToken,
     method: 'PATCH',
     body: {
       description,
       start: { dateTime: startWallClock, timeZone: rules.timeZone },
       end: { dateTime: endWallClock, timeZone: rules.timeZone },
-      extendedProperties: { private: { [BOOKING_SLOT_PROPERTY]: slot.start } },
+      extendedProperties: {
+        private: {
+          [BOOKING_SLOT_PROPERTY]: slot.start,
+          ...(emailSequence === undefined ? {} : { [BOOKING_EMAIL_SEQUENCE_PROPERTY]: String(emailSequence) }),
+        },
+      },
     },
   })
   if (!response.ok) return response
 
-  return { ok: true, data: { eventId: response.data.id } }
+  return {
+    ok: true,
+    data: { eventId: response.data.id, iCalUid: response.data.iCalUID, sequence: response.data.sequence },
+  }
 }
 
 /**
- * Cancels one booking event and emails the cancellation to the attendee.
+ * Cancels one booking event; Softn's cancellation email carries the news itself.
  *
  * The event is deleted, which is the cancellation Google Calendar knows: the event keeps answering
  * as cancelled to a read, so a manage page opened afterwards still tells the visitor what happened.
- * `sendUpdates=all` is what has Google send the cancellation message, and the success carries no
- * body.
+ * `sendUpdates=none` keeps Google from emailing the guest, because Softn sends the cancellation
+ * with the calendar file that withdraws the appointment. The deletion answers no body, so the
+ * cancellation email's file takes its sequence from the counter the event holds.
  *
  * @param input Event id and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of the deletion.
@@ -709,7 +1063,7 @@ export const cancelBookingEvent = async ({
   const calendarId = readCalendarId()
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
-  const search = new URLSearchParams({ sendUpdates: 'all' })
+  const search = new URLSearchParams({ sendUpdates: 'none' })
 
   return requestCalendarWithoutBody({
     url: `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${search.toString()}`,
@@ -721,9 +1075,9 @@ export const cancelBookingEvent = async ({
 /**
  * Writes the leads row id into the event's private properties.
  *
- * Best effort, and deliberately without `sendUpdates`: the id is an internal mark, so the visitor is
- * not emailed about it. `events.patch` merges private properties, so the id lands beside the slot,
- * the consent and the lead mark instead of replacing them.
+ * Best effort, and `sendUpdates=none` so the visitor is not emailed about an internal mark.
+ * `events.patch` merges private properties, so the id lands beside the slot, the consent and the
+ * lead mark instead of replacing them.
  *
  * @param input Event id, row id and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
@@ -737,7 +1091,7 @@ export const storeBookingLeadRowId = async ({
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
   const response = await requestCalendar({
-    url: `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    url: markUrl(calendarId, eventId),
     schema: EventPatchResponseSchema,
     subjectToken,
     method: 'PATCH',
@@ -755,8 +1109,9 @@ export const storeBookingLeadRowId = async ({
  *
  * The booking stands — it exists and the visitor was told so — but Mel has to be able to spot the
  * events whose row is missing. `events.patch` merges private properties, so the mark is added
- * beside the slot and the consent instead of replacing them. A failure here is never reported to the
- * visitor and never changes the answer: it is one code in the log line of the caller.
+ * beside the slot and the consent instead of replacing them, and `sendUpdates=none` keeps Google
+ * from notifying anybody about an internal mark. A failure here is never reported to the visitor
+ * and never changes the answer: it is one code in the log line of the caller.
  *
  * @param input Event id, the calendar of this deployment and the subject token of the request.
  * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
@@ -769,12 +1124,118 @@ export const markBookingLeadNotStored = async ({
   if (calendarId === null) return { ok: false, error: 'not-configured' }
 
   const response = await requestCalendar({
-    url: `${CALENDAR_API_BASE_URL}/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    url: markUrl(calendarId, eventId),
     schema: EventPatchResponseSchema,
     subjectToken,
     method: 'PATCH',
     body: {
       extendedProperties: { private: { [BOOKING_LEAD_STORED_PROPERTY]: 'false' } },
+    },
+  })
+  if (!response.ok) return response
+
+  return { ok: true, data: true }
+}
+
+/**
+ * Best-effort mark on an event whose booking email could not be sent.
+ *
+ * The booking, the reschedule or the cancel stands — the visitor was told so and nothing here
+ * changes it — but Mel has to be able to spot the guests who never got their message.
+ * `events.patch` merges private properties, so the mark is added beside the slot, the consent and
+ * the guest name instead of replacing them, and no notification is sent to anybody. A failure here
+ * is never reported to the visitor and never changes the answer: it is one code in the log line of
+ * the caller.
+ *
+ * @param input Event id, the kind of message that failed and the subject token of the request.
+ * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
+ */
+export const markBookingEmailFailed = async ({
+  eventId,
+  email,
+  subjectToken,
+}: MarkBookingEmailFailedInput): Promise<CalendarResult<true>> => {
+  const calendarId = readCalendarId()
+  if (calendarId === null) return { ok: false, error: 'not-configured' }
+
+  const response = await requestCalendar({
+    url: markUrl(calendarId, eventId),
+    schema: EventPatchResponseSchema,
+    subjectToken,
+    method: 'PATCH',
+    body: {
+      extendedProperties: { private: { [BOOKING_EMAIL_FAILED_PROPERTY]: email } },
+    },
+  })
+  if (!response.ok) return response
+
+  return { ok: true, data: true }
+}
+
+/**
+ * Writes the reminder flag of one slot into the event's private properties.
+ *
+ * The flag is written once the message has really left, never before: a run that fails in between
+ * sends the reminder again at the next run rather than losing it. `events.patch` merges private
+ * properties, so the flag is added beside the slot, the guest, the file counter and the sent
+ * instant, and `sendUpdates=none` keeps Google from notifying anybody about an internal mark.
+ *
+ * The flag names the slot the reminder was sent for, so a reschedule re-arms the reminder by itself:
+ * the new start no longer matches the flag, without the reschedule path clearing anything.
+ *
+ * @param input Event id, the slot the reminder was sent for and the subject token of the request.
+ * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
+ */
+export const markBookingReminderSent = async ({
+  eventId,
+  slotStart,
+  subjectToken,
+}: MarkBookingReminderSentInput): Promise<CalendarResult<true>> => {
+  const calendarId = readCalendarId()
+  if (calendarId === null) return { ok: false, error: 'not-configured' }
+
+  const response = await requestCalendar({
+    url: markUrl(calendarId, eventId),
+    schema: EventPatchResponseSchema,
+    subjectToken,
+    method: 'PATCH',
+    body: {
+      extendedProperties: { private: { [BOOKING_REMINDER_SENT_PROPERTY]: slotStart } },
+    },
+  })
+  if (!response.ok) return response
+
+  return { ok: true, data: true }
+}
+
+/**
+ * Writes the instant the confirmation or the update of one slot left, best effort.
+ *
+ * The reminder job waits a short grace after this instant, so a guest who booked just inside the
+ * reminder window is not written to twice within minutes. It is a mark of its own rather than a
+ * reading of the event's `updated`, which every internal patch and every hand edit by Mel moves
+ * without any email being sent; `sendUpdates=none` keeps Google from notifying anybody about it. A
+ * failure here is never reported to the visitor and never changes the answer: it only means the
+ * reminder has no grace to observe, which is still better than no reminder at all.
+ *
+ * @param input Event id, the instant the message was sent and the subject token of the request.
+ * @returns Nothing worth showing a visitor: the success flag of a best-effort write.
+ */
+export const storeBookingEmailSentAt = async ({
+  eventId,
+  sentAt,
+  subjectToken,
+}: StoreBookingEmailSentAtInput): Promise<CalendarResult<true>> => {
+  const calendarId = readCalendarId()
+  if (calendarId === null) return { ok: false, error: 'not-configured' }
+
+  const response = await requestCalendar({
+    url: markUrl(calendarId, eventId),
+    schema: EventPatchResponseSchema,
+    subjectToken,
+    method: 'PATCH',
+    body: {
+      extendedProperties: { private: { [BOOKING_EMAIL_SENT_PROPERTY]: sentAt } },
     },
   })
   if (!response.ok) return response

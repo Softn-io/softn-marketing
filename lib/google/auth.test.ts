@@ -130,6 +130,38 @@ describe('getAccessToken', () => {
     expect(JSON.stringify(fetchMock.mock.calls)).not.toContain('another-subject-token')
   })
 
+  it('keeps the Gmail scope out of the calendar token, and asks it alone for the mail call', async () => {
+    answerChain()
+    const { getAccessToken, GOOGLE_BOOKING_SCOPES, GOOGLE_GMAIL_SEND_SCOPES } = await import('./auth')
+
+    // The calendar default is unchanged, and its assertion never carries the mail scope.
+    await getAccessToken({ subjectToken: SUBJECT_TOKEN })
+    const [calendarSigning] = callsTo('iamcredentials.googleapis.com')
+    const calendarAssertion = JSON.parse(String(JSON.parse(String(calendarSigning?.init?.body))['payload'])) as Record<
+      string,
+      unknown
+    >
+    expect(calendarAssertion['scope']).toBe(GOOGLE_BOOKING_SCOPES.join(' '))
+    expect(String(calendarAssertion['scope'])).not.toContain('gmail.send')
+
+    // The mail call asks for its own scope, and its own token is minted: the cache is keyed on it.
+    const callsBefore = fetchMock.mock.calls.length
+    await getAccessToken({ subjectToken: SUBJECT_TOKEN, scopes: GOOGLE_GMAIL_SEND_SCOPES })
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(callsBefore)
+
+    const signings = callsTo('iamcredentials.googleapis.com')
+    const mailAssertion = JSON.parse(String(JSON.parse(String(signings[1]?.init?.body))['payload'])) as Record<
+      string,
+      unknown
+    >
+    expect(mailAssertion['scope']).toBe('https://www.googleapis.com/auth/gmail.send')
+
+    // A second mail call reuses that token instead of walking the chain again.
+    const afterMail = fetchMock.mock.calls.length
+    await getAccessToken({ subjectToken: SUBJECT_TOKEN, scopes: GOOGLE_GMAIL_SEND_SCOPES })
+    expect(fetchMock.mock.calls).toHaveLength(afterMail)
+  })
+
   it('fails closed without a subject token and without configuration, with no network call', async () => {
     const { getAccessToken } = await import('./auth')
 

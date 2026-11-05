@@ -70,6 +70,25 @@ export const formatBookingTimeLabel = (instant: string, rules: BookingRules): st
   }).format(date)
 }
 
+/**
+ * Long date of one instant, as the booking emails write it: « jeudi 12 novembre 2026 ».
+ *
+ * @param instant Slot start as an ISO 8601 instant.
+ * @param rules Rules holding the time zone.
+ * @returns The label, or an empty string when the instant cannot be read.
+ */
+export const formatBookingDateLabel = (instant: string, rules: BookingRules): string => {
+  const date = new Date(instant)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return formatterFor(BOOKING_LOCALE_TAG, rules.timeZone, 'date', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
 /** One day of the chooser: its key and the three parts of its compact label. */
 export type BookingDayLabel = {
   /** Day the label belongs to, as `YYYY-MM-DD`. */

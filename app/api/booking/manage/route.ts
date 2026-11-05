@@ -8,6 +8,10 @@
  * booking tag is treated as not found whatever its id. Answers carry non-personal codes, logs carry
  * a stage and a code and nothing else: never a name, an address, a slot or an upstream body.
  *
+ * Google notifies no guest anymore (`sendUpdates=none`): each action then sends Softn's own email,
+ * with the calendar file that follows the change. A failed email leaves a code and a mark on the
+ * event and never changes the visitor's answer.
+ *
  * The timing rules are read from the event's real start as the calendar holds it, never from the
  * token's expiry: an older link must not get around the reschedule notice after Mel moved the event
  * by hand.
@@ -28,7 +32,14 @@ import {
   bookingManageLinkOrigin,
   bookingManageUrlOfEvent,
 } from '@/lib/booking/event'
+import {
+  sendBookingCancellationEmail,
+  sendBookingUpdateEmail,
+  type BookingEmailEvent,
+  type BookingEmailOutcome,
+} from '@/lib/booking/emails'
 import { hasJsonContentType, isSameOriginRequest } from '@/lib/booking/guard'
+import { emailSequenceOf } from '@/lib/booking/ics'
 import { bookingLeadCancellationFields, bookingLeadRescheduleFields } from '@/lib/booking/lead'
 import { readBookingLinkSecret, verifyBookingManageToken } from '@/lib/booking/manageToken'
 import { BOOKING_RULES, manageCancelVerdict, manageRescheduleVerdict } from '@/lib/booking/rules'
@@ -133,6 +144,29 @@ const ownIntervalOf = (event: BookingEvent): { readonly start: string; readonly 
       ? new Date(startMs + BOOKING_RULES.slotMinutes * MILLISECONDS_PER_MINUTE).toISOString()
       : event.end
   return Number.isFinite(Date.parse(end)) ? { start: event.start, end } : null
+}
+
+/** One managed event as the booking emails read it. */
+const emailEventOf = (event: BookingEvent): BookingEmailEvent => ({
+  eventId: event.eventId,
+  iCalUid: event.iCalUid,
+  guestFirstName: event.guestFirstName,
+  guestLastName: event.guestLastName,
+  guestEmail: event.guestEmail,
+})
+
+/**
+ * Logs the outcome of one booking email, without ever touching the visitor's answer.
+ *
+ * A failed message leaves one non-personal code; when the event could not even be marked, the
+ * second code names that failure too, so Mel can decide between a mail problem and a calendar
+ * problem.
+ */
+const logEmailOutcome = (outcome: BookingEmailOutcome): void => {
+  if (outcome.ok) return
+
+  logFailure(`email not sent: ${outcome.detail}`)
+  if (outcome.markDetail !== undefined) logFailure(`email mark not stored: ${outcome.markDetail}`)
 }
 
 /** Arguments of {@link freeSlotsForReschedule}. */
@@ -274,6 +308,9 @@ const reschedule = async ({ event, slotStart, origin, now, subjectToken }: Resch
     eventId: event.eventId,
     slot,
     description,
+    // The counter numbers this change's calendar file; the patch stores it so the next change of
+    // the same booking counts on from there.
+    emailSequence: emailSequenceOf({ counter: event.emailSequence, googleSequence: undefined }),
     rules: BOOKING_RULES,
     subjectToken,
   })
@@ -285,6 +322,23 @@ const reschedule = async ({ event, slotStart, origin, now, subjectToken }: Resch
   const row = await updateLeadRow({ leadRowId: event.leadRowId, fields: bookingLeadRescheduleFields({ slot }) })
   if (!row.ok) logFailure(`lead not updated: baserow ${baserowFailureDetail(row)}`)
 
+  // Google notifies nobody (`sendUpdates=none`): Softn sends the update itself, with the calendar
+  // file that replaces the appointment in the guest's agenda. A failed email never undoes the
+  // reschedule and never changes the answer.
+  logEmailOutcome(
+    await sendBookingUpdateEmail({
+      event: emailEventOf(event),
+      slot,
+      previousStart: own.start,
+      meetLink: event.hangoutLink,
+      manageLink: manageUrl ?? undefined,
+      emailCounter: event.emailSequence,
+      googleSequence: moved.data.sequence,
+      rules: BOOKING_RULES,
+      subjectToken,
+    }),
+  )
+
   return json({ rescheduled: true }, 200)
 }
 
@@ -292,6 +346,8 @@ const reschedule = async ({ event, slotStart, origin, now, subjectToken }: Resch
 type CancelInput = {
   /** Event to cancel. */
   event: BookingEvent
+  /** Current interval of the event, released once it is deleted. */
+  own: { readonly start: string; readonly end: string }
   /** Code of the reason the visitor picked, absent when none was given. */
   reason: BookingCancelReason | undefined
   /** Subject token of the current request, from {@link readSubjectToken}. */
@@ -302,9 +358,11 @@ type CancelInput = {
  * Cancels one event, then updates its leads row, best effort.
  *
  * The calendar is the source of truth: the deletion happens first, and a failed row update only
- * leaves a code in the log — the visitor is told the cancellation stands.
+ * leaves a code in the log — the visitor is told the cancellation stands. Softn then sends the
+ * cancellation itself, with the calendar file that withdraws the appointment; a failed email leaves
+ * a code and a mark on the event, and never changes the answer.
  */
-const cancel = async ({ event, reason, subjectToken }: CancelInput): Promise<Response> => {
+const cancel = async ({ event, own, reason, subjectToken }: CancelInput): Promise<Response> => {
   const cancelled = await cancelBookingEvent({ eventId: event.eventId, subjectToken })
   if (!cancelled.ok) {
     logFailure(`calendar unavailable: ${googleFailureDetail('events delete', cancelled)}`)
@@ -316,6 +374,18 @@ const cancel = async ({ event, reason, subjectToken }: CancelInput): Promise<Res
     fields: bookingLeadCancellationFields(reason === undefined ? {} : { reason }),
   })
   if (!row.ok) logFailure(`lead not updated: baserow ${baserowFailureDetail(row)}`)
+
+  // The deletion answers no event to read a sequence from, so the counter the event carried is the
+  // only source the cancellation file's SEQUENCE can count on.
+  logEmailOutcome(
+    await sendBookingCancellationEmail({
+      event: emailEventOf(event),
+      slot: { start: own.start, end: own.end },
+      emailCounter: event.emailSequence,
+      rules: BOOKING_RULES,
+      subjectToken,
+    }),
+  )
 
   return json({ cancelled: true }, 200)
 }
@@ -383,7 +453,7 @@ export const POST = async (request: Request): Promise<Response> => {
       return errorResponse('started', 410)
     }
 
-    return cancel({ event: event.data, reason: parsed.data.reason, subjectToken })
+    return cancel({ event: event.data, own, reason: parsed.data.reason, subjectToken })
   }
 
   const verdict = manageRescheduleVerdict({ eventStart: own.start, now, rules: BOOKING_RULES })

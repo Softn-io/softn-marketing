@@ -106,10 +106,11 @@ const manageLine = (manageUrl: string): string =>
 /**
  * Event title of a booking, from the locale.
  *
- * @param lead Answers of the visitor.
+ * @param lead Answers of the visitor, or the guest of a booking already in the calendar: only the
+ * two name parts are read.
  * @returns The title Mel reads in her calendar.
  */
-export const bookingEventTitle = (lead: BookingLead): string =>
+export const bookingEventTitle = (lead: Pick<BookingLead, 'firstName' | 'lastName'>): string =>
   interpolate(chatbot.booking.event.title, { firstName: lead.firstName, lastName: lead.lastName })
 
 /**

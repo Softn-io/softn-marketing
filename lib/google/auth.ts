@@ -58,6 +58,16 @@ export const GOOGLE_BOOKING_SCOPES = [
   'https://www.googleapis.com/auth/calendar.freebusy',
 ] as const
 
+/**
+ * OAuth scope of the Gmail send call, delegated to the service account in the Workspace admin
+ * console beside the two calendar scopes.
+ *
+ * Requested for the Gmail call alone: the calendar calls keep {@link GOOGLE_BOOKING_SCOPES}, so a
+ * token that may send mail is never minted for them. `gmail.send` sends on the impersonated user's
+ * behalf and reads nothing.
+ */
+export const GOOGLE_GMAIL_SEND_SCOPES = ['https://www.googleapis.com/auth/gmail.send'] as const
+
 /** Non-personal failure codes of the Google calls, mapped to locale copy by the caller. */
 export type GoogleFailureCode = 'not-configured' | 'unauthorized' | 'request-failed' | 'timeout' | 'invalid-response'
 
@@ -298,20 +308,26 @@ type SignCalendarAssertionInput = {
   federatedToken: string
   /** Current time, in seconds since the epoch. */
   issuedAt: number
+  /**
+   * Scopes the assertion asks for, the caller's own. The delegated scopes travel here and
+   * nowhere else, so the mail call's token can send mail and cannot read a calendar.
+   */
+  scopes: readonly string[]
 }
 
 /**
  * Has the service account sign the assertion the Calendar API accepts.
  *
  * The payload carries the delegation this booking needs: `iss` is the service account, `sub` is the
- * calendar owner, and `scope` is the two calendar scopes. The key never leaves Google: IAM
- * Credentials signs with its system-managed key, which is what makes the flow keyless.
+ * calendar owner, and `scope` is exactly the scopes the caller asked for. The key never leaves
+ * Google: IAM Credentials signs with its system-managed key, which is what makes the flow keyless.
  */
 const signCalendarAssertion = async ({
   serviceAccountEmail,
   owner,
   federatedToken,
   issuedAt,
+  scopes,
 }: SignCalendarAssertionInput): Promise<GoogleResult<string>> => {
   const signed = await callGoogle({
     url: `${IAM_CREDENTIALS_ENDPOINT}/projects/-/serviceAccounts/${encodeURIComponent(serviceAccountEmail)}:signJwt`,
@@ -321,7 +337,7 @@ const signCalendarAssertion = async ({
       payload: JSON.stringify({
         iss: serviceAccountEmail,
         sub: owner,
-        scope: GOOGLE_BOOKING_SCOPES.join(' '),
+        scope: scopes.join(' '),
         aud: TOKEN_ENDPOINT,
         iat: issuedAt,
         exp: issuedAt + ASSERTION_LIFETIME_SECONDS,
@@ -374,7 +390,10 @@ const requestCalendarToken = async (
 export type GetAccessTokenInput = {
   /** Subject token of the current request, from {@link readSubjectToken}. */
   subjectToken: string | undefined
-  /** Scopes requested on the calendar. Defaults to {@link GOOGLE_BOOKING_SCOPES}. */
+  /**
+   * Scopes the returned token may carry. Defaults to {@link GOOGLE_BOOKING_SCOPES}; the mail call
+   * passes its own, so the two never share a token.
+   */
   scopes?: readonly string[]
 }
 
@@ -384,11 +403,12 @@ export type GetAccessTokenInput = {
  * The environment is read at call time and a missing project, pool, provider, service account,
  * owner or subject token answers `not-configured` without any network call, so a build, a preview or
  * a test without the federation keeps working and fails closed. A token already issued for the same
- * identity is reused until shortly before it expires, and that identity is the owner: the calendar
- * the events go to never enters the key. The subject token itself is never stored. No upstream body is read, and nothing of this chain is logged.
+ * identity and the same scopes is reused until shortly before it expires, and that identity is the
+ * owner: the calendar the events go to never enters the key. The subject token itself is never
+ * stored. No upstream body is read, and nothing of this chain is logged.
  *
  * @param input Subject token of the request, and optional scopes.
- * @returns The bearer token for the Calendar API, or a non-personal failure code.
+ * @returns The bearer token for the asked scopes, or a non-personal failure code.
  */
 export const getAccessToken = async ({
   subjectToken,
@@ -412,6 +432,7 @@ export const getAccessToken = async ({
     owner: config.owner,
     federatedToken: federated.data,
     issuedAt: Math.floor(Date.now() / 1000),
+    scopes,
   })
   if (!signed.ok) return signed
 

@@ -19,9 +19,15 @@ const baserowMock = vi.hoisted(() => ({ updateBaserowRow: vi.fn() }))
 
 const rateLimitMock = vi.hoisted(() => ({ checkRateLimit: vi.fn(), trustedClientIp: vi.fn() }))
 
+const emailMock = vi.hoisted(() => ({
+  sendBookingUpdateEmail: vi.fn(),
+  sendBookingCancellationEmail: vi.fn(),
+}))
+
 vi.mock('@/lib/google/calendar', () => calendarMock)
 vi.mock('@/lib/baserow', () => baserowMock)
 vi.mock('@/lib/assistant/rateLimit', () => rateLimitMock)
+vi.mock('@/lib/booking/emails', () => emailMock)
 
 const SECRET = 's'.repeat(48)
 const EVENT_ID = 'softnabc0123456789abcdefghijkl'
@@ -39,6 +45,12 @@ const liveEvent = (start: string = FAR_START) => ({
   end: new Date(Date.parse(start) + BOOKING_RULES.slotMinutes * 60_000).toISOString(),
   description: 'Besoin : automatiser mes devis\nlien: https://softn.io/rendez-vous/old-token',
   leadRowId: '42',
+  iCalUid: `${EVENT_ID}@google.com`,
+  hangoutLink: 'https://meet.google.com/abc-defg-hij',
+  guestFirstName: 'Camille',
+  guestLastName: 'Meyer',
+  guestEmail: 'camille@example.fr',
+  emailSequence: '0',
 })
 
 const tokenFor = (expiresAt: string = FAR_START): string => {
@@ -79,11 +91,18 @@ beforeEach(() => {
   calendarMock.readBookingEvent.mockResolvedValue({ ok: true, data: liveEvent() })
   calendarMock.queryBusyIntervals.mockResolvedValue({ ok: true, data: [] })
   calendarMock.countBookedCallsPerDay.mockResolvedValue({ ok: true, data: {} })
-  calendarMock.rescheduleBookingEvent.mockResolvedValue({ ok: true, data: { eventId: EVENT_ID } })
+  calendarMock.rescheduleBookingEvent.mockResolvedValue({
+    ok: true,
+    data: { eventId: EVENT_ID, iCalUid: `${EVENT_ID}@google.com`, sequence: 1 },
+  })
   calendarMock.cancelBookingEvent.mockResolvedValue({ ok: true, data: true })
   baserowMock.updateBaserowRow.mockResolvedValue({ ok: true, data: { id: 42 } })
   rateLimitMock.checkRateLimit.mockResolvedValue({ ok: true, data: 'allowed' })
   rateLimitMock.trustedClientIp.mockReturnValue('test-client')
+  emailMock.sendBookingUpdateEmail.mockReset()
+  emailMock.sendBookingCancellationEmail.mockReset()
+  emailMock.sendBookingUpdateEmail.mockResolvedValue({ ok: true })
+  emailMock.sendBookingCancellationEmail.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -265,6 +284,7 @@ describe('POST /api/booking/manage reschedule', () => {
       eventId: string
       slot: { start: string; end: string }
       description: string
+      emailSequence: number
     }
     expect(move.eventId).toBe(EVENT_ID)
     expect(move.slot).toEqual({
@@ -286,6 +306,51 @@ describe('POST /api/booking/manage reschedule', () => {
       rowId: 42,
       fields: { [BOOKING_LEAD_FIELDS.slot]: new Date(Date.parse(newSlot.start)).toISOString() },
     })
+
+    // The change is numbered before the patch, so the next file of the booking counts on from it.
+    expect(move.emailSequence).toBe(1)
+
+    // Softn sends the update itself, with the same event identity, the previous start and the file
+    // counter as the event carried it.
+    expect(emailMock.sendBookingUpdateEmail).toHaveBeenCalledTimes(1)
+    const emailed = emailMock.sendBookingUpdateEmail.mock.calls[0]?.[0] as {
+      event: unknown
+      previousStart: string
+      meetLink: string
+      emailCounter: string
+      googleSequence: number
+    }
+    expect(emailed.event).toEqual({
+      eventId: EVENT_ID,
+      iCalUid: `${EVENT_ID}@google.com`,
+      guestFirstName: 'Camille',
+      guestLastName: 'Meyer',
+      guestEmail: 'camille@example.fr',
+    })
+    expect(emailed.previousStart).toBe(FAR_START)
+    expect(emailed.meetLink).toBe('https://meet.google.com/abc-defg-hij')
+    expect(emailed.emailCounter).toBe('0')
+    expect(emailed.googleSequence).toBe(1)
+  })
+
+  it('keeps the moved answer when the update email cannot leave, and logs non-personal codes', async () => {
+    emailMock.sendBookingUpdateEmail.mockResolvedValue({
+      ok: false,
+      detail: 'gmail request-failed status=502',
+      markDetail: 'events patch timeout',
+    })
+
+    const response = await POST(request({ action: 'reschedule', token: tokenFor(), slot: newSlot.start }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ rescheduled: true })
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage: email not sent: gmail request-failed status=502')
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage: email mark not stored: events patch timeout')
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of [EVENT_ID, newSlot.start, 'camille@example.fr', 'Camille']) {
+      expect(logged).not.toContain(personal)
+    }
   })
 
   it('pins the fresh manage link to the canonical site in production', async () => {
@@ -394,6 +459,48 @@ describe('POST /api/booking/manage cancel', () => {
         [BOOKING_LEAD_FIELDS.cancelReason]: 'Empêchement',
       },
     })
+
+    // Softn sends the cancellation itself, from the event identity and the counter it carried: a
+    // deletion answers no sequence to read one from.
+    expect(emailMock.sendBookingCancellationEmail).toHaveBeenCalledTimes(1)
+    expect(emailMock.sendBookingCancellationEmail).toHaveBeenCalledWith({
+      event: {
+        eventId: EVENT_ID,
+        iCalUid: `${EVENT_ID}@google.com`,
+        guestFirstName: 'Camille',
+        guestLastName: 'Meyer',
+        guestEmail: 'camille@example.fr',
+      },
+      slot: {
+        start: FAR_START,
+        end: new Date(Date.parse(FAR_START) + BOOKING_RULES.slotMinutes * 60_000).toISOString(),
+      },
+      emailCounter: '0',
+      rules: BOOKING_RULES,
+      subjectToken: undefined,
+    })
+  })
+
+  it('keeps the cancelled answer when the cancellation email cannot leave, logging non-personal codes', async () => {
+    emailMock.sendBookingCancellationEmail.mockResolvedValue({
+      ok: false,
+      detail: 'gmail unauthorized status=403',
+      markDetail: 'events patch request-failed status=500',
+    })
+
+    const response = await POST(request({ action: 'cancel', token: tokenFor() }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ cancelled: true })
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage: email not sent: gmail unauthorized status=403')
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[booking] manage: email mark not stored: events patch request-failed status=500',
+    )
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of [EVENT_ID, 'camille@example.fr', 'Camille', 'Meyer']) {
+      expect(logged).not.toContain(personal)
+    }
   })
 
   it('cancels without a reason, leaving the reason column untouched', async () => {

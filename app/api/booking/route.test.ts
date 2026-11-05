@@ -16,9 +16,12 @@ const baserowMock = vi.hoisted(() => ({ createBaserowRow: vi.fn() }))
 
 const rateLimitMock = vi.hoisted(() => ({ checkRateLimit: vi.fn(), trustedClientIp: vi.fn() }))
 
+const emailMock = vi.hoisted(() => ({ sendBookingConfirmationEmail: vi.fn() }))
+
 vi.mock('@/lib/google/calendar', () => calendarMock)
 vi.mock('@/lib/baserow', () => baserowMock)
 vi.mock('@/lib/assistant/rateLimit', () => rateLimitMock)
+vi.mock('@/lib/booking/emails', () => emailMock)
 
 let errorSpy: MockInstance
 
@@ -75,12 +78,17 @@ beforeEach(() => {
 
   calendarMock.queryBusyIntervals.mockResolvedValue({ ok: true, data: [] })
   calendarMock.countBookedCallsPerDay.mockResolvedValue({ ok: true, data: {} })
-  calendarMock.insertBookingEvent.mockResolvedValue({ ok: true, data: { eventId: 'softnabc' } })
+  calendarMock.insertBookingEvent.mockResolvedValue({
+    ok: true,
+    data: { eventId: 'softnabc', iCalUid: 'softnabc@google.com', hangoutLink: 'https://meet.google.com/abc-defg-hij' },
+  })
   calendarMock.markBookingLeadNotStored.mockResolvedValue({ ok: true, data: true })
   calendarMock.storeBookingLeadRowId.mockResolvedValue({ ok: true, data: true })
   baserowMock.createBaserowRow.mockResolvedValue({ ok: true, data: { id: 7 } })
   rateLimitMock.checkRateLimit.mockResolvedValue({ ok: true, data: 'allowed' })
   rateLimitMock.trustedClientIp.mockReturnValue('test-client')
+  emailMock.sendBookingConfirmationEmail.mockReset()
+  emailMock.sendBookingConfirmationEmail.mockResolvedValue({ ok: true })
 })
 
 afterEach(() => {
@@ -278,6 +286,46 @@ describe('POST /api/booking order', () => {
       rowId: 7,
       subjectToken: undefined,
     })
+
+    // Softn sends the confirmation itself, with the event's identity, its Meet link and the signed
+    // manage link the answer also carries.
+    expect(emailMock.sendBookingConfirmationEmail).toHaveBeenCalledTimes(1)
+    const emailInput = emailMock.sendBookingConfirmationEmail.mock.calls[0]?.[0] as {
+      event: unknown
+      slot: unknown
+      meetLink: string
+      manageLink: string
+    }
+    expect(emailInput.event).toEqual({
+      eventId: 'softnabc',
+      iCalUid: 'softnabc@google.com',
+      guestFirstName: 'Marie',
+      guestLastName: 'Dupont',
+      guestEmail: 'marie@example.fr',
+    })
+    expect(emailInput.slot).toEqual(slot)
+    expect(emailInput.meetLink).toBe('https://meet.google.com/abc-defg-hij')
+    expect(emailInput.manageLink.startsWith('http://localhost/rendez-vous/')).toBe(true)
+  })
+
+  it('keeps the booking when the confirmation cannot leave, and logs non-personal codes', async () => {
+    emailMock.sendBookingConfirmationEmail.mockResolvedValue({
+      ok: false,
+      detail: 'gmail request-failed status=502',
+      markDetail: 'events patch request-failed status=500',
+    })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    expect(errorSpy).toHaveBeenCalledWith('[booking] email not sent: gmail request-failed status=502')
+    expect(errorSpy).toHaveBeenCalledWith('[booking] email mark not stored: events patch request-failed status=500')
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of ['Marie', 'Dupont', 'marie@example.fr', 'Automatiser']) {
+      expect(logged).not.toContain(personal)
+    }
   })
 
   it('books without a manage line when the deployment has no signing secret, logging one code', async () => {
