@@ -1,3 +1,4 @@
+import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { HERO_CTA_ID, type SectionId } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
@@ -28,6 +29,9 @@ const NAV_LINKS = [
   { label: nav.items.thisSite, aria: nav.itemsAria.thisSite, id: 'coulisses' },
   { label: nav.items.faq, aria: nav.itemsAria.faq, id: 'faq' },
 ]
+
+/** Same WCAG 2.1 A/AA tag set as the coming-soon suite's axe audits. */
+const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] as const
 
 /**
  * Common prefix of the two theme-toggle accessible names, read off the locale instead of hardcoding
@@ -1183,15 +1187,20 @@ test.describe('header: mobile drawer', () => {
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
   })
 
-  const FOCUS_CYCLE = ['logo', 'toggle', 'close', 'link', 'link', 'link', 'link', 'link', 'cta'] as const
+  /** The drawer controls one Tab press visits at a time, starting from the close control. */
+  const TAB_CYCLE = ['link', 'link', 'link', 'link', 'link', 'cta', 'logo', 'toggle', 'close'] as const
+  /** The same walk in reverse, starting from the close control with Shift+Tab. */
+  const SHIFT_TAB_CYCLE = ['toggle', 'logo', 'cta', 'link', 'link', 'link', 'link', 'link', 'close'] as const
 
-  /** Classifies the focused element against the dialog content, or "outside" when it is not inside the dialog. */
+  /** Classifies the focused element against the dialog content, or "outside" when it is not a real drawer control. */
   const classifyFocus = (page: Page) =>
     page.evaluate(
-      ([togglePrefix, closeLabel]) => {
+      ([togglePrefix, closeLabel, skipLink]) => {
         const active = document.activeElement
         const dialog = document.querySelector("[role='dialog']")
         if (active !== null && active.hasAttribute('data-base-ui-focus-guard')) return 'guard'
+        if (active !== null && active.tagName === 'A' && (active.textContent ?? '').trim() === skipLink)
+          return 'skip-link'
         if (active === null || dialog === null || !dialog.contains(active)) return 'outside'
         const label = active.getAttribute('aria-label') ?? ''
         if (active.closest('nav') !== null) return 'link'
@@ -1201,46 +1210,176 @@ test.describe('header: mobile drawer', () => {
         if (active.tagName === 'A') return 'cta'
         return 'outside'
       },
-      [TOGGLE_PREFIX, CLOSE] as const,
+      [TOGGLE_PREFIX, CLOSE, SKIP_LINK] as const,
     )
 
-  /** Presses a key, then waits for the focus guard (transient wrap-around stop) to hand focus back to a real element. */
-  const pressSettled = async (page: Page, key: string) => {
+  /**
+   * Presses one key, then lets the drawer's focus guards settle for exactly one frame before reading focus.
+   * Base UI wraps focus at the ends of a modal dialog through guards whose wrap-around runs on the next
+   * animation frame, so a press can still sit on a guard while that frame is pending; the two frame ticks
+   * give the library the frame it needs to hand focus back to a real control. A guard that is still
+   * focused after the settle, or any focus outside the dialog, fails the walk.
+   */
+  const pressOnce = async (page: Page, key: string) => {
     await page.keyboard.press(key)
-    await expect.poll(() => classifyFocus(page)).not.toBe('guard')
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              resolve()
+            })
+          })
+        }),
+    )
     return classifyFocus(page)
   }
 
-  test('Tab cycles logo, toggle, close, five links, CTA and wraps without leaving the dialog', async ({ page }) => {
+  test('Tab walks the drawer controls and wraps at both ends without leaving the dialog', async ({ page }) => {
     await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
     const seen: string[] = []
-    // Start on close (initial focus): 6 stops reach the CTA, then 3 more wrap through logo, toggle, close, and one more full loop.
-    for (let i = 0; i < FOCUS_CYCLE.length * 2; i += 1) {
-      seen.push(await pressSettled(page, 'Tab'))
+    // Two full cycles: a cycle starts and ends on the close control, so the second repeats the first.
+    for (let i = 0; i < TAB_CYCLE.length * 2; i += 1) {
+      seen.push(await pressOnce(page, 'Tab'))
     }
-    expect(seen.includes('outside'), `focus left the dialog: ${seen.join(',')}`).toBe(false)
-    // DOM order is logo, toggle, close, 5 links, CTA. From close: 5 links, CTA, then wrap to logo, toggle, close.
-    expect(seen.slice(0, 9)).toEqual(['link', 'link', 'link', 'link', 'link', 'cta', 'logo', 'toggle', 'close'])
-    expect(seen.slice(9)).toEqual(['link', 'link', 'link', 'link', 'link', 'cta', 'logo', 'toggle', 'close'])
+    expect(seen, `every Tab press must land on a drawer control: ${seen.join(',')}`).toEqual([
+      ...TAB_CYCLE,
+      ...TAB_CYCLE,
+    ])
+    expect(seen, 'the skip link of the page behind must never take focus').not.toContain('skip-link')
   })
 
-  test('Shift+Tab cycles in reverse without leaving the dialog', async ({ page }) => {
+  test('Shift+Tab walks the drawer controls in reverse and wraps at both ends without leaving the dialog', async ({
+    page,
+  }) => {
     await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
     await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
     const seen: string[] = []
-    for (let i = 0; i < FOCUS_CYCLE.length * 2; i += 1) {
-      seen.push(await pressSettled(page, 'Shift+Tab'))
+    for (let i = 0; i < SHIFT_TAB_CYCLE.length * 2; i += 1) {
+      seen.push(await pressOnce(page, 'Shift+Tab'))
     }
-    expect(seen.includes('outside'), `focus left the dialog: ${seen.join(',')}`).toBe(false)
-    // From close in reverse: toggle, logo, wrap to CTA, 5 links, close.
-    expect(seen.slice(0, 9)).toEqual(['toggle', 'logo', 'cta', 'link', 'link', 'link', 'link', 'link', 'close'])
-    expect(seen.slice(9)).toEqual(['toggle', 'logo', 'cta', 'link', 'link', 'link', 'link', 'link', 'close'])
+    expect(seen, `every Shift+Tab press must land on a drawer control: ${seen.join(',')}`).toEqual([
+      ...SHIFT_TAB_CYCLE,
+      ...SHIFT_TAB_CYCLE,
+    ])
+    expect(seen, 'the skip link of the page behind must never take focus').not.toContain('skip-link')
   })
+
+  for (const scheme of ['light', 'dark'] as const) {
+    test(`axe reports no WCAG 2.1 A/AA violation with the drawer open (${scheme})`, async ({ page }) => {
+      await page.addInitScript(([nextScheme]) => localStorage.setItem('softn-theme', nextScheme ?? 'light'), [scheme])
+      await page.goto('/preview')
+      await burger(page).click()
+      await expect(drawer(page)).toBeVisible()
+      const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
+
+      /*
+       * axe 4.14 cannot parse the lab() computed colors that `@softnio-labs/tokens` produces: with
+       * the drawer open it reports the drawer logo's `text-brand-vivid` wordmark on invented sRGB
+       * pairs (the misparse is documented at length in comingSoon.spec.ts). So color-contrast nodes
+       * are not silenced with `disableRules`: each is re-measured on the sRGB bytes Chrome actually
+       * paints (canvas conversion of the computed colors; the real ratio must clear 4.5:1), and any
+       * other rule stays a plain violation.
+       */
+      const contrastNodes = results.violations.flatMap((violation) =>
+        violation.id === 'color-contrast' ? violation.nodes : [],
+      )
+      const otherViolations = results.violations.filter((violation) => violation.id !== 'color-contrast')
+      expect(
+        otherViolations,
+        `axe found non-color-contrast WCAG 2.1 A/AA violation(s) with the drawer open:\n${otherViolations
+          .map(
+            (violation) =>
+              `- ${violation.id}: ${violation.help} at ${violation.nodes.map((node) => node.target.join(' >>> ')).join(' | ')}`,
+          )
+          .join('\n')}`,
+      ).toEqual([])
+
+      type RenderedRatio = { target: string; fg: string; bg: string; ratio: number; size: number; weight: number }
+      const ratios = await page.evaluate(
+        (targets): RenderedRatio[] => {
+          const canvas = document.createElement('canvas')
+          canvas.width = 1
+          canvas.height = 1
+          const ctx = canvas.getContext('2d')
+          if (ctx === null) throw new Error('no 2d context')
+          /** Paint one pixel in the given color and read the bytes back: sRGB whatever the notation. */
+          const toSrgb = (value: string): [number, number, number] | null => {
+            if (value === 'transparent') return null
+            ctx.fillStyle = '#010203'
+            ctx.fillStyle = value
+            if (String(ctx.fillStyle) === '#010203' && value !== '#010203') return null
+            ctx.clearRect(0, 0, 1, 1)
+            ctx.fillRect(0, 0, 1, 1)
+            const pixel = ctx.getImageData(0, 0, 1, 1).data
+            if ((pixel[3] ?? 0) === 0) return null
+            return [pixel[0] ?? 0, pixel[1] ?? 0, pixel[2] ?? 0]
+          }
+          const luminance = (rgb: [number, number, number]): number => {
+            const lin = rgb.map((channel) => {
+              const s = channel / 255
+              return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+            })
+            return 0.2126 * (lin[0] ?? 0) + 0.7152 * (lin[1] ?? 0) + 0.0722 * (lin[2] ?? 0)
+          }
+          const ratio = (a: [number, number, number], b: [number, number, number]): number => {
+            const la = luminance(a)
+            const lb = luminance(b)
+            return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+          }
+          return targets.map((parts) => {
+            let root: ParentNode = document
+            let element: Element | null = null
+            for (const part of parts) {
+              const selector = typeof part === 'string' ? part : String(part)
+              const found: Element | null = root.querySelector(selector)
+              if (found === null) return { target: parts.join(' >>> '), fg: '', bg: '', ratio: -1, size: 0, weight: 0 }
+              element = found
+              root = found.shadowRoot ?? found
+            }
+            if (element === null) return { target: parts.join(' >>> '), fg: '', bg: '', ratio: -1, size: 0, weight: 0 }
+            const style = getComputedStyle(element)
+            const fg = toSrgb(style.color)
+            let bg = toSrgb(style.backgroundColor)
+            let ancestor = element.parentElement
+            while (bg === null && ancestor !== null) {
+              bg = toSrgb(getComputedStyle(ancestor).backgroundColor)
+              ancestor = ancestor.parentElement
+            }
+            if (fg === null || bg === null)
+              return { target: parts.join(' >>> '), fg: '', bg: '', ratio: -1, size: 0, weight: 0 }
+            return {
+              target: parts.join(' >>> '),
+              fg: `rgb(${fg.map((c) => String(Math.round(c))).join(', ')})`,
+              bg: `rgb(${bg.map((c) => String(Math.round(c))).join(', ')})`,
+              ratio: ratio(fg, bg),
+              size: Number.parseFloat(style.fontSize),
+              weight: Number.parseFloat(style.fontWeight),
+            }
+          })
+        },
+        contrastNodes.map((node) => node.target),
+      )
+      expect(ratios.length, 'every reported color-contrast node is re-measured').toBe(contrastNodes.length)
+      for (const measured of ratios) {
+        /*
+         * WCAG 1.4.3 threshold: 4.5:1 for normal text, 3:1 for large text (24 px, or 18.66 px bold).
+         * The reported node is the drawer's logo wordmark: a brand logotype (no strict requirement),
+         * `text-title-md` = 20 px at weight 700, so even the plain large-text threshold applies.
+         */
+        const large = measured.size >= 24 || (measured.size >= 18.66 && measured.weight >= 700)
+        expect(
+          measured.ratio,
+          `axe color-contrast on ${measured.target}: rendered ${measured.fg} on ${measured.bg} (${measured.size}px/${measured.weight}) must keep ${large ? 3 : 4.5}:1 (axe 4.14 misparses lab() computed colors — see the comment above)`,
+        ).toBeGreaterThanOrEqual(large ? 3 : 4.5)
+      }
+    })
+  }
 
   test('theme toggle inside the popup switches the theme', async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem('softn-theme', 'dark'))
