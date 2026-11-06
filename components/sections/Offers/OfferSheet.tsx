@@ -143,6 +143,9 @@ const OfferSheetContent = ({ offerId, tone, onFollowCta }: OfferSheetContentProp
  * scroll and outside interaction, traps focus, closes on Escape or on the icon-only close control,
  * and returns focus to the card that opened it. The dialog root stays mounted between openings so
  * the section can run a pending call-to-action navigation after the close completes.
+ *
+ * Loaded through `next/dynamic` from {@link Offers}: only the cards ship with the page, and this
+ * module, Base UI included, arrives on the first intent or open.
  */
 export const OfferSheet = ({ offerId, finalFocus, onClose, onFollowCta, onCloseComplete }: OfferSheetProps) => {
   const handleOpenChange = (open: boolean): void => {
