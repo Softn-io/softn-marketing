@@ -1,8 +1,19 @@
-import { expect, test, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import {
+  chromium,
+  devices,
+  expect,
+  test,
+  webkit,
+  type Browser,
+  type BrowserContext,
+  type Locator,
+  type Page,
+} from '@playwright/test'
 import { HERO_CTA_ID, type SectionId } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
 import { hero, nav } from '../locales/fr/hero'
+import { offers } from '../locales/fr/offers'
 
 // Expected copy comes from the locale source, never hardcoded (QA rule for this suite).
 const SKIP_LINK = nav.skipLink
@@ -2045,9 +2056,344 @@ test.describe('header: contrast in both themes', () => {
       })
       test.info().annotations.push({
         type: 'measure',
-        description: `revealed booking CTA label contrast (${scheme}): ${ratio.toFixed(2)}:1`,
+        description: `revealed booking CTA label contrast (${scheme}): ${ratio.toFixed(2)}`,
       })
-      expect(ratio, `revealed CTA label contrast (${scheme})`).toBeGreaterThanOrEqual(4.5)
+      expect(ratio, `revealed booking CTA label contrast (${scheme})`).toBeGreaterThanOrEqual(4.5)
+    })
+  }
+})
+
+/**
+ * Focus ring after close (issue #55, fix loop 1). The drawer and the offer sheet return focus to
+ * the control that opened them, and the ring follows the interaction that closed: gone after a
+ * pointer or touch close (tap on the close control, swipe down, mouse click, nav-link tap), kept
+ * after a keyboard close (Escape). The regression Mel saw — the ring staying on the burger after a
+ * touch close of a keyboard-opened drawer — is pinned here for the first open (chunk cold, no prior
+ * hover) and for a later open, on both mobile engines: Chromium for Android Chrome, WebKit for iOS
+ * Safari, each with real device emulation and touch input.
+ *
+ * The suite launches the engines itself: the config ships one Chromium desktop project and the QA
+ * write scope does not extend to `playwright.config.ts`. On WebKit the context strips the CSP
+ * `upgrade-insecure-requests` directive — over the plain-HTTP test server the engine would rewrite
+ * every localhost asset to HTTPS and none would load; production serves over HTTPS where the
+ * directive is inert, and the test asserts nothing about CSP here. Chromium exempts localhost, so
+ * its context stays untouched.
+ *
+ * The swipe-down close runs on Chromium only: it drives real touch input through the CDP input
+ * pipeline, which WebKit does not expose, and WebKit cannot construct the `Touch` objects a
+ * synthetic `TouchEvent` needs (the constructor throws). The swipe's focus outcome is pinned in the
+ * report for the WebKit limitation.
+ */
+test.describe('header and offers: focus ring after close (issue #55 fix loop 1)', () => {
+  const FOCUS_ENGINES = [
+    { name: 'chromium · Pixel 7', engine: chromium, device: devices['Pixel 7'] },
+    { name: 'webkit · iPhone 13', engine: webkit, device: devices['iPhone 13'] },
+  ] as const
+
+  /** DOM focus and the visible ring of the element behind `locator`, read in the page. */
+  const focusStateOf = (locator: Locator): Promise<{ focused: boolean; focusVisible: boolean }> =>
+    locator.evaluate((element) => ({
+      focused: element === document.activeElement,
+      focusVisible: element.matches(':focus-visible'),
+    }))
+
+  /** Launches the engine with device emulation, stripping the CSP upgrade directive on WebKit. */
+  const launchFocusEngine = async (
+    engine: (typeof FOCUS_ENGINES)[number]['engine'],
+    device: (typeof FOCUS_ENGINES)[number]['device'],
+  ): Promise<{ browser: Browser; context: BrowserContext }> => {
+    const browser = await engine.launch()
+    const context = await browser.newContext({ ...device })
+    if (engine === webkit) {
+      await context.route('**/*', async (route) => {
+        const response = await route.fetch()
+        const headers = { ...response.headers() }
+        const csp = headers['content-security-policy']
+        if (csp !== undefined) {
+          headers['content-security-policy'] = csp
+            .replace('upgrade-insecure-requests', '')
+            .replace(/;\s*;/g, ';')
+            .replace(/;\s*$/, '')
+        }
+        await route.fulfill({ response, headers })
+      })
+    }
+    return { browser, context }
+  }
+
+  /** CDP swipe down from the drawer handle: real touch input through the pipeline (Chromium only). */
+  const swipeDownCdp = async (page: Page, context: BrowserContext): Promise<void> => {
+    const handle = drawer(page).locator('> div').nth(1).locator('> div').nth(0)
+    const box = await handle.boundingBox()
+    if (box === null) throw new Error('drawer handle has no bounding box')
+    const session = await context.newCDPSession(page)
+    const x = box.x + box.width / 2
+    const y = box.y + 4
+    const touch = async (type: 'touchStart' | 'touchMove' | 'touchEnd', clientY: number) =>
+      session.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints: type === 'touchEnd' ? [] : [{ x, y: clientY }],
+      })
+    await touch('touchStart', y)
+    for (let cy = y + 24; cy <= y + 480; cy += 24) {
+      await touch('touchMove', cy)
+      await page.waitForTimeout(18)
+    }
+    await page.waitForTimeout(80)
+    await touch('touchEnd', y + 480)
+  }
+
+  /** Opens the drawer the way a visitor would — touch tap, mouse click or keyboard — and settles it. */
+  const openDrawer = async (page: Page, how: 'tap' | 'click' | 'keyboard'): Promise<void> => {
+    if (how === 'tap') await burger(page).tap()
+    else if (how === 'click') await burger(page).click()
+    else {
+      await burger(page).focus()
+      await page.keyboard.press('Enter')
+    }
+    await expect(drawer(page)).toBeVisible()
+    await expect.poll(() => drawer(page).evaluate((element) => getComputedStyle(element).opacity)).toBe('1')
+  }
+
+  /** Closes the drawer the given way and waits for the exit to finish. */
+  const closeDrawer = async (
+    page: Page,
+    how: 'tapClose' | 'clickClose' | 'escape' | 'swipe' | 'navLink',
+    context: BrowserContext,
+  ): Promise<void> => {
+    if (how === 'tapClose') await drawer(page).getByRole('button', { name: CLOSE }).tap()
+    else if (how === 'clickClose') await drawer(page).getByRole('button', { name: CLOSE }).click()
+    else if (how === 'escape') await page.keyboard.press('Escape')
+    else if (how === 'swipe') await swipeDownCdp(page, context)
+    else await drawer(page).getByRole('navigation').getByRole('link').nth(0).tap()
+    await expect(drawer(page)).toBeHidden()
+    await expect(burger(page)).toHaveAttribute('aria-expanded', 'false')
+  }
+
+  /** The offer card and sheet popup, self-contained so the matrix reads linearly. */
+  const sheetCard = (page: Page) => page.getByRole('button', { name: offers.create.cardTitle })
+  const sheetPopup = (page: Page) => page.getByRole('dialog')
+  const sheetClose = (page: Page) => page.getByRole('button', { name: offers.sheetCloseLabel })
+
+  /** Opens the sheet the given way and waits for its entrance to settle. */
+  const openSheet = async (page: Page, how: 'tap' | 'click' | 'keyboard'): Promise<void> => {
+    if (how === 'tap') await sheetCard(page).tap()
+    else if (how === 'click') await sheetCard(page).click()
+    else {
+      await sheetCard(page).focus()
+      await page.keyboard.press('Enter')
+    }
+    await expect(sheetPopup(page)).toBeVisible()
+  }
+
+  /** Closes the sheet the given way and waits for it to leave the DOM. */
+  const closeSheet = async (page: Page, how: 'tapClose' | 'clickClose' | 'escape'): Promise<void> => {
+    if (how === 'tapClose') await sheetClose(page).tap()
+    else if (how === 'clickClose') await sheetClose(page).click()
+    else await page.keyboard.press('Escape')
+    await expect(sheetPopup(page)).toHaveCount(0)
+  }
+
+  /**
+   * Runs one open/close pair twice — once with a cold chunk (first open), once warm (later open) —
+   * and asserts the focus target after each close: DOM focus on the control that opened the layer,
+   * with the ring only when a keyboard interaction closed it.
+   */
+  const firstAndLater = async (
+    page: Page,
+    open: (page: Page) => Promise<void>,
+    close: (page: Page) => Promise<void>,
+    focusTarget: (page: Page) => Locator,
+    expectRing: boolean,
+  ): Promise<void> => {
+    for (const round of ['first', 'later'] as const) {
+      await open(page)
+      await close(page)
+      await expect
+        .poll(() => focusStateOf(focusTarget(page)), `${round} open: the opening control must hold DOM focus`)
+        .toEqual({ focused: true, focusVisible: expectRing })
+    }
+  }
+
+  for (const { name, engine, device } of FOCUS_ENGINES) {
+    test.describe(name, () => {
+      test('tap open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'tap'),
+            (page) => closeDrawer(page, 'tapClose', context),
+            burger,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('tap open + swipe-down close: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        test.skip(engine === webkit, 'CDP touch input is Chromium-only; WebKit cannot synthesize TouchEvents')
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'tap'),
+            (page) => closeDrawer(page, 'swipe', context),
+            burger,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('mouse click open + click close: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'click'),
+            (page) => closeDrawer(page, 'clickClose', context),
+            burger,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('keyboard open + Escape: the burger keeps the visible ring (first and later open)', async ({ baseURL }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'keyboard'),
+            (page) => closeDrawer(page, 'escape', context),
+            burger,
+            true,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('keyboard open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'keyboard'),
+            (page) => closeDrawer(page, 'tapClose', context),
+            burger,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('tap open + tap a nav link: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openDrawer(page, 'tap'),
+            (page) => closeDrawer(page, 'navLink', context),
+            burger,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('offer sheet: tap open + tap close control: no ring on the card (first and later open)', async ({
+        baseURL,
+      }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openSheet(page, 'tap'),
+            (page) => closeSheet(page, 'tapClose'),
+            sheetCard,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('offer sheet: mouse click open + click close: no ring on the card (first and later open)', async ({
+        baseURL,
+      }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openSheet(page, 'click'),
+            (page) => closeSheet(page, 'clickClose'),
+            sheetCard,
+            false,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
+
+      test('offer sheet: keyboard open + Escape: the card keeps the visible ring (first and later open)', async ({
+        baseURL,
+      }) => {
+        const { browser, context } = await launchFocusEngine(engine, device)
+        const page = await context.newPage()
+        try {
+          await page.goto(`${baseURL}/preview`)
+          await page.waitForLoadState('networkidle')
+          await firstAndLater(
+            page,
+            (page) => openSheet(page, 'keyboard'),
+            (page) => closeSheet(page, 'escape'),
+            sheetCard,
+            true,
+          )
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      })
     })
   }
 })
