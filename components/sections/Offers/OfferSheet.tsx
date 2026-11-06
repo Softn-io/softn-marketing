@@ -148,6 +148,26 @@ const OfferSheetContent = ({ offerId, tone, onFollowCta }: OfferSheetContentProp
  * module, Base UI included, arrives on the first intent or open.
  */
 export const OfferSheet = ({ offerId, finalFocus, onClose, onFollowCta, onCloseComplete }: OfferSheetProps) => {
+  /**
+   * Focus target when the sheet closes: the card control that opened it, with the focus ring made
+   * explicit. Base UI marks a keyboard close as `:focus-visible` and leaves a pointer close to the
+   * browser heuristic; that heuristic keeps the ring on an element focused by script when the focus
+   * chain started visible (a keyboard or programmatic open), so a tap or a click would leave a ring on
+   * the card. Clearing it before Base UI focuses the card makes the pointer path deterministic.
+   * `closeType` is empty while the sheet is still open, when Base UI also calls this function, so only
+   * a real close clears it.
+   */
+  const handleFinalFocus = (closeType: string): HTMLElement | null => {
+    const element = finalFocus.current
+    if (element === null) return null
+    if (closeType !== '' && closeType !== 'keyboard') {
+      // `focusVisible` ships in browsers but not yet in the TypeScript DOM lib.
+      const options: FocusOptions & { focusVisible?: boolean } = { preventScroll: true, focusVisible: false }
+      element.focus(options)
+    }
+    return element
+  }
+
   const handleOpenChange = (open: boolean): void => {
     if (!open) onClose()
   }
@@ -155,7 +175,7 @@ export const OfferSheet = ({ offerId, finalFocus, onClose, onFollowCta, onCloseC
   return (
     <Dialog.Root open={offerId !== null} onOpenChange={handleOpenChange} onOpenChangeComplete={onCloseComplete}>
       <Dialog.Portal>
-        <Dialog.Popup className={styles.popup} aria-modal="true" finalFocus={finalFocus}>
+        <Dialog.Popup className={styles.popup} aria-modal="true" finalFocus={handleFinalFocus}>
           {offerId === null ? null : (
             <OfferSheetContent offerId={offerId} tone={OFFER_TONES[offerId]} onFollowCta={onFollowCta} />
           )}

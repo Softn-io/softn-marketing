@@ -42,7 +42,9 @@ type MobileMenuDrawerProps = {
 /**
  * Modal navigation drawer below the `lg` breakpoint, built on the accessible Base UI drawer: focus is
  * trapped, Escape and a swipe down close it (a swipe can only start from the top row and the handle,
- * the links and CTA are marked swipe-ignore), focus lands on the close control and returns to the burger.
+ * the links and CTA are marked swipe-ignore), focus lands on the close control and returns to the
+ * burger, with the focus ring following the interaction that closed the drawer (visible for a
+ * keyboard close, hidden for a pointer one).
  * The drawer layers sit above the sticky header and cover it; the popup repeats the header's top row
  * (logo, theme toggle, close control in the burger's spot) so the focus trap and the accessibility tree
  * stay correct.
@@ -67,6 +69,25 @@ export const MobileMenuDrawer = ({
   menuLabel,
   closeLabel,
 }: MobileMenuDrawerProps) => {
+  /**
+   * Focus target when the drawer closes: the burger, with the focus ring made explicit. Base UI marks
+   * a keyboard close as `:focus-visible` and leaves a pointer close to the browser heuristic; that
+   * heuristic keeps the ring on an element focused by script when the focus chain started visible (a
+   * keyboard or programmatic open), so a tap or a click would leave a ring on the burger. Clearing it
+   * before Base UI focuses the burger makes the pointer path deterministic. `closeType` is empty while
+   * the drawer is still open, when Base UI also calls this function, so only a real close clears it.
+   */
+  const handleFinalFocus = (closeType: string): HTMLElement | null => {
+    const element = burger.current
+    if (element === null) return null
+    if (closeType !== '' && closeType !== 'keyboard') {
+      // `focusVisible` ships in browsers but not yet in the TypeScript DOM lib.
+      const options: FocusOptions & { focusVisible?: boolean } = { preventScroll: true, focusVisible: false }
+      element.focus(options)
+    }
+    return element
+  }
+
   const handleOpenChange = (nextOpen: boolean, details: Drawer.Root.ChangeEventDetails): void => {
     onOpenChange(nextOpen, details.reason)
   }
@@ -90,7 +111,7 @@ export const MobileMenuDrawer = ({
             className={styles.popup}
             aria-label={menuLabel}
             initialFocus={closeControl}
-            finalFocus={burger}
+            finalFocus={handleFinalFocus}
             data-swipe-dismissed={dismissedBySwipe ? '' : undefined}
           >
             <div className={`${styles.header} ${styles['drawer-bar']} flex items-center justify-between gap-6`}>
