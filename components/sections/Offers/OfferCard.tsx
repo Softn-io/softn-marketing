@@ -45,6 +45,8 @@ type OfferCardProps = {
   detailLink: string
   /** Called with this card's id when the card is activated; without it the card does nothing. */
   onOpen?: ((offerId: OfferId) => void) | undefined
+  /** Called on hover, focus or press, so the sheet is mounted and its code loaded before it opens. */
+  onIntent?: (() => void) | undefined
 }
 
 /**
@@ -56,7 +58,17 @@ type OfferCardProps = {
  * computes the tilt from them, so no pointer move re-renders the component. Touch pointers are
  * ignored, and the stylesheet only applies the tilt to hovering fine pointers with motion allowed.
  */
-export const OfferCard = ({ offerId, tone, kicker, title, text, audiences, detailLink, onOpen }: OfferCardProps) => {
+export const OfferCard = ({
+  offerId,
+  tone,
+  kicker,
+  title,
+  text,
+  audiences,
+  detailLink,
+  onOpen,
+  onIntent,
+}: OfferCardProps) => {
   const titleId = `offer-${offerId}-title`
   const toneStyles = TONE_STYLES[tone]
 
@@ -89,6 +101,9 @@ export const OfferCard = ({ offerId, tone, kicker, title, text, audiences, detai
   return (
     <article
       className={`${styles.card} ${toneStyles.card}`}
+      onPointerEnter={onIntent}
+      onPointerDown={onIntent}
+      onFocus={onIntent}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
