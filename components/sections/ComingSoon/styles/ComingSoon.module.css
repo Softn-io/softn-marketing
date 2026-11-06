@@ -99,6 +99,12 @@
   text-decoration: none;
 }
 
+/* Same ring as the site header logo: the browser default is the only thing this link had left. */
+.wordmark:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
 .main {
   position: relative;
   display: flex;

@@ -728,6 +728,42 @@ test.describe('coming-soon: keyboard-only journey', () => {
     await expect(visibleAnnouncement(page, form.success.replace('{email}', EMAIL))).toBeVisible()
     await expect(page.getByRole('button', { name: form.submit })).toHaveCount(0)
   })
+
+  test('the wordmark link shows the site focus ring on keyboard focus', async ({ page }) => {
+    guardBaserow(page)
+    await gotoWithTheme(page, 'dark')
+    await expect(page.getByRole('banner')).toBeVisible()
+
+    // First Tab stop of the page: the wordmark link, right before the theme toggle.
+    await page.keyboard.press('Tab')
+    const wordmark = page.getByRole('link', { name: nav.logo.ariaLabel })
+    await expect(wordmark).toBeFocused()
+
+    // The ring colour is compared against the token as the browser resolves it — a probe painted with
+    // the same variable — never against a hand-written colour: the token's lab() values do not
+    // serialize as the authored text.
+    const tokenColor = await page.evaluate(() => {
+      const probe = document.createElement('span')
+      probe.style.color = 'var(--softn-border-active)'
+      document.body.appendChild(probe)
+      const resolved = getComputedStyle(probe).color
+      probe.remove()
+      return resolved
+    })
+    const ring = await wordmark.evaluate((el) => {
+      const style = getComputedStyle(el)
+      return {
+        style: style.outlineStyle,
+        width: Number.parseFloat(style.outlineWidth),
+        color: style.outlineColor,
+        offset: style.outlineOffset,
+      }
+    })
+    expect(ring.style, 'the wordmark link is ringed by :focus-visible, not by the browser default').toBe('solid')
+    expect(ring.width, 'the ring is 2 px wide').toBe(2)
+    expect(ring.color, 'the ring uses the active border token').toBe(tokenColor)
+    expect(ring.offset, 'the ring sits 2 px off the link').toBe('2px')
+  })
 })
 
 test.describe('coming-soon: reduced motion', () => {
