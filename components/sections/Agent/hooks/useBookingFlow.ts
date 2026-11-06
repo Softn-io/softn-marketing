@@ -5,6 +5,7 @@ import type { BookingSlot } from '@/lib/booking/availability'
 import { formatSlotLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { interpolate } from '@/lib/interpolate'
+import { prefersReducedMotion } from '@/lib/motion'
 import { chatbot } from '@/locales/fr/chatbot'
 import {
   BOOKING_HONEYPOT_FIELD,
@@ -366,18 +367,6 @@ const buildScript = ({
 
   return entries
 }
-
-/**
- * True when the visitor asked the system for less motion.
- *
- * Reading the preference needs a browser: outside one (tests, server render) motion stays on, and a
- * guard replaces the media query rather than throwing. The flow reads it once, and the component
- * that scrolls the conversation uses it too, so the two agree on the same answer.
- */
-export const prefersReducedMotion = (): boolean =>
-  typeof window !== 'undefined' &&
-  typeof window.matchMedia === 'function' &&
-  window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 /**
  * Owns the booking flow: its answers, its step, its transcript, its pacing and its requests.

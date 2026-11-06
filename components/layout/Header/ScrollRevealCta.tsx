@@ -35,7 +35,7 @@ const getServerMarker = (): boolean => false
  * focusable CTA. `inert` is only belt and braces on top of it, and it is applied **client-side only**,
  * never in the server markup: no CSS can lift an attribute, so a server-rendered `inert` would keep the
  * CTA the stylesheet shows without JavaScript (`scripting` media feature) painted but unfocusable and
- * unclickable — a dead button, when that state exists precisely to keep it a plain `#reservation` link
+ * unclickable — a dead button, when that state exists precisely to keep it a plain `#assistant` link
  * (see `BookingCta`).
  *
  * `isScripted` is that client marker, and `useSyncExternalStore` is what makes it hydration-safe rather

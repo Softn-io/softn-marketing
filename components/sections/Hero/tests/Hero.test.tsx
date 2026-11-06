@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { HERO_CTA_ID } from '@/lib/anchors'
+import { HERO_CTA_ID, SECTION_IDS } from '@/lib/anchors'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS } from '@/lib/assistant/intent'
 import { interpolate } from '@/lib/interpolate'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
@@ -89,6 +89,28 @@ describe('Hero', () => {
     // Fire-and-forget event: the default anchor navigation is kept, nothing is prevented.
     expect(notCancelled).toBe(true)
     window.removeEventListener(ASSISTANT_INTENT_EVENT, listener)
+  })
+
+  it('primary call to action scrolls the assistant section into view when the fragment already names it', () => {
+    window.history.replaceState(null, '', `/preview#${SECTION_IDS.agent}`)
+    const section = document.createElement('section')
+    section.id = SECTION_IDS.agent
+    const scrollIntoView = vi.fn<() => void>()
+    Object.defineProperty(section, 'scrollIntoView', { configurable: true, value: scrollIntoView })
+    document.body.appendChild(section)
+    const received = vi.fn()
+    const listener = (event: Event): void => received((event as CustomEvent).detail)
+    window.addEventListener(ASSISTANT_INTENT_EVENT, listener)
+    render(<Hero />)
+    fireEvent.click(screen.getByRole('link', { name: hero.cta.primary }))
+    // The browser would see no hash change and stay put: the section is scrolled into view instead,
+    // and the booking intent still goes out.
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
+    expect(received).toHaveBeenCalledWith({ intent: ASSISTANT_INTENTS.booking })
+    window.removeEventListener(ASSISTANT_INTENT_EVENT, listener)
+    document.body.removeChild(section)
+    window.history.replaceState(null, '', '/')
   })
 
   it('secondary call to action links to the method section', () => {

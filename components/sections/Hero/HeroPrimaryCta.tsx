@@ -1,8 +1,10 @@
 'use client'
 
+import type { MouseEvent } from 'react'
 import { Button } from '@components/ui/Button'
-import { HERO_CTA_ID, SECTION_IDS } from '@/lib/anchors'
+import { HERO_CTA_ID, SECTION_IDS, goToSection } from '@/lib/anchors'
 import { ASSISTANT_INTENTS, dispatchAssistantIntent } from '@/lib/assistant/intent'
+import { isPlainLeftClick } from '@/lib/pointer'
 import { hero } from '@/locales/fr/hero'
 
 /**
@@ -11,11 +13,16 @@ import { hero } from '@/locales/fr/hero'
  * own booking call to action once this one has scrolled out of view.
  *
  * Clicking additionally asks the assistant to start the booking flow (fire-and-forget event: the
- * chatbot is not implemented yet, and the browser keeps following the anchor).
+ * chatbot is not implemented yet, and the browser keeps following the anchor). When the fragment
+ * already names the assistant section, the browser has nothing left to navigate to: the section is
+ * scrolled into view explicitly instead.
  */
 export const HeroPrimaryCta = () => {
-  const handleClick = (): void => {
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     dispatchAssistantIntent(ASSISTANT_INTENTS.booking)
+    if (!event.defaultPrevented && isPlainLeftClick(event) && window.location.hash === `#${SECTION_IDS.agent}`) {
+      goToSection(SECTION_IDS.agent)
+    }
   }
 
   return (

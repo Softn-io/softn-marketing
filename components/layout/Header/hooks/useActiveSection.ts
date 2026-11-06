@@ -70,6 +70,12 @@ type ReadingBand = {
  * shrinks, until the visitor takes the scroll back (a gesture or a pointer press, a click on a link,
  * a new fragment).
  *
+ * URL: once the reader drives, the active section follows into the address with `replaceState`, so a
+ * shared URL names the section on screen. The sync adds no history entry, keeps the path and query
+ * string, fires no `hashchange` and scrolls nothing; it writes no fragment while the page holds the
+ * visitor's own fragment or a click lock, and after a settled scroll the URL matches the active
+ * section — with no fragment at all when none is active (hero, footer).
+ *
  * Click lock: `select` sets the active id and ignores the observer until the scroll that follows the
  * click has settled (no scroll event for `SCROLL_IDLE_MS`), the visitor scrolls by hand, or
  * `MAX_LOCK_MS` elapses. On release the active id is recomputed from what the observer saw meanwhile.
@@ -105,6 +111,30 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
 
     const computeActive = (): SectionId | null => observed.filter(({ id }) => intersecting.has(id)).at(-1)?.id ?? null
 
+    /**
+     * Mirrors the active section into the URL fragment: the address keeps telling where the reader
+     * is, and a shared URL opens on it. `replaceState` adds no history entry, fires no `hashchange`
+     * and scrolls nothing — the back button stays on real navigations, and this hook's own
+     * `hashchange` listener only sees the visitor's own fragment changes.
+     */
+    const syncFragment = (id: SectionId | null): void => {
+      const nextHash = id === null ? '' : `#${id}`
+      const { hash, pathname, search } = window.location
+      if (hash === nextHash) return
+      window.history.replaceState(null, '', `${pathname}${search}${nextHash}`)
+    }
+
+    /**
+     * Publishes an active section to the navigation and the URL. While the page still holds the
+     * fragment it was opened on, the URL is the visitor's choice: the observer's first reading, taken
+     * before the layout pass that marks and holds that fragment, must not replace it.
+     */
+    const applyActive = (id: SectionId | null): void => {
+      setActiveId(id)
+      if (fragmentId !== null && !fragmentHeld) return
+      syncFragment(id)
+    }
+
     /** Reading band of the current frame: the bottom follows the viewport, the top the sticky header. */
     const readingBand = (): ReadingBand => ({
       top: stickyOffset,
@@ -119,7 +149,7 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
           if (entry.isIntersecting) intersecting.add(match.id)
           else intersecting.delete(match.id)
         }
-        if (!isLocked) setActiveId(computeActive())
+        if (!isLocked) applyActive(computeActive())
       },
       { rootMargin: `-${stickyOffset}px 0px -${READING_BAND_BOTTOM_INSET}% 0px` },
     )
@@ -140,7 +170,7 @@ export const useActiveSection = (ids: readonly SectionId[]): ActiveSection => {
     const releaseLock = (): void => {
       if (!isLocked) return
       clearLock()
-      setActiveId(computeActive())
+      applyActive(computeActive())
     }
 
     /** Holds the active section against the observer until the scroll it causes has settled. */

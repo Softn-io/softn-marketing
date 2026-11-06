@@ -201,7 +201,12 @@ test.describe('offer sheet: opening and content', () => {
 
   test('Enter and Space on a focused card each open the sheet', async ({ page }) => {
     await page.goto('/preview')
-    const before = page.url()
+    // The scroll spy mirrors the section in view into the URL fragment while the Tab focus scrolls
+    // the page (issue #118), so the address is compared without its fragment: what must not change
+    // is the document itself — no navigation, and no history entry from the fragment sync either.
+    const before = new URL(page.url())
+    const pathOf = (url: URL): string => `${url.pathname}${url.search}`
+    const historyLength = await page.evaluate(() => window.history.length)
 
     await tabTo(page, cardButton(page, 0))
     await page.keyboard.press('Enter')
@@ -209,7 +214,10 @@ test.describe('offer sheet: opening and content', () => {
     await expect(sheet(page).getByRole('heading', { level: 2, name: offers.create.sheet.title })).toBeVisible()
     await page.keyboard.press('Escape')
     await expect(sheet(page)).toHaveCount(0)
-    expect(page.url(), 'the keyboard opening is not a navigation').toBe(before)
+    expect(pathOf(new URL(page.url())), 'the keyboard opening is not a navigation').toBe(pathOf(before))
+    expect(await page.evaluate(() => window.history.length), 'the keyboard opening adds no history entry').toBe(
+      historyLength,
+    )
 
     await tabTo(page, cardButton(page, 1))
     await page.keyboard.press('Space')

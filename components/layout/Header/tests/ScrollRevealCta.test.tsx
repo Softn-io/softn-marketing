@@ -28,7 +28,7 @@ const mountHeroCta = (): HTMLElement => {
 const renderCta = () =>
   render(
     <ScrollRevealCta>
-      <a href="#reservation">Réserver</a>
+      <a href="#assistant">Réserver</a>
     </ScrollRevealCta>,
   )
 
@@ -65,12 +65,12 @@ describe('ScrollRevealCta', () => {
     // so hydration has nothing to correct and no frame can show a CTA that then disappears.
     const markup = renderToStaticMarkup(
       <ScrollRevealCta className="hidden lg:block">
-        <a href="#reservation">Réserver</a>
+        <a href="#assistant">Réserver</a>
       </ScrollRevealCta>,
     )
     expect(markup).toContain('data-state="hidden"')
     // No `inert` in the markup (D-1): nothing can lift an attribute without JavaScript, and the CTA the
-    // `scripting: none` stylesheet shows has to stay a plain, operable `#reservation` link.
+    // `scripting: none` stylesheet shows has to stay a plain, operable `#assistant` link.
     expect(markup).not.toContain('inert')
   })
 
