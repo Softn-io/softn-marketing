@@ -3,9 +3,11 @@
 import { Drawer } from '@base-ui/react/drawer'
 import { ArrowRight, X } from 'lucide-react'
 import Link from 'next/link'
-import type { MouseEvent, RefObject } from 'react'
+import { useRef, type MouseEvent, type RefObject } from 'react'
 import { Logo } from '@components/ui/Logo'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
+import { useHasPaintedOnce } from '@/hooks/useHasPaintedOnce'
+import { ringlessFinalFocus } from '@/lib/focus/ringlessFinalFocus'
 import { nav } from '@/locales/fr/hero'
 import { SectionLink } from './SectionLink'
 import { BookingCta } from './BookingCta'
@@ -15,8 +17,8 @@ import styles from './styles/Header.module.css'
 type MobileMenuDrawerProps = {
   /** Open state, owned by the burger button outside this component. */
   open: boolean
-  /** Reports the drawer's own open and close; `reason` is Base UI's, and `'swipe'` is the swipe down. */
-  onOpenChange: (open: boolean, reason: string) => void
+  /** Reports the drawer's own open and close reasons, including the `'swipe'` of a swipe down. */
+  onOpenChange: (open: boolean, reason: Drawer.Root.ChangeEventReason) => void
   /** Runs when an open or close transition has finished, so the caller can act after the scroll lock release. */
   onOpenChangeComplete: (open: boolean) => void
   /** Closes the drawer without a follow-up action, for the logo link. */
@@ -27,8 +29,6 @@ type MobileMenuDrawerProps = {
   onBeforeActivate: (activate: () => void) => void
   /** Whether the drawer was dismissed by a swipe down; drives its exit animation. */
   dismissedBySwipe: boolean
-  /** Focus target on open: the close control, which sits where the burger was. */
-  closeControl: RefObject<HTMLButtonElement | null>
   /** Focus target on close: the burger button, which stays in the page. */
   burger: RefObject<HTMLButtonElement | null>
   links: readonly NavLink[]
@@ -52,7 +52,8 @@ type MobileMenuDrawerProps = {
  * Loaded through `next/dynamic` from {@link MobileMenu}: only the burger ships with the page, and this
  * module, Base UI included, arrives on the first intent or open. It holds no open state of its own: the
  * burger owns it, so a click that lands before this module is in the browser still opens the drawer as
- * soon as it arrives.
+ * soon as it arrives, and `useHasPaintedOnce` holds the Root closed for one frame first, so Base UI
+ * always sees the closed → open transition that locks the page.
  */
 export const MobileMenuDrawer = ({
   open,
@@ -62,43 +63,24 @@ export const MobileMenuDrawer = ({
   onLinkClick,
   onBeforeActivate,
   dismissedBySwipe,
-  closeControl,
   burger,
   links,
   ctaLabel,
   menuLabel,
   closeLabel,
 }: MobileMenuDrawerProps) => {
-  /**
-   * Focus target when the drawer closes: the burger, with the focus ring made explicit. Base UI marks
-   * a keyboard close as `:focus-visible` and leaves a pointer close to the browser heuristic; that
-   * heuristic keeps the ring on an element focused by script when the focus chain started visible (a
-   * keyboard or programmatic open), so a tap or a click would leave a ring on the burger. Clearing it
-   * before Base UI focuses the burger makes the pointer path deterministic. `closeType` is empty while
-   * the drawer is still open, when Base UI also calls this function, so only a real close clears it.
-   */
-  const handleFinalFocus = (closeType: string): HTMLElement | null => {
-    const element = burger.current
-    if (element === null) return null
-    if (closeType !== '' && closeType !== 'keyboard') {
-      // `focusVisible` ships in browsers but not yet in the TypeScript DOM lib.
-      const options: FocusOptions & { focusVisible?: boolean } = { preventScroll: true, focusVisible: false }
-      element.focus(options)
-    }
-    return element
-  }
+  const hasPaintedOnce = useHasPaintedOnce()
+  /** Focus target on open: the close control, which sits where the burger was. */
+  const closeControl = useRef<HTMLButtonElement | null>(null)
+  const handleFinalFocus = ringlessFinalFocus(burger)
 
   const handleOpenChange = (nextOpen: boolean, details: Drawer.Root.ChangeEventDetails): void => {
     onOpenChange(nextOpen, details.reason)
   }
 
-  const handleLinkClick = (event: MouseEvent<HTMLAnchorElement>, link: NavLink): void => {
-    onLinkClick(event, link)
-  }
-
   return (
     <Drawer.Root
-      open={open}
+      open={hasPaintedOnce && open}
       onOpenChange={handleOpenChange}
       onOpenChangeComplete={onOpenChangeComplete}
       swipeDirection="down"
@@ -140,7 +122,7 @@ export const MobileMenuDrawer = ({
                       <li key={link.id}>
                         <SectionLink
                           link={link}
-                          onClick={(event) => handleLinkClick(event, link)}
+                          onClick={(event) => onLinkClick(event, link)}
                           className={`${styles['drawer-link']} flex items-center justify-between font-display text-title-sm`}
                         >
                           {link.label}

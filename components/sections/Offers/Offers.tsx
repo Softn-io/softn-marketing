@@ -33,19 +33,19 @@ const OfferSheet = dynamic(() => import('./OfferSheet').then((module) => module.
  */
 export const Offers = () => {
   const [openOfferId, setOpenOfferId] = useState<OfferId | null>(null)
-  const [mounted, setMounted] = useState(false)
+  const [shouldMountSheet, setShouldMountSheet] = useState(false)
   const pendingAction = useRef<(() => void) | null>(null)
   const openingCard = useRef<HTMLElement | null>(null)
 
   const mountSheet = (): void => {
-    setMounted(true)
+    setShouldMountSheet(true)
   }
 
   const handleOpen = (offerId: OfferId): void => {
     // The control lives inside OfferCard: resolve it by the id the card exposes, so focus can return
     // there after closing even when the browser did not focus the button on click.
     openingCard.current = document.getElementById(offerActionId(offerId))
-    setMounted(true)
+    setShouldMountSheet(true)
     setOpenOfferId(offerId)
   }
 
@@ -99,7 +99,7 @@ export const Offers = () => {
             )
           })}
         </div>
-        {mounted ? (
+        {shouldMountSheet ? (
           <OfferSheet
             offerId={openOfferId}
             finalFocus={openingCard}

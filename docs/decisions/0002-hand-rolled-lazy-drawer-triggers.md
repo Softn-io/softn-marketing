@@ -79,6 +79,10 @@ closes. The exception is limited to the trigger elements' ARIA and open/close wi
   closes), `e2e/offerSheet.spec.ts`, and `e2e/lazyMount.spec.ts` (SSR burger announces
   `aria-haspopup`/`aria-expanded`; a programmatic click before the chunk arrives still opens the
   drawer and the sheet; no Base UI chunk is requested at initial load).
+- The lazy roots hold their open state back for one frame (`useHasPaintedOnce`,
+  `hooks/useHasPaintedOnce.ts`): Base UI only locks the page scroll and runs the enter transition on
+  a closed → open change, so a Root that mounts already open paints the popup before the lock lands.
+  Removing the hold brings the cold-open scroll leak back.
 - `focusVisible` in `focus()` options is ignored by browsers older than Chrome/Edge 86, Safari 15.4
   and Firefox 104; those fall back to the browser's focus heuristic, which is the pre-#55
   behaviour (a ring can stay on the trigger after a pointer close of a keyboard-opened layer). No

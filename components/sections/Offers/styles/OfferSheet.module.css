@@ -4,7 +4,8 @@
  * width is capped by the 4xl container token in the markup.
  *
  * The viewport itself is the scroll container so the header can stay sticky. The entrance follows
- * the design's rise-and-fade, sized with the motion tokens; reduced motion removes it entirely.
+ * the design's rise-and-fade, sized with the motion tokens; reduced motion removes it entirely (see
+ * the media query below).
  */
 
 .popup {

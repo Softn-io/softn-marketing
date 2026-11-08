@@ -4,7 +4,9 @@ import { Dialog } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
 import type { MouseEvent, RefObject } from 'react'
 import { Button } from '@components/ui/Button'
+import { useHasPaintedOnce } from '@/hooks/useHasPaintedOnce'
 import { SECTION_IDS } from '@/lib/anchors'
+import { ringlessFinalFocus } from '@/lib/focus/ringlessFinalFocus'
 import { interpolate } from '@/lib/interpolate'
 import { isPlainLeftClick } from '@/lib/pointer'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
@@ -148,32 +150,19 @@ const OfferSheetContent = ({ offerId, tone, onFollowCta }: OfferSheetContentProp
  * module, Base UI included, arrives on the first intent or open.
  */
 export const OfferSheet = ({ offerId, finalFocus, onClose, onFollowCta, onCloseComplete }: OfferSheetProps) => {
-  /**
-   * Focus target when the sheet closes: the card control that opened it, with the focus ring made
-   * explicit. Base UI marks a keyboard close as `:focus-visible` and leaves a pointer close to the
-   * browser heuristic; that heuristic keeps the ring on an element focused by script when the focus
-   * chain started visible (a keyboard or programmatic open), so a tap or a click would leave a ring on
-   * the card. Clearing it before Base UI focuses the card makes the pointer path deterministic.
-   * `closeType` is empty while the sheet is still open, when Base UI also calls this function, so only
-   * a real close clears it.
-   */
-  const handleFinalFocus = (closeType: string): HTMLElement | null => {
-    const element = finalFocus.current
-    if (element === null) return null
-    if (closeType !== '' && closeType !== 'keyboard') {
-      // `focusVisible` ships in browsers but not yet in the TypeScript DOM lib.
-      const options: FocusOptions & { focusVisible?: boolean } = { preventScroll: true, focusVisible: false }
-      element.focus(options)
-    }
-    return element
-  }
+  const hasPaintedOnce = useHasPaintedOnce()
+  const handleFinalFocus = ringlessFinalFocus(finalFocus)
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) onClose()
   }
 
   return (
-    <Dialog.Root open={offerId !== null} onOpenChange={handleOpenChange} onOpenChangeComplete={onCloseComplete}>
+    <Dialog.Root
+      open={hasPaintedOnce && offerId !== null}
+      onOpenChange={handleOpenChange}
+      onOpenChangeComplete={onCloseComplete}
+    >
       <Dialog.Portal>
         <Dialog.Popup className={styles.popup} aria-modal="true" finalFocus={handleFinalFocus}>
           {offerId === null ? null : (

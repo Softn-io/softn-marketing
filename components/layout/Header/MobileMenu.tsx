@@ -1,5 +1,6 @@
 'use client'
 
+import type { Drawer } from '@base-ui/react/drawer'
 import { Menu } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
@@ -49,11 +50,10 @@ const readDesktopMediaQuery = (): string | undefined => {
  */
 export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMenuProps) => {
   const [open, setOpen] = useState(false)
-  const [mounted, setMounted] = useState(false)
+  const [shouldMountDrawer, setShouldMountDrawer] = useState(false)
   const [dismissedBySwipe, setDismissedBySwipe] = useState(false)
   const { select } = useActiveSectionContext()
   const pendingAction = useRef<(() => void) | null>(null)
-  const closeControl = useRef<HTMLButtonElement | null>(null)
   const burger = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -68,15 +68,15 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
   }, [])
 
   const mountDrawer = (): void => {
-    setMounted(true)
+    setShouldMountDrawer(true)
   }
 
   const handleTriggerClick = (): void => {
-    setMounted(true)
+    setShouldMountDrawer(true)
     setOpen((isOpen) => !isOpen)
   }
 
-  const handleOpenChange = (nextOpen: boolean, reason: string): void => {
+  const handleOpenChange = (nextOpen: boolean, reason: Drawer.Root.ChangeEventReason): void => {
     setDismissedBySwipe(!nextOpen && reason === 'swipe')
     setOpen(nextOpen)
   }
@@ -118,7 +118,7 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
       >
         <Menu size={20} aria-hidden="true" focusable="false" />
       </button>
-      {mounted ? (
+      {shouldMountDrawer ? (
         <MobileMenuDrawer
           open={open}
           onOpenChange={handleOpenChange}
@@ -127,7 +127,6 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
           onLinkClick={handleLinkClick}
           onBeforeActivate={closeThen}
           dismissedBySwipe={dismissedBySwipe}
-          closeControl={closeControl}
           burger={burger}
           links={links}
           ctaLabel={ctaLabel}
