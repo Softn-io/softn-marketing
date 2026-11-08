@@ -1,4 +1,4 @@
-import { chromium, expect, test, webkit, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { chromium, expect, test, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { nav } from '../locales/fr/hero'
 import { offers } from '../locales/fr/offers'
 import {
@@ -31,12 +31,8 @@ import {
  * programmatic scrolling stays allowed by design (Base UI's documented behaviour), so a moved
  * page there is not a regression; the page is reset afterwards.
  *
- * The suite launches the engines itself, since the config ships a single desktop Chromium project.
- * On WebKit the context strips the CSP
- * `upgrade-insecure-requests` directive — over the plain-HTTP test server the engine would
- * rewrite every localhost asset to HTTPS and none would load; production serves over HTTPS where
- * the directive is inert, and the test asserts nothing about CSP here. Chromium exempts
- * localhost, so its context stays untouched.
+ * The suite launches the engines itself (the config ships a single desktop Chromium project); see
+ * `support/mobileEngines.ts` for the WebKit CSP strip.
  *
  * The CDP touch drag runs on Chromium only: it drives real touch input through the CDP input
  * pipeline, which WebKit does not expose. The wheel attempt runs on both engines.
@@ -193,17 +189,17 @@ const scrollAttempts = async (
 }
 
 for (const layer of ['drawer', 'sheet'] as const) {
-  for (const { name, engine, device } of MOBILE_ENGINES) {
-    test(`${layer}: the page behind does not scroll while the layer is open (${name})`, async () => {
+  for (const { name, engine, device, stripsUpgradeInsecureRequests } of MOBILE_ENGINES) {
+    test(`${layer}: the page behind does not scroll while the layer is open (${name})`, async ({ baseURL }) => {
       const { browser, context } = await launchMobileEngine(engine, device)
       const delayedChunks: string[] = []
       // Holds back every response whose body is a lazy chunk (bodies inspected against the lazy
       // markers, so the cold path stays deterministic whatever the hashed names are) and strips
-      // the CSP upgrade directive on WebKit.
+      // the CSP upgrade directive where the engine's entry asks for it.
       await context.route('**/*', async (route) => {
         const response = await route.fetch()
         const rawHeaders = response.headers()
-        const headers = engine === webkit ? stripUpgradeInsecureRequests(rawHeaders) : rawHeaders
+        const headers = stripsUpgradeInsecureRequests ? stripUpgradeInsecureRequests(rawHeaders) : rawHeaders
         const url = route.request().url()
         if (url.includes('/_next/static/chunks/') && url.endsWith('.js')) {
           const body = await response.text()
@@ -221,7 +217,7 @@ for (const layer of ['drawer', 'sheet'] as const) {
       const page = await context.newPage()
       const dialog = layer === 'drawer' ? drawer(page) : sheet(page)
       try {
-        await page.goto('/preview')
+        await page.goto(`${baseURL}/preview`)
         await page.waitForLoadState('networkidle')
         await installLockRecorder(page)
         expect(delayedChunks, 'no lazy chunk may load before the first intent').toEqual([])

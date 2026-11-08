@@ -14,10 +14,27 @@ import {
  * launch of a browser with device emulation, and real CDP touch input.
  */
 
-/** The engines every mobile-engine suite runs: Chromium for Android Chrome, WebKit for iOS Safari. */
+/**
+ * The engines every mobile-engine suite runs: Chromium for Android Chrome, WebKit for iOS Safari.
+ * `stripsUpgradeInsecureRequests` marks the engines whose context strips the CSP
+ * `upgrade-insecure-requests` directive over the plain-HTTP test server: WebKit would rewrite
+ * every localhost asset to HTTPS and none would load, while Chromium exempts localhost. Production
+ * serves over HTTPS where the directive is inert, and the mobile-engine specs assert nothing about
+ * CSP.
+ */
 export const MOBILE_ENGINES = [
-  { name: 'chromium · Pixel 7', engine: chromium, device: devices['Pixel 7'] },
-  { name: 'webkit · iPhone 13', engine: webkit, device: devices['iPhone 13'] },
+  {
+    name: 'chromium · Pixel 7',
+    engine: chromium,
+    device: devices['Pixel 7'],
+    stripsUpgradeInsecureRequests: false,
+  },
+  {
+    name: 'webkit · iPhone 13',
+    engine: webkit,
+    device: devices['iPhone 13'],
+    stripsUpgradeInsecureRequests: true,
+  },
 ] as const
 
 export type MobileEngine = (typeof MOBILE_ENGINES)[number]
@@ -25,10 +42,8 @@ export type MobileEngineType = MobileEngine['engine']
 export type MobileEngineDevice = MobileEngine['device']
 
 /**
- * Removes the CSP `upgrade-insecure-requests` directive from response headers. Over the plain-HTTP
- * test server WebKit would rewrite every localhost asset to HTTPS and none would load; production
- * serves over HTTPS where the directive is inert, and the mobile-engine specs assert nothing about
- * CSP. Chromium exempts localhost, so its headers stay untouched.
+ * Removes the CSP `upgrade-insecure-requests` directive from the given response headers and tidies
+ * the directive separators the removal leaves behind.
  */
 export const stripUpgradeInsecureRequests = (headers: Record<string, string>): Record<string, string> => {
   const csp = headers['content-security-policy']
@@ -41,8 +56,8 @@ export const stripUpgradeInsecureRequests = (headers: Record<string, string>): R
 
 /**
  * Launches an engine with real device emulation. The caller adds its own routing needs on the
- * returned context: the CSP strip on WebKit (`stripUpgradeInsecureRequestsOnContext`), or a
- * bespoke request route.
+ * returned context: the CSP strip where the engine's `MOBILE_ENGINES` entry asks for it
+ * (`stripUpgradeInsecureRequestsOnContext`), or a bespoke request route.
  */
 export const launchMobileEngine = async (
   engine: MobileEngineType,
@@ -54,14 +69,16 @@ export const launchMobileEngine = async (
 }
 
 /**
- * Rewrites every response of a context to drop the CSP `upgrade-insecure-requests` directive.
- * Only WebKit needs it; no route is registered on the other engines.
+ * Registers the CSP `upgrade-insecure-requests` strip on the context when the engine's
+ * `MOBILE_ENGINES` entry asks for it (`stripsUpgradeInsecureRequests`): every response is re-served
+ * with `stripUpgradeInsecureRequests` applied. No route is registered on the other engines.
  */
 export const stripUpgradeInsecureRequestsOnContext = async (
   context: BrowserContext,
   engine: MobileEngineType,
 ): Promise<void> => {
-  if (engine !== webkit) return
+  const entry = MOBILE_ENGINES.find((candidate) => candidate.engine === engine)
+  if (!entry?.stripsUpgradeInsecureRequests) return
   await context.route('**/*', async (route) => {
     const response = await route.fetch()
     await route.fulfill({ response, headers: stripUpgradeInsecureRequests(response.headers()) })
@@ -78,16 +95,17 @@ export const dispatchTouchPath = async (
   session: CDPSession,
   gesture: { x: number; y: number; clientYs: number[]; moveDelayMs: number; settleMs: number },
 ): Promise<void> => {
-  const touch = async (type: 'touchStart' | 'touchMove' | 'touchEnd', clientY: number) =>
+  const touch = async (type: 'touchStart' | 'touchMove', clientY: number) =>
     session.send('Input.dispatchTouchEvent', {
       type,
-      touchPoints: type === 'touchEnd' ? [] : [{ x: gesture.x, y: clientY }],
+      touchPoints: [{ x: gesture.x, y: clientY }],
     })
+  const touchEnd = () => session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
   await touch('touchStart', gesture.y)
   for (const clientY of gesture.clientYs) {
     await touch('touchMove', clientY)
     await page.waitForTimeout(gesture.moveDelayMs)
   }
   await page.waitForTimeout(gesture.settleMs)
-  await touch('touchEnd', gesture.y)
+  await touchEnd()
 }

@@ -2196,7 +2196,7 @@ test.describe('header: contrast in both themes', () => {
       })
       test.info().annotations.push({
         type: 'measure',
-        description: `revealed booking CTA label contrast (${scheme}): ${ratio.toFixed(2)}`,
+        description: `revealed booking CTA label contrast (${scheme}): ${ratio.toFixed(2)}:1`,
       })
       expect(ratio, `revealed booking CTA label contrast (${scheme})`).toBeGreaterThanOrEqual(4.5)
     })
@@ -2212,12 +2212,8 @@ test.describe('header: contrast in both themes', () => {
  * no prior hover) and for a later open, on both mobile engines: Chromium for Android Chrome,
  * WebKit for iOS Safari, each with real device emulation and touch input.
  *
- * The suite launches the engines itself, since the config ships a single desktop Chromium project.
- * On WebKit the context strips the CSP
- * `upgrade-insecure-requests` directive — over the plain-HTTP test server the engine would rewrite
- * every localhost asset to HTTPS and none would load; production serves over HTTPS where the
- * directive is inert, and the test asserts nothing about CSP here. Chromium exempts localhost, so
- * its context stays untouched.
+ * The suite launches the engines itself (the config ships a single desktop Chromium project); see
+ * `support/mobileEngines.ts` for the WebKit CSP strip.
  *
  * The swipe-down close runs on Chromium only: it drives real touch input through the CDP input
  * pipeline, which WebKit does not expose, and WebKit cannot construct the `Touch` objects a
@@ -2225,7 +2221,7 @@ test.describe('header: contrast in both themes', () => {
  * WebKit.
  */
 test.describe('header and offers: focus ring after close', () => {
-  /** Launches the mobile engine with device emulation and, on WebKit, strips the CSP upgrade directive. */
+  /** Launches the mobile engine with device emulation and the CSP strip where the engine's entry asks for it. */
   const launchFocusEngine = async (
     engine: MobileEngineType,
     device: MobileEngineDevice,
@@ -2331,182 +2327,139 @@ test.describe('header and offers: focus ring after close', () => {
 
   for (const { name, engine, device } of MOBILE_ENGINES) {
     test.describe(name, () => {
-      test('tap open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
+      /**
+       * Launches the engine with device emulation, opens `/preview` on a fresh page and tears the
+       * browser down, so each test body is only its `firstAndLater` call.
+       */
+      const withMobilePage = async (
+        baseURL: string | undefined,
+        run: (page: Page, context: BrowserContext) => Promise<void>,
+      ): Promise<void> => {
         const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
         try {
+          const page = await context.newPage()
           await page.goto(`${baseURL}/preview`)
           await page.waitForLoadState('networkidle')
-          await firstAndLater(
+          await run(page, context)
+        } finally {
+          await context.close()
+          await browser.close()
+        }
+      }
+
+      test('tap open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'tap'),
             (page) => closeDrawer(page, 'tapClose', context),
             burger,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('tap open + swipe-down close: no ring on the burger (first and later open)', async ({ baseURL }) => {
         test.skip(engine === webkit, 'CDP touch input is Chromium-only; WebKit cannot synthesize TouchEvents')
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'tap'),
             (page) => closeDrawer(page, 'swipe', context),
             burger,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('mouse click open + click close: no ring on the burger (first and later open)', async ({ baseURL }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'click'),
             (page) => closeDrawer(page, 'clickClose', context),
             burger,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('keyboard open + Escape: the burger keeps the visible ring (first and later open)', async ({ baseURL }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'keyboard'),
             (page) => closeDrawer(page, 'escape', context),
             burger,
             true,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('keyboard open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'keyboard'),
             (page) => closeDrawer(page, 'tapClose', context),
             burger,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('tap open + tap a nav link: no ring on the burger (first and later open)', async ({ baseURL }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page, context) =>
+          firstAndLater(
             page,
             (page) => openDrawer(page, 'tap'),
             (page) => closeDrawer(page, 'navLink', context),
             burger,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('offer sheet: tap open + tap close control: no ring on the card (first and later open)', async ({
         baseURL,
       }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page) =>
+          firstAndLater(
             page,
             (page) => openSheet(page, 'tap'),
             (page) => closeSheet(page, 'tapClose'),
             sheetCard,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('offer sheet: mouse click open + click close: no ring on the card (first and later open)', async ({
         baseURL,
       }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page) =>
+          firstAndLater(
             page,
             (page) => openSheet(page, 'click'),
             (page) => closeSheet(page, 'clickClose'),
             sheetCard,
             false,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
 
       test('offer sheet: keyboard open + Escape: the card keeps the visible ring (first and later open)', async ({
         baseURL,
       }) => {
-        const { browser, context } = await launchFocusEngine(engine, device)
-        const page = await context.newPage()
-        try {
-          await page.goto(`${baseURL}/preview`)
-          await page.waitForLoadState('networkidle')
-          await firstAndLater(
+        await withMobilePage(baseURL, (page) =>
+          firstAndLater(
             page,
             (page) => openSheet(page, 'keyboard'),
             (page) => closeSheet(page, 'escape'),
             sheetCard,
             true,
-          )
-        } finally {
-          await context.close()
-          await browser.close()
-        }
+          ),
+        )
       })
     })
   }
