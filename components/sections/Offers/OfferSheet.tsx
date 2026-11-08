@@ -4,7 +4,9 @@ import { Dialog } from '@base-ui/react/dialog'
 import { X } from 'lucide-react'
 import type { MouseEvent, RefObject } from 'react'
 import { Button } from '@components/ui/Button'
+import { useHasPaintedOnce } from '@/hooks/useHasPaintedOnce'
 import { SECTION_IDS } from '@/lib/anchors'
+import { ringlessFinalFocus } from '@/lib/focus/ringlessFinalFocus'
 import { interpolate } from '@/lib/interpolate'
 import { isPlainLeftClick } from '@/lib/pointer'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
@@ -143,16 +145,26 @@ const OfferSheetContent = ({ offerId, tone, onFollowCta }: OfferSheetContentProp
  * scroll and outside interaction, traps focus, closes on Escape or on the icon-only close control,
  * and returns focus to the card that opened it. The dialog root stays mounted between openings so
  * the section can run a pending call-to-action navigation after the close completes.
+ *
+ * Loaded through `next/dynamic` from {@link Offers}: only the cards ship with the page, and this
+ * module, Base UI included, arrives on the first intent or open.
  */
 export const OfferSheet = ({ offerId, finalFocus, onClose, onFollowCta, onCloseComplete }: OfferSheetProps) => {
+  const hasPaintedOnce = useHasPaintedOnce()
+  const handleFinalFocus = ringlessFinalFocus(finalFocus)
+
   const handleOpenChange = (open: boolean): void => {
     if (!open) onClose()
   }
 
   return (
-    <Dialog.Root open={offerId !== null} onOpenChange={handleOpenChange} onOpenChangeComplete={onCloseComplete}>
+    <Dialog.Root
+      open={hasPaintedOnce && offerId !== null}
+      onOpenChange={handleOpenChange}
+      onOpenChangeComplete={onCloseComplete}
+    >
       <Dialog.Portal>
-        <Dialog.Popup className={styles.popup} aria-modal="true" finalFocus={finalFocus}>
+        <Dialog.Popup className={styles.popup} aria-modal="true" finalFocus={handleFinalFocus}>
           {offerId === null ? null : (
             <OfferSheetContent offerId={offerId} tone={OFFER_TONES[offerId]} onFollowCta={onFollowCta} />
           )}

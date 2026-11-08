@@ -47,6 +47,31 @@ describe('OfferCard', () => {
     }).not.toThrow()
   })
 
+  it('reports intent on pointer enter and press, and on focus reaching the card', () => {
+    const onIntent = vi.fn()
+    const { container } = render(<OfferCard {...createCard} onIntent={onIntent} />)
+    const card = container.querySelector('article')
+    if (card === null) throw new Error('card not found')
+    fireEvent.pointerEnter(card)
+    fireEvent.pointerDown(card)
+    expect(onIntent).toHaveBeenCalledTimes(2)
+    // Focus and the button press bubble up from inside the card, the way keyboard intent arrives.
+    fireEvent.focus(screen.getByRole('button', { name: createCard.title }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: createCard.title }))
+    expect(onIntent).toHaveBeenCalledTimes(4)
+  })
+
+  it('stays renderable when intent events arrive without an onIntent handler', () => {
+    const { container } = render(<OfferCard {...createCard} />)
+    const card = container.querySelector('article')
+    if (card === null) throw new Error('card not found')
+    expect(() => {
+      fireEvent.pointerEnter(card)
+      fireEvent.pointerDown(card)
+      fireEvent.focus(screen.getByRole('button', { name: createCard.title }))
+    }).not.toThrow()
+  })
+
   it('writes the normalized pointer position for the CSS tilt and clears it on leave', () => {
     const { container } = render(<OfferCard {...createCard} />)
     const card = container.querySelector('article')

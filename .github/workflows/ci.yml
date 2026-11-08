@@ -173,8 +173,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: pnpm exec playwright install --with-deps chromium
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      - run: pnpm exec playwright install --with-deps chromium webkit
       - run: pnpm test:e2e
         env:
           PLAYWRIGHT_SKIP_BUILD: '1'

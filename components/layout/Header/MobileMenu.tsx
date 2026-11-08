@@ -1,17 +1,12 @@
 'use client'
 
-import { Drawer } from '@base-ui/react/drawer'
-import { ArrowRight, Menu, X } from 'lucide-react'
-import Link from 'next/link'
+import type { Drawer } from '@base-ui/react/drawer'
+import { Menu } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { Logo } from '@components/ui/Logo'
-import { ThemeToggle } from '@components/ui/ThemeToggle'
-import { nav } from '@/locales/fr/hero'
 import { goToSection } from '@/lib/anchors'
 import { isPlainLeftClick } from '@/lib/pointer'
 import { useActiveSectionContext } from './context/ActiveSectionContext'
-import { SectionLink } from './SectionLink'
-import { BookingCta } from './BookingCta'
 import type { NavLink } from './data/navLinks'
 import styles from './styles/Header.module.css'
 
@@ -24,6 +19,17 @@ type MobileMenuProps = {
   closeLabel: string
 }
 
+/**
+ * The drawer itself, Base UI included, kept out of the initial bundle: only the burger ships with the
+ * page. The `loading` fallback keeps the chunk load inside this subtree, so a suspending import never
+ * reaches a route-level boundary; the drawer is the only thing that would render, and it renders empty.
+ * It is mounted closed as soon as the burger is hovered, focused or pressed, so the first open does not
+ * pay for the chunk load and the first render of the Base UI tree.
+ */
+const MobileMenuDrawer = dynamic(() => import('./MobileMenuDrawer').then((module) => module.MobileMenuDrawer), {
+  loading: () => null,
+})
+
 /** Reads the `lg` breakpoint from the published token so the drawer never outlives the burger. */
 const readDesktopMediaQuery = (): string | undefined => {
   const minWidth = getComputedStyle(document.documentElement).getPropertyValue('--softn-breakpoint-lg').trim()
@@ -32,19 +38,23 @@ const readDesktopMediaQuery = (): string | undefined => {
 
 /**
  * Burger button and full-screen navigation drawer shown below the `lg` breakpoint.
- * The drawer is modal: focus is trapped, Escape and a swipe down close it (a swipe can only start from the top row and the handle, the links and CTA are marked swipe-ignore), focus returns to the burger.
- * The drawer layers sit above the sticky header and cover it; the popup repeats the header's top row
- * (logo, theme toggle, close control in the burger's spot) so the focus trap and the accessibility tree stay correct.
- * Focus lands on the close control on open, which is where the burger was.
- * Activating a link or the CTA closes the drawer first, then performs the action once the scroll lock is released;
- * a link also becomes the active section at that moment.
+ * The burger is a plain button, server-rendered with the header: it owns the open state, so it stays
+ * interactive and announces `aria-expanded` before any drawer code is in the browser.
+ * Activating a link or the CTA closes the drawer first, then performs the action once the scroll lock
+ * is released; a link also becomes the active section at that moment.
+ *
+ * The drawer (see {@link MobileMenuDrawer}) is loaded on demand, mounted closed on the first intent on
+ * the burger and kept mounted from then on, so the first open is immediate and its exit transition and
+ * the actions waiting on it keep working. A click that lands while the chunk is still loading opens the
+ * drawer as soon as it arrives: the open state is already `true`.
  */
 export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMenuProps) => {
   const [open, setOpen] = useState(false)
+  const [shouldMountDrawer, setShouldMountDrawer] = useState(false)
   const [dismissedBySwipe, setDismissedBySwipe] = useState(false)
   const { select } = useActiveSectionContext()
   const pendingAction = useRef<(() => void) | null>(null)
-  const closeControl = useRef<HTMLButtonElement | null>(null)
+  const burger = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
     const query = readDesktopMediaQuery()
@@ -57,8 +67,17 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
     return () => media.removeEventListener('change', closeOnDesktop)
   }, [])
 
-  const handleOpenChange = (nextOpen: boolean, details: Drawer.Root.ChangeEventDetails): void => {
-    setDismissedBySwipe(!nextOpen && details.reason === 'swipe')
+  const mountDrawer = (): void => {
+    setShouldMountDrawer(true)
+  }
+
+  const handleTriggerClick = (): void => {
+    setShouldMountDrawer(true)
+    setOpen((isOpen) => !isOpen)
+  }
+
+  const handleOpenChange = (nextOpen: boolean, reason: Drawer.Root.ChangeEventReason): void => {
+    setDismissedBySwipe(!nextOpen && reason === 'swipe')
     setOpen(nextOpen)
   }
 
@@ -84,73 +103,37 @@ export const MobileMenu = ({ links, ctaLabel, menuLabel, closeLabel }: MobileMen
   }
 
   return (
-    <Drawer.Root
-      open={open}
-      onOpenChange={handleOpenChange}
-      onOpenChangeComplete={handleOpenChangeComplete}
-      swipeDirection="down"
-      modal
-    >
-      <Drawer.Trigger
+    <>
+      <button
+        ref={burger}
+        type="button"
         aria-label={menuLabel}
+        aria-haspopup="dialog"
         aria-expanded={open}
+        onClick={handleTriggerClick}
+        onPointerEnter={mountDrawer}
+        onPointerDown={mountDrawer}
+        onFocus={mountDrawer}
         className={`${styles.burger} inline-flex size-10 items-center justify-center rounded-pill lg:hidden`}
       >
         <Menu size={20} aria-hidden="true" focusable="false" />
-      </Drawer.Trigger>
-      <Drawer.Portal className={styles.portal}>
-        <Drawer.Backdrop className={styles.backdrop} />
-        <Drawer.Viewport className={styles.viewport}>
-          <Drawer.Popup
-            className={styles.popup}
-            aria-label={menuLabel}
-            initialFocus={closeControl}
-            data-swipe-dismissed={dismissedBySwipe ? '' : undefined}
-          >
-            <div className={`${styles.header} ${styles['drawer-bar']} flex items-center justify-between gap-6`}>
-              <Link href="/" aria-label={nav.logo.ariaLabel} className={styles.logo} onClick={() => setOpen(false)}>
-                <Logo />
-              </Link>
-              <div className="flex items-center gap-3">
-                <ThemeToggle />
-                <Drawer.Close
-                  ref={closeControl}
-                  aria-label={closeLabel}
-                  className={`${styles.burger} inline-flex size-10 items-center justify-center rounded-pill`}
-                >
-                  <X size={20} aria-hidden="true" focusable="false" />
-                </Drawer.Close>
-              </div>
-            </div>
-            <div className={styles['drawer-body']}>
-              <div className={styles['drawer-handle']} aria-hidden="true">
-                <span className={styles['drawer-handle-pill']} />
-              </div>
-              <div className={styles['drawer-content']} data-base-ui-swipe-ignore="">
-                <nav className={styles['drawer-nav']}>
-                  <ul className={styles['drawer-list']}>
-                    {links.map((link) => (
-                      <li key={link.id}>
-                        <SectionLink
-                          link={link}
-                          onClick={(event) => handleLinkClick(event, link)}
-                          className={`${styles['drawer-link']} flex items-center justify-between font-display text-title-sm`}
-                        >
-                          {link.label}
-                          <ArrowRight size={16} aria-hidden="true" focusable="false" className="text-brand-vivid" />
-                        </SectionLink>
-                      </li>
-                    ))}
-                  </ul>
-                </nav>
-                <BookingCta onBeforeActivate={closeThen} size="lg" className="self-start">
-                  {ctaLabel}
-                </BookingCta>
-              </div>
-            </div>
-          </Drawer.Popup>
-        </Drawer.Viewport>
-      </Drawer.Portal>
-    </Drawer.Root>
+      </button>
+      {shouldMountDrawer ? (
+        <MobileMenuDrawer
+          open={open}
+          onOpenChange={handleOpenChange}
+          onOpenChangeComplete={handleOpenChangeComplete}
+          onDismiss={() => setOpen(false)}
+          onLinkClick={handleLinkClick}
+          onBeforeActivate={closeThen}
+          dismissedBySwipe={dismissedBySwipe}
+          burger={burger}
+          links={links}
+          ctaLabel={ctaLabel}
+          menuLabel={menuLabel}
+          closeLabel={closeLabel}
+        />
+      ) : null}
+    </>
   )
 }
