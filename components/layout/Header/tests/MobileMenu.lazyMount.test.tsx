@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Lazy-mount behaviour of the burger and its drawer (issue #55): the burger is a plain
+ * Lazy-mount behaviour of the burger and its drawer: the burger is a plain
  * server-rendered button that owns the open state, the Base UI drawer arrives through
  * `next/dynamic`, and the drawer subtree is mounted closed on the first intent (hover, press,
  * focus) so the first open does not pay for the chunk load. The drawer module is mocked here:
@@ -27,10 +27,13 @@ const renderMenu = () =>
   render(<MobileMenu links={getNavLinks()} ctaLabel={CTA_LABEL} menuLabel={MENU_LABEL} closeLabel={CLOSE_LABEL} />)
 
 /** The page burger: query it with `hidden: true`, the way `MobileMenu.test.tsx` does. */
-const burger = (): HTMLElement =>
-  screen
+const burger = (): HTMLElement => {
+  const trigger = screen
     .getAllByRole('button', { name: MENU_LABEL, hidden: true })
-    .find((button) => button.hasAttribute('aria-expanded')) as HTMLElement
+    .find((button) => button.hasAttribute('aria-expanded'))
+  if (trigger === undefined) throw new Error('burger not found')
+  return trigger
+}
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -48,6 +51,14 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
+
+/** Waits for the mocked drawer to report the open state (the dynamic import resolves asynchronously). */
+const waitForMountedOpen = async (): Promise<void> => {
+  await screen.findByTestId('drawer-mount')
+  await vi.waitFor(() => {
+    expect(screen.getByTestId('drawer-mount').getAttribute('data-open')).toBe('true')
+  })
+}
 
 describe('MobileMenu lazy mount', () => {
   it('ships a server-rendered burger with the label, dialog popup and collapsed state, and mounts no drawer', () => {
@@ -108,11 +119,3 @@ describe('MobileMenu lazy mount', () => {
     await waitForMountedOpen()
   })
 })
-
-/** Waits for the mocked drawer to report the open state (the dynamic import resolves asynchronously). */
-async function waitForMountedOpen(): Promise<void> {
-  await screen.findByTestId('drawer-mount')
-  await vi.waitFor(() => {
-    expect(screen.getByTestId('drawer-mount').getAttribute('data-open')).toBe('true')
-  })
-}

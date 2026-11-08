@@ -1,20 +1,18 @@
 import { AxeBuilder } from '@axe-core/playwright'
-import {
-  chromium,
-  devices,
-  expect,
-  test,
-  webkit,
-  type Browser,
-  type BrowserContext,
-  type Locator,
-  type Page,
-} from '@playwright/test'
+import { expect, test, webkit, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import { HERO_CTA_ID, type SectionId } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
 import { hero, nav } from '../locales/fr/hero'
 import { offers } from '../locales/fr/offers'
+import {
+  dispatchTouchPath,
+  launchMobileEngine,
+  MOBILE_ENGINES,
+  stripUpgradeInsecureRequestsOnContext,
+  type MobileEngineDevice,
+  type MobileEngineType,
+} from './support/mobileEngines'
 
 // Expected copy comes from the locale source, never hardcoded (QA rule for this suite).
 const SKIP_LINK = nav.skipLink
@@ -1170,6 +1168,9 @@ test.describe('header: mobile drawer', () => {
     await page.goto('/preview')
     await burger(page).click()
     await expect(drawer(page)).toBeVisible()
+    // Base UI moves the initial focus to the close control asynchronously: wait for it, or the
+    // Tab below can fire while focus is still on the burger and land somewhere else entirely.
+    await expect(drawer(page).getByRole('button', { name: CLOSE })).toBeFocused()
     await page.keyboard.press('Tab')
     await expect(drawer(page).getByRole('navigation').getByRole('link').first()).toBeFocused()
   })
@@ -2203,16 +2204,16 @@ test.describe('header: contrast in both themes', () => {
 })
 
 /**
- * Focus ring after close (issue #55, fix loop 1). The drawer and the offer sheet return focus to
+ * Focus ring after close. The drawer and the offer sheet return focus to
  * the control that opened them, and the ring follows the interaction that closed: gone after a
  * pointer or touch close (tap on the close control, swipe down, mouse click, nav-link tap), kept
- * after a keyboard close (Escape). The regression Mel saw — the ring staying on the burger after a
- * touch close of a keyboard-opened drawer — is pinned here for the first open (chunk cold, no prior
- * hover) and for a later open, on both mobile engines: Chromium for Android Chrome, WebKit for iOS
- * Safari, each with real device emulation and touch input.
+ * after a keyboard close (Escape). The regression pinned here is a visible focus ring left on the
+ * burger by a touch close of a keyboard-opened drawer, asserted for the first open (chunk cold,
+ * no prior hover) and for a later open, on both mobile engines: Chromium for Android Chrome,
+ * WebKit for iOS Safari, each with real device emulation and touch input.
  *
- * The suite launches the engines itself: the config ships one Chromium desktop project and the QA
- * write scope does not extend to `playwright.config.ts`. On WebKit the context strips the CSP
+ * The suite launches the engines itself, since the config ships a single desktop Chromium project.
+ * On WebKit the context strips the CSP
  * `upgrade-insecure-requests` directive — over the plain-HTTP test server the engine would rewrite
  * every localhost asset to HTTPS and none would load; production serves over HTTPS where the
  * directive is inert, and the test asserts nothing about CSP here. Chromium exempts localhost, so
@@ -2220,14 +2221,19 @@ test.describe('header: contrast in both themes', () => {
  *
  * The swipe-down close runs on Chromium only: it drives real touch input through the CDP input
  * pipeline, which WebKit does not expose, and WebKit cannot construct the `Touch` objects a
- * synthetic `TouchEvent` needs (the constructor throws). The swipe's focus outcome is pinned in the
- * report for the WebKit limitation.
+ * synthetic `TouchEvent` needs (the constructor throws) — so the swipe close is not covered on
+ * WebKit.
  */
-test.describe('header and offers: focus ring after close (issue #55 fix loop 1)', () => {
-  const FOCUS_ENGINES = [
-    { name: 'chromium · Pixel 7', engine: chromium, device: devices['Pixel 7'] },
-    { name: 'webkit · iPhone 13', engine: webkit, device: devices['iPhone 13'] },
-  ] as const
+test.describe('header and offers: focus ring after close', () => {
+  /** Launches the mobile engine with device emulation and, on WebKit, strips the CSP upgrade directive. */
+  const launchFocusEngine = async (
+    engine: MobileEngineType,
+    device: MobileEngineDevice,
+  ): Promise<{ browser: Browser; context: BrowserContext }> => {
+    const { browser, context } = await launchMobileEngine(engine, device)
+    await stripUpgradeInsecureRequestsOnContext(context, engine)
+    return { browser, context }
+  }
 
   /** DOM focus and the visible ring of the element behind `locator`, read in the page. */
   const focusStateOf = (locator: Locator): Promise<{ focused: boolean; focusVisible: boolean }> =>
@@ -2236,50 +2242,19 @@ test.describe('header and offers: focus ring after close (issue #55 fix loop 1)'
       focusVisible: element.matches(':focus-visible'),
     }))
 
-  /** Launches the engine with device emulation, stripping the CSP upgrade directive on WebKit. */
-  const launchFocusEngine = async (
-    engine: (typeof FOCUS_ENGINES)[number]['engine'],
-    device: (typeof FOCUS_ENGINES)[number]['device'],
-  ): Promise<{ browser: Browser; context: BrowserContext }> => {
-    const browser = await engine.launch()
-    const context = await browser.newContext({ ...device })
-    if (engine === webkit) {
-      await context.route('**/*', async (route) => {
-        const response = await route.fetch()
-        const headers = { ...response.headers() }
-        const csp = headers['content-security-policy']
-        if (csp !== undefined) {
-          headers['content-security-policy'] = csp
-            .replace('upgrade-insecure-requests', '')
-            .replace(/;\s*;/g, ';')
-            .replace(/;\s*$/, '')
-        }
-        await route.fulfill({ response, headers })
-      })
-    }
-    return { browser, context }
-  }
-
   /** CDP swipe down from the drawer handle: real touch input through the pipeline (Chromium only). */
   const swipeDownCdp = async (page: Page, context: BrowserContext): Promise<void> => {
     const handle = drawer(page).locator('> div').nth(1).locator('> div').nth(0)
     const box = await handle.boundingBox()
     if (box === null) throw new Error('drawer handle has no bounding box')
     const session = await context.newCDPSession(page)
-    const x = box.x + box.width / 2
-    const y = box.y + 4
-    const touch = async (type: 'touchStart' | 'touchMove' | 'touchEnd', clientY: number) =>
-      session.send('Input.dispatchTouchEvent', {
-        type,
-        touchPoints: type === 'touchEnd' ? [] : [{ x, y: clientY }],
-      })
-    await touch('touchStart', y)
-    for (let cy = y + 24; cy <= y + 480; cy += 24) {
-      await touch('touchMove', cy)
-      await page.waitForTimeout(18)
-    }
-    await page.waitForTimeout(80)
-    await touch('touchEnd', y + 480)
+    await dispatchTouchPath(page, session, {
+      x: box.x + box.width / 2,
+      y: box.y + 4,
+      clientYs: Array.from({ length: 20 }, (_, index) => box.y + 4 + 24 * (index + 1)),
+      moveDelayMs: 18,
+      settleMs: 80,
+    })
   }
 
   /** Opens the drawer the way a visitor would — touch tap, mouse click or keyboard — and settles it. */
@@ -2354,7 +2329,7 @@ test.describe('header and offers: focus ring after close (issue #55 fix loop 1)'
     }
   }
 
-  for (const { name, engine, device } of FOCUS_ENGINES) {
+  for (const { name, engine, device } of MOBILE_ENGINES) {
     test.describe(name, () => {
       test('tap open + tap close control: no ring on the burger (first and later open)', async ({ baseURL }) => {
         const { browser, context } = await launchFocusEngine(engine, device)

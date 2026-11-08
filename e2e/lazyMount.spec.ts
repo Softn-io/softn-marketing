@@ -3,7 +3,7 @@ import { nav } from '../locales/fr/hero'
 import { offers } from '../locales/fr/offers'
 
 /**
- * Issue #55 — the Base UI drawer and the offer sheet are loaded with `next/dynamic`, so the
+ * The Base UI drawer and the offer sheet are loaded with `next/dynamic`, so the
  * initial JS of `/preview` carries neither. This spec pins the contract end to end:
  *
  * - the server-rendered HTML announces the burger (label, popup role, collapsed state) before
@@ -63,7 +63,7 @@ const gotoSettled = async (page: Page): Promise<void> => {
   await page.waitForLoadState('networkidle')
 }
 
-test.describe('lazy mount: server-rendered burger (issue #55)', () => {
+test.describe('lazy mount: server-rendered burger', () => {
   test('the SSR HTML of /preview announces the burger and the card buttons with no drawer code', async ({ page }) => {
     const response = await page.request.get('/preview')
     expect(response.ok()).toBe(true)

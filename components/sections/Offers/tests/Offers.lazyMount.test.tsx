@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 /**
- * Lazy-mount behaviour of the offers section and its sheet (issue #55): only the cards ship with
+ * Lazy-mount behaviour of the offers section and its sheet: only the cards ship with
  * the page, the sheet (Base UI included) arrives through `next/dynamic`, and the sheet subtree is
  * mounted closed on the first intent on a card (hover, press, focus). The sheet module is mocked
  * here: these tests observe the mount boundary only. The sheet's own behaviour (focus trap,
@@ -29,7 +29,9 @@ describe('Offers lazy mount', () => {
 
   it('mounts the sheet closed on the first hover on a card, without opening anything', async () => {
     const { container } = render(<Offers />)
-    fireEvent.pointerEnter(container.querySelectorAll('article')[0] as Element)
+    const card = container.querySelector('article')
+    if (card === null) throw new Error('card not found')
+    fireEvent.pointerEnter(card)
     const mount = await screen.findByTestId('sheet-mount')
     expect(mount.getAttribute('data-offer')).toBe('closed')
     expect(screen.queryByRole('dialog')).toBeNull()
@@ -40,13 +42,6 @@ describe('Offers lazy mount', () => {
     fireEvent.focus(screen.getByRole('button', { name: offers.create.cardTitle }))
     const mount = await screen.findByTestId('sheet-mount')
     expect(mount.getAttribute('data-offer')).toBe('closed')
-  })
-
-  it('flips nothing visible on a no-intent click that lands before the sheet chunk arrives', () => {
-    render(<Offers />)
-    // A programmatic click fires no pointer or focus event: no intent preceded it.
-    fireEvent.click(screen.getByRole('button', { name: offers.create.cardTitle }))
-    // The sheet is still loading; the open state already lives in the section.
   })
 
   it('still opens the right sheet on that no-intent click once the sheet arrives', async () => {
@@ -60,7 +55,9 @@ describe('Offers lazy mount', () => {
 
   it('opens immediately when the click follows a hover (the sheet is already mounted)', async () => {
     const { container } = render(<Offers />)
-    fireEvent.pointerEnter(container.querySelectorAll('article')[0] as Element)
+    const card = container.querySelector('article')
+    if (card === null) throw new Error('card not found')
+    fireEvent.pointerEnter(card)
     await screen.findByTestId('sheet-mount')
     fireEvent.click(screen.getByRole('button', { name: offers.create.cardTitle }))
     await vi.waitFor(() => {
