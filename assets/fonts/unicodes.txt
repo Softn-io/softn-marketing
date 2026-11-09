@@ -1,0 +1,24 @@
+# Code points kept by the self-hosted font subsets.
+#
+# Consumed by `subset.sh` (pyftsubset --unicodes-file) and by `app/fonts.test.ts`, which asserts
+# that every character of every `locales/fr` string is covered by this list. Add a range here
+# before shipping a locale string that needs it, then re-run `subset.sh`.
+#
+# Basic Latin: letters, digits, punctuation, currency and symbol keys.
+U+0020-007E
+# Latin-1 Supplement: the French accents and the symbols used by the copy (©, ·, «, »).
+U+00A0-00FF
+# Latin Extended-A: Œ and œ.
+U+0152-0153
+# Latin Extended-A: Ÿ.
+U+0178
+# General Punctuation: en/em dash, curly quotes, bullet, ellipsis, narrow no-break space,
+# single guillemets.
+U+2013-2014
+U+2018-201D
+U+2022
+U+2026
+U+202F
+U+2039-203A
+# Currency Symbols: €.
+U+20AC
