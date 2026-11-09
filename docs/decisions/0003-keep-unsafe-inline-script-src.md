@@ -80,7 +80,9 @@ experimental ("feature may change or be removed"). It is not adopted by this dec
 
 ### Follow-up
 
-Neither option below was tested in this spike; both are tracked in the follow-up spike issue #135.
+Both options below were tested in the follow-up spike #135 and shipped; see
+[0004](0004-script-src-attr-none-and-nonce-on-dynamic-routes.md) for the evidence and the exact
+scope.
 
 - `script-src-attr 'none'` first: one directive in the static policy (`lib/securityHeaders.ts`),
   cheap and global. It blocks the inline event-handler attributes (`on*=`) that `'unsafe-inline'`
