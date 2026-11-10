@@ -6,6 +6,7 @@ import { Agent } from '@components/sections/Agent'
 import { Hero } from '@components/sections/Hero'
 import { Method } from '@components/sections/Method'
 import { Offers } from '@components/sections/Offers'
+import { ThisSite } from '@components/sections/ThisSite'
 import { SECTION_IDS } from '@/lib/anchors'
 import { isPreviewRouteEnabled } from '@/lib/preview'
 import { metadataContent } from '@/locales/fr/metadata'
@@ -43,6 +44,7 @@ const Preview = async () => {
         <Offers />
         <Method />
         <Agent />
+        <ThisSite />
       </main>
     </>
   )
