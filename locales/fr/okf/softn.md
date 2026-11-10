@@ -5,7 +5,12 @@ description: Softn.io réalise des applications, des automatisations et des agen
 tags: [softn, présentation, applications, agents IA, automatisation]
 status: stable
 generated: { by: content-seo/claude-sonnet-5-5, at: 2026-10-28T00:53:29+01:00 }
-verified: [{ by: "human:mel", at: "2026-10-28T01:42:38+01:00" }]
+verified:
+  - { by: "human:mel", at: "2026-10-28T01:42:38+01:00" }
+  - { by: "human:mel", at: "2026-11-10T00:53:27+01:00" }
+  - { by: "human:mel", at: "2026-11-10T16:15:51+01:00" }
+  - { by: "human:mel", at: "2026-11-10T17:04:40+01:00" }
+  - { by: "human:mel", at: "2026-11-10T20:47:04+01:00" }
 sources:
   - { id: hero, resource: ../hero.ts, title: Section d'accueil }
   - { id: offers, resource: ../offers.ts, title: Section des services }

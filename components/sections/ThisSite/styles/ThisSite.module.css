@@ -1,0 +1,335 @@
+/*
+ * "Ce site" section. Colors, typography, spacing, radii and motion come from --softn-* tokens:
+ * utilities in the markup, and this file for what has no utility — the fluid section rhythm, the
+ * interaction hint that follows the visitor's input, the two-column step layout, the tab states,
+ * the detail blocks and the total.
+ *
+ * The three intro lines are switched here rather than in JavaScript: `(pointer: coarse)` shows the
+ * wording written for touch, and a focus ring inside the tab list (`:has`) shows the keyboard one.
+ * The 7px x 15px blinking caret is the design's own mark, held here as geometry: no --softn-*
+ * variable is defined or overridden in this file.
+ */
+
+.content {
+  padding-block: clamp(var(--softn-space-12), 8vw, var(--softn-space-24));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.title {
+  margin-block-start: var(--softn-space-4);
+  max-inline-size: 20ch;
+}
+
+.intro {
+  margin-block-start: var(--softn-space-5);
+  max-inline-size: 46ch;
+}
+
+.introTouch,
+.introKeyboard {
+  display: none;
+}
+
+/* Touch input: a hint about the mouse would be wrong, so the paragraph switches wording. */
+@media (pointer: coarse) {
+  .introHover {
+    display: none;
+  }
+
+  .introTouch {
+    display: block;
+  }
+}
+
+/* Keyboard: a focus ring in the tab list replaces the hint by the one that names the keys. */
+.content:has(.list :focus-visible) .introHover,
+.content:has(.list :focus-visible) .introTouch {
+  display: none;
+}
+
+.content:has(.list :focus-visible) .introKeyboard {
+  display: block;
+}
+
+.layout {
+  display: grid;
+  gap: clamp(var(--softn-space-6), 4vw, var(--softn-space-12));
+  margin-block-start: clamp(var(--softn-space-8), 4.5vw, var(--softn-space-12));
+}
+
+/*
+ * From `md` (the package breakpoint, 48rem), the design's two columns: the steps and their total on
+ * the left, the detail on the right spanning both rows. Below that the panels keep the DOM order —
+ * steps, detail, total — so a tap always reveals the detail under the step it selected, and the
+ * island stops selecting on hover (its query mirrors this breakpoint).
+ *
+ * The rows are sized `auto 1fr`, not left to the implicit `auto`: the detail spans both rows and is
+ * as tall as the tallest of the six, and an item that spans two auto rows has its extra height
+ * shared evenly between them — row 1 would grow past the list and push the total down, holding the
+ * free space between the list and the total instead of under it. With `auto 1fr`, row 1 keeps the
+ * list's own height, row 2 takes the rest, and the total starts one row gap under the list whatever
+ * step is selected, while the section keeps the tallest detail's height.
+ */
+@media (min-width: 48rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    align-items: start;
+  }
+
+  .list {
+    grid-area: 1 / 1;
+  }
+
+  .total {
+    grid-area: 2 / 1;
+  }
+
+  .details {
+    grid-area: 1 / 2 / span 2 / span 1;
+  }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+/* One step of the list: full-width tab, ruled above like the design, branded once selected. */
+.step {
+  display: flex;
+  align-items: baseline;
+  gap: var(--softn-space-4);
+  inline-size: 100%;
+  min-block-size: var(--softn-size-md);
+  padding-block: var(--softn-space-4);
+  padding-inline: 0;
+  border: 0;
+  border-block-start: 1px solid var(--softn-border-subtle);
+  background-color: transparent;
+  color: var(--softn-color-secondary);
+  font-family: var(--softn-font-body);
+  text-align: start;
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-block-start-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.step[data-active] {
+  border-block-start-color: var(--softn-brand-vivid);
+  color: var(--softn-color);
+}
+
+/*
+ * The indent the design gives the selected step. Its content travels, never the tab's own box: a
+ * `transform` is animated on the compositor where a `padding-inline-start` relayouts the list on
+ * every frame, and the hit area and the focus ring keep their place and their size.
+ *
+ * The title keeps the indent's distance free at its end, so the translation can never push a line
+ * past the tab's edge.
+ */
+.stepNumber,
+.stepTitle {
+  transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.step[data-active] .stepNumber,
+.step[data-active] .stepTitle {
+  transform: translateX(var(--softn-space-3));
+}
+
+.stepNumber {
+  flex: none;
+  color: var(--softn-color-tertiary);
+}
+
+/*
+ * The step number of the selected step in the accent the site uses for text: `brand-glow` is the
+ * design's vivid violet, too light on the light theme's page (2.5:1 on a step number, below the AA
+ * threshold axe checks) where `brand-foreground` is the same violet in the dark theme and the deeper
+ * one in the light theme.
+ */
+.step[data-active] .stepNumber {
+  color: var(--softn-brand-foreground);
+}
+
+.stepTitle {
+  min-inline-size: 0;
+  padding-inline-end: var(--softn-space-3);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .step:hover {
+    color: var(--softn-color);
+  }
+}
+
+.step:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step,
+  .stepNumber,
+  .stepTitle {
+    transition: none;
+  }
+}
+
+/*
+ * The details of the six steps. All of them stay in the DOM — Base UI `keepMounted`, so the six
+ * details are in the server HTML — and from the breakpoint below they share one grid cell, as tall as
+ * the tallest detail. Selecting another step then resizes nothing: a detail that changed the
+ * section's height would move the steps under the pointer that just hovered one, and the step under
+ * the pointer would change, and the layout would move again.
+ *
+ * Below the breakpoint the panels follow each other and only the selected one is laid out, so a
+ * short detail leaves no empty band.
+ */
+.details {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+}
+
+/*
+ * The detail of a step: its blocks, stacked in one column.
+ *
+ * Base UI marks the panel it is leaving with `data-ending-style` on the very commit that changes the
+ * selection, and with the `hidden` attribute once that exit has been reported complete — one
+ * animation frame later, through `useAnimationsFinished` (verified in `@base-ui/react`). Below the
+ * breakpoint both states leave the layout, so never two details are shown at once and the arriving
+ * detail takes the leaving one's place in the same frame.
+ */
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-5);
+}
+
+.detail[hidden],
+.detail[data-ending-style] {
+  display: none;
+}
+
+/*
+ * From the breakpoint, the six details share one grid cell (`align-self: start` keeps each panel's
+ * own box around its content), and the panel Base UI is leaving keeps its place in it for the one
+ * frame of its exit: `visibility` hides it without removing it from the layout, so the cell, and the
+ * section with it, hold one height before, during and after a selection change.
+ */
+@media (min-width: 48rem) {
+  .detail {
+    grid-area: 1 / 1;
+    align-self: start;
+  }
+
+  .detail[data-ending-style] {
+    display: flex;
+    visibility: hidden;
+  }
+}
+
+/*
+ * The reservation of the other five details, which Base UI marks `hidden`. Their `display` has to be
+ * declared inside Tailwind's `base` layer: preflight declares `[hidden] { display: none !important }`
+ * in that layer, and an important declaration from a layer outranks an important declaration made
+ * outside one — the layer order is inverted for important declarations — so nothing else in this
+ * file could hold them in the layout. Within the layer this selector wins on specificity: `0-2-0`
+ * against preflight's `0-1-0`.
+ *
+ * Laid out, they keep the cell as tall as the tallest detail. `visibility` keeps them out of the
+ * paint and out of the accessibility tree, and Base UI's `inert` keeps them unreachable.
+ */
+@layer base {
+  @media (min-width: 48rem) {
+    .detail[hidden] {
+      display: flex !important;
+      visibility: hidden;
+    }
+  }
+}
+
+.detail:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: var(--softn-space-1);
+}
+
+.detailBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+}
+
+.prompt {
+  font-style: italic;
+}
+
+/* Decorative mark of the design, after the instructions: a caret waiting for the next order. */
+.caret {
+  display: inline-block;
+  inline-size: 7px;
+  block-size: 15px;
+  margin-inline-start: var(--softn-space-1);
+  vertical-align: -2px;
+  background-color: var(--softn-brand-vivid);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .caret {
+    animation: this-site-caret 1s step-end infinite;
+  }
+}
+
+@keyframes this-site-caret {
+  0%,
+  49% {
+    opacity: 1;
+  }
+
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.durations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+}
+
+.durationRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--softn-space-4);
+}
+
+/* The design's total row, kept as a block: label, the two measures, then what they cover. */
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+  padding-block-start: var(--softn-space-5);
+  border-block-start: 1px solid var(--softn-border-subtle);
+}
+
+.totalNote {
+  max-inline-size: 52ch;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--softn-space-2);
+}
+
+.tag {
+  padding: var(--softn-space-1) var(--softn-space-3);
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-pill);
+}

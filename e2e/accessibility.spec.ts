@@ -61,7 +61,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { HERO_CTA_ID } from '../lib/anchors'
+import { HERO_CTA_ID, SECTION_IDS } from '../lib/anchors'
 import { hero, nav } from '../locales/fr/hero'
 
 /** localStorage key the inline theme script reads; same contract as `lib/theme`. */
@@ -333,5 +333,45 @@ test.describe('accessibility: header with the revealed booking CTA (WCAG 2.1 AA)
           .join(' | ')}`,
       ).toBe(true)
     })
+  }
+})
+
+test.describe('accessibility: "Ce site" section (WCAG 2.1 AA)', () => {
+  const WIDTHS = [
+    { name: 'mobile', width: 375 },
+    { name: 'tablet', width: 768 },
+    { name: 'desktop', width: 1280 },
+  ] as const
+
+  for (const scheme of SCHEMES) {
+    for (const { name, width } of WIDTHS) {
+      test(`#coulisses landmark at ${width}px (${scheme} theme)`, async ({ page }) => {
+        await page.setViewportSize({ width, height: 800 })
+        await gotoHomeWithTheme(page, scheme)
+        // The section is a region named by its single h2; its tab list and its details must all be
+        // in the analysed tree, so the scan waits for the interactive part, not just the main.
+        const scoped = page.locator(`#${SECTION_IDS.thisSite}`)
+        await expect(scoped.getByRole('tablist')).toBeVisible()
+        await expect(scoped.getByRole('tabpanel')).toBeVisible()
+        await awaitFonts(page)
+        await expectNoViolations(
+          new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).include(`#${SECTION_IDS.thisSite}`),
+          `"Ce site" section (${scheme}, ${name})`,
+        )
+        // Non-vacuity: axe must have measured the section's own text for contrast, so "0
+        // violations" cannot mean "axe never looked inside #coulisses".
+        const results = await new AxeBuilder({ page })
+          .withTags(['wcag2aa'])
+          .include(`#${SECTION_IDS.thisSite}`)
+          .analyze()
+        const contrast = results.passes.find((rule) => rule.id === 'color-contrast')
+        expect(contrast, 'axe reported no color-contrast passes at all').toBeTruthy()
+        const contrastNodes = contrast?.nodes ?? []
+        expect(
+          contrastNodes.length,
+          `axe measured no color-contrast node inside #${SECTION_IDS.thisSite}`,
+        ).toBeGreaterThanOrEqual(6)
+      })
+    }
   }
 })
