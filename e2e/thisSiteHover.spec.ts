@@ -3,28 +3,31 @@ import { SECTION_IDS } from '../lib/anchors'
 import { thisSite } from '../locales/fr/thisSite'
 
 /**
- * Mel's report: on the two-column layout, hovering the bottom border of a step — or a pixel above it —
- * made the page shake and showed two step details at once. The outgoing panel stayed in the document
- * flow for one animation frame (Base UI keeps it mounted until its exit is reported complete), so the
- * detail column grew, the section grew, and the steps moved under the stationary pointer; the step
- * then under the pointer got hover-selected, which moved the layout again, and so on.
+ * Invariant under test: hovering near a step border must select at most the step under the pointer
+ * and never resize the section. A resize moves the steps under a stationary pointer, so the step
+ * under the pointer changes, which moves the layout again: the selection and the geometry must
+ * settle together. The section holds it through the reserved detail cell: from the two-column
+ * breakpoint the six details share one cell, and the tallest sets its height.
  *
- * These specs drive real pointer input at the reported viewport, scroll the page to its bottom, and
- * record every frame of the section while the pointer moves: how many details are displayed, how many
- * times the selection changed, and whether the page or the step list moved at all.
+ * These specs drive real pointer input at a fixed viewport, scroll the page to its bottom, and record
+ * every frame of the section: how many details are displayed, how many times the selection changed,
+ * and whether the page, the section or the step list moved at all. The last two sweep the six steps
+ * at the two-column widths and hold that cell to one height throughout.
  */
 
-/** The reported viewport: wide enough for the two columns, short enough that the page scrolls. */
+/** The viewport under test: wide enough for the two columns, short enough that the page scrolls. */
 const VIEWPORT = { width: 1512, height: 862 }
 
 /** What the recorded frames held. */
-type HoverRecording = {
+type FrameRecording = {
   /** Times the selected tab changed over the recording: one per step really crossed. */
   changes: number
   /** Largest number of details displayed at once over the recorded frames. */
   maxVisibleDetails: number
   /** Document height on each recorded frame. */
   heights: readonly number[]
+  /** Height of the section on each recorded frame: a selection must never resize it. */
+  sectionHeights: readonly number[]
   /** Viewport top of the step list on each recorded frame. */
   listTops: readonly number[]
   /** Scroll offset on each recorded frame. */
@@ -32,8 +35,8 @@ type HoverRecording = {
 }
 
 /** Handle the page keeps between the two `evaluate` calls. */
-type HoverRecorderWindow = {
-  __thisSiteHover?: { stop: () => HoverRecording }
+type FrameRecorderWindow = {
+  __thisSiteFrames?: { stop: () => FrameRecording }
 }
 
 /**
@@ -63,8 +66,8 @@ const settleAtPageBottom = async (page: Page): Promise<void> => {
     .toBe(true)
 }
 
-/** Starts a per-frame recording of the section's invariants; {@link stopHoverRecording} returns it. */
-const startHoverRecording = async (page: Page): Promise<void> => {
+/** Starts a per-frame recording of the section's invariants; {@link stopFrameRecording} returns it. */
+const startFrameRecording = async (page: Page): Promise<void> => {
   await page.evaluate((sectionId) => {
     const section = document.getElementById(sectionId)
     if (section === null) throw new Error(`#${sectionId} missing`)
@@ -82,6 +85,7 @@ const startHoverRecording = async (page: Page): Promise<void> => {
     let maxVisibleDetails = 0
     let previous = selectedTabId()
     const heights: number[] = []
+    const sectionHeights: number[] = []
     const listTops: number[] = []
     const scrollTops: number[] = []
 
@@ -92,32 +96,33 @@ const startHoverRecording = async (page: Page): Promise<void> => {
       previous = current ?? previous
       maxVisibleDetails = Math.max(maxVisibleDetails, visibleDetails())
       heights.push(document.documentElement.scrollHeight)
+      sectionHeights.push(Math.round(section.getBoundingClientRect().height))
       listTops.push(Math.round(list.getBoundingClientRect().top))
       scrollTops.push(Math.round(window.scrollY))
       frame = requestAnimationFrame(sample)
     }
     frame = requestAnimationFrame(sample)
 
-    const recorder = window as unknown as HoverRecorderWindow
-    recorder.__thisSiteHover = {
+    const recorder = window as unknown as FrameRecorderWindow
+    recorder.__thisSiteFrames = {
       stop: () => {
         cancelAnimationFrame(frame)
-        return { changes, maxVisibleDetails, heights, listTops, scrollTops }
+        return { changes, maxVisibleDetails, heights, sectionHeights, listTops, scrollTops }
       },
     }
   }, SECTION_IDS.thisSite)
 }
 
 /** Stops the recording and returns what the frames held. */
-const stopHoverRecording = async (page: Page): Promise<HoverRecording> =>
+const stopFrameRecording = async (page: Page): Promise<FrameRecording> =>
   page.evaluate(() => {
-    const recorder = window as unknown as HoverRecorderWindow
-    if (recorder.__thisSiteHover === undefined) throw new Error('the recording was not started')
-    return recorder.__thisSiteHover.stop()
+    const recorder = window as unknown as FrameRecorderWindow
+    if (recorder.__thisSiteFrames === undefined) throw new Error('the recording was not started')
+    return recorder.__thisSiteFrames.stop()
   })
 
 /** Invariants every recorded frame must respect, whatever the pointer did. */
-const expectStableHover = (recording: HoverRecording, mostChanges: number): void => {
+const expectStableHover = (recording: FrameRecording, mostChanges: number): void => {
   expect(recording.maxVisibleDetails, 'two step details were displayed at the same time').toBe(1)
   expect(new Set(recording.heights).size, 'the page was resized by the hover').toBe(1)
   expect(new Set(recording.listTops).size, 'the step list moved under the pointer').toBe(1)
@@ -153,16 +158,18 @@ test.describe('the "Ce site" steps under a pointer', () => {
     await expect(tabs).toHaveCount(thisSite.steps.length)
     await settleAtPageBottom(page)
 
-    // The reported hover: the last pixel row of the third step, just above the border it shares with
-    // the fourth.
+    // The hover under test: the last pixel row of the third step, just above the border it shares
+    // with the fourth.
     const point = await aboveStepBottom(page, 2, 1)
     const hit = await stepAtPoint(page, point)
     expect(hit, 'the point must hit a step, not the space between two').toContain(thisSite.steps[2]?.title ?? '')
 
-    await startHoverRecording(page)
+    await startFrameRecording(page)
     await page.mouse.move(point.x, point.y)
+    // The fixed waits of this spec are sampling windows, not synchronisation: frames must elapse for
+    // the invariant to be observable, so they must not be turned into `expect.poll`.
     await page.waitForTimeout(1_000)
-    const recording = await stopHoverRecording(page)
+    const recording = await stopFrameRecording(page)
 
     expectStableHover(recording, 1)
     expect(recording.changes, 'the hovered step must be selected exactly once').toBe(1)
@@ -179,19 +186,74 @@ test.describe('the "Ce site" steps under a pointer', () => {
     await settleAtPageBottom(page)
 
     // From two pixels above the border between the second and the third step to one pixel below it:
-    // the drift Mel's report describes as the shake's trigger.
+    // the drift that crosses the border.
     const border = await aboveStepBottom(page, 1, 0)
 
-    await startHoverRecording(page)
+    await startFrameRecording(page)
+    // Sampling windows again: see the note in the first test.
     for (const offset of [2, 1, 0, -1]) {
       await page.mouse.move(border.x, border.y - offset)
       await page.waitForTimeout(150)
     }
     await page.waitForTimeout(500)
-    const recording = await stopHoverRecording(page)
+    const recording = await stopFrameRecording(page)
 
     expectStableHover(recording, 2)
     await expect(tabs.nth(1)).toHaveAttribute('aria-selected', 'false')
     await expect(tabs.nth(2)).toHaveAttribute('aria-selected', 'true')
   })
+})
+
+/** The two-column widths where the detail cell is reserved: the tallest detail sets the height. */
+const RESERVED_CELL_WIDTHS = [1024, 1512] as const
+
+test.describe('the "Ce site" detail cell', () => {
+  for (const width of RESERVED_CELL_WIDTHS) {
+    test.describe(`at ${width}px`, () => {
+      test.use({ viewport: { width, height: VIEWPORT.height } })
+
+      test('selecting each of the six steps leaves the section and the document at one height', async ({ page }) => {
+        await page.goto('/preview')
+        const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
+        await expect(tabs).toHaveCount(thisSite.steps.length)
+        await settleAtPageBottom(page)
+
+        await startFrameRecording(page)
+        for (let position = 0; position < thisSite.steps.length; position += 1) {
+          await tabs.nth(position).click()
+          await expect(tabs.nth(position)).toHaveAttribute('aria-selected', 'true')
+          // A sampling window: every step's frames must be recorded before the next click.
+          await page.waitForTimeout(150)
+        }
+        const recording = await stopFrameRecording(page)
+
+        expect([...new Set(recording.sectionHeights)], 'a selection resized the section').toHaveLength(1)
+        expect([...new Set(recording.heights)], 'a selection resized the document').toHaveLength(1)
+        expect(recording.maxVisibleDetails, 'two step details were displayed at the same time').toBe(1)
+
+        // What holds the cell open: the five inactive panels stay laid out, out of the paint and out
+        // of the accessibility tree (`visibility`), and unreachable (Base UI's `inert`).
+        const inactive = await page.evaluate((sectionId) => {
+          const section = document.getElementById(sectionId)
+          if (section === null) throw new Error(`#${sectionId} missing`)
+          return [...section.querySelectorAll('[role="tabpanel"]')]
+            .filter((panel) => panel.hasAttribute('hidden'))
+            .map((panel) => ({
+              inert: panel.hasAttribute('inert'),
+              visibility: getComputedStyle(panel).visibility,
+              height: Math.round(panel.getBoundingClientRect().height),
+            }))
+        }, SECTION_IDS.thisSite)
+
+        expect(inactive).toHaveLength(thisSite.steps.length - 1)
+        inactive.forEach((panel, index) => {
+          expect(panel, `inactive detail ${String(index + 1)} must stay inert and invisible`).toMatchObject({
+            inert: true,
+            visibility: 'hidden',
+          })
+          expect(panel.height, `inactive detail ${String(index + 1)} must hold the cell open`).toBeGreaterThan(0)
+        })
+      })
+    })
+  }
 })

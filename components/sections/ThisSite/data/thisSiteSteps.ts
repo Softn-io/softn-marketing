@@ -49,7 +49,6 @@ export const thisSiteSteps: readonly ThisSiteStep[] = thisSite.steps.map((step, 
   heading: withAssistantName(step.heading),
   body: withAssistantName(step.body),
   prompt: withAssistantName(step.prompt),
-  tech: step.tech,
   tags: step.tags.map(withAssistantName),
 }))
 

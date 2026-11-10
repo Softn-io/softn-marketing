@@ -2,15 +2,12 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { thisSite } from '@/locales/fr/thisSite'
-import { ThisSiteTabs } from '../ThisSiteTabs'
+import { HOVER_SELECTION_QUERY, ThisSiteTabs } from '../ThisSiteTabs'
 import { ThisSiteTotal } from '../ThisSiteTotal'
 import { thisSiteLabels, thisSiteSteps, type ThisSiteStep } from '../data/thisSiteSteps'
 
 /** Id of the heading that names the list; the section owns it and the island only receives it. */
 const LABELLED_BY = 'this-site-title'
-
-/** The hover guard the island writes, at the stylesheet's `md` breakpoint. */
-const HOVER_SELECTION_QUERY = '(min-width: 48rem) and (hover: hover)'
 
 /** Whether the stub lets the hover guard match: the stacked-layout test turns it off. */
 let hoverSelects = true

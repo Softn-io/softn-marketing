@@ -10,8 +10,11 @@ import styles from './styles/ThisSite.module.css'
  * The two columns of the stylesheet, at the `md` breakpoint, on a pointer that really hovers: the
  * only layout where a hover can safely reveal a step. Below it the list stacks above the detail, and
  * a pointer travelling from a step down to its detail crosses the steps in between.
+ *
+ * Exported so the unit test stubs `matchMedia` on the very query the island matches, rather than on
+ * a copy of that string which could drift from it.
  */
-const HOVER_SELECTION_QUERY = '(min-width: 48rem) and (hover: hover)'
+export const HOVER_SELECTION_QUERY = '(min-width: 48rem) and (hover: hover)'
 
 type ThisSiteTabsProps = {
   /** Steps to show, in order: each one becomes a tab and the panel that holds its detail. */

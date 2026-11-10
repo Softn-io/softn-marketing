@@ -106,14 +106,30 @@
   cursor: pointer;
   transition:
     color var(--softn-duration-micro) var(--softn-easing-out),
-    border-block-start-color var(--softn-duration-micro) var(--softn-easing-out),
-    padding-inline-start var(--softn-duration-screen-transition) var(--softn-easing-out);
+    border-block-start-color var(--softn-duration-micro) var(--softn-easing-out);
 }
 
 .step[data-active] {
-  padding-inline-start: var(--softn-space-3);
   border-block-start-color: var(--softn-brand-vivid);
   color: var(--softn-color);
+}
+
+/*
+ * The indent the design gives the selected step. Its content travels, never the tab's own box: a
+ * `transform` is animated on the compositor where a `padding-inline-start` relayouts the list on
+ * every frame, and the hit area and the focus ring keep their place and their size.
+ *
+ * The title keeps the indent's distance free at its end, so the translation can never push a line
+ * past the tab's edge.
+ */
+.stepNumber,
+.stepTitle {
+  transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.step[data-active] .stepNumber,
+.step[data-active] .stepTitle {
+  transform: translateX(var(--softn-space-3));
 }
 
 .stepNumber {
@@ -133,6 +149,7 @@
 
 .stepTitle {
   min-inline-size: 0;
+  padding-inline-end: var(--softn-space-3);
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -147,17 +164,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .step {
+  .step,
+  .stepNumber,
+  .stepTitle {
     transition: none;
   }
 }
 
 /*
- * The details of the six steps, stacked in one grid cell. All of them stay in the DOM — Base UI
- * `keepMounted`, so the six details are in the server HTML — and the tallest one sets the cell's
- * height. Selecting another step therefore resizes nothing: a detail that changed the section's
- * height would move the steps under the pointer that just hovered one, and the step under the
- * pointer would change, and the layout would move again.
+ * The details of the six steps. All of them stay in the DOM — Base UI `keepMounted`, so the six
+ * details are in the server HTML — and from the breakpoint below they share one grid cell, as tall as
+ * the tallest detail. Selecting another step then resizes nothing: a detail that changed the
+ * section's height would move the steps under the pointer that just hovered one, and the step under
+ * the pointer would change, and the layout would move again.
+ *
+ * Below the breakpoint the panels follow each other and only the selected one is laid out, so a
+ * short detail leaves no empty band.
  */
 .details {
   display: grid;
@@ -166,19 +188,15 @@
 }
 
 /*
- * The detail of a step, in the cell its five siblings share (`align-self: start` keeps its own box
- * around its content; it still counts towards the cell's height).
+ * The detail of a step: its blocks, stacked in one column.
  *
  * Base UI marks the panel it is leaving with `data-ending-style` on the very commit that changes the
  * selection, and with the `hidden` attribute once that exit has been reported complete — one
- * animation frame later, through `useAnimationsFinished` (verified in `@base-ui/react`). Both states
- * must keep the panel's place in the cell, or the height would collapse between them, but neither
- * may show: `visibility` hides them (and takes them out of the accessibility tree) where the
- * browser's own `display: none` for `[hidden]` would have removed them from the layout.
+ * animation frame later, through `useAnimationsFinished` (verified in `@base-ui/react`). Below the
+ * breakpoint both states leave the layout, so never two details are shown at once and the arriving
+ * detail takes the leaving one's place in the same frame.
  */
 .detail {
-  grid-area: 1 / 1;
-  align-self: start;
   display: flex;
   flex-direction: column;
   gap: var(--softn-space-5);
@@ -186,8 +204,45 @@
 
 .detail[hidden],
 .detail[data-ending-style] {
-  display: flex;
-  visibility: hidden;
+  display: none;
+}
+
+/*
+ * From the breakpoint, the six details share one grid cell (`align-self: start` keeps each panel's
+ * own box around its content), and the panel Base UI is leaving keeps its place in it for the one
+ * frame of its exit: `visibility` hides it without removing it from the layout, so the cell, and the
+ * section with it, hold one height before, during and after a selection change.
+ */
+@media (min-width: 48rem) {
+  .detail {
+    grid-area: 1 / 1;
+    align-self: start;
+  }
+
+  .detail[data-ending-style] {
+    display: flex;
+    visibility: hidden;
+  }
+}
+
+/*
+ * The reservation of the other five details, which Base UI marks `hidden`. Their `display` has to be
+ * declared inside Tailwind's `base` layer: preflight declares `[hidden] { display: none !important }`
+ * in that layer, and an important declaration from a layer outranks an important declaration made
+ * outside one — the layer order is inverted for important declarations — so nothing else in this
+ * file could hold them in the layout. Within the layer this selector wins on specificity: `0-2-0`
+ * against preflight's `0-1-0`.
+ *
+ * Laid out, they keep the cell as tall as the tallest detail. `visibility` keeps them out of the
+ * paint and out of the accessibility tree, and Base UI's `inert` keeps them unreachable.
+ */
+@layer base {
+  @media (min-width: 48rem) {
+    .detail[hidden] {
+      display: flex !important;
+      visibility: hidden;
+    }
+  }
 }
 
 .detail:focus-visible {
