@@ -2748,6 +2748,10 @@ test.describe('booking flow: token fidelity (4a-1)', () => {
 
   /** The full 4a-1 assertion set on the booking flow, in one walk of the flow. */
   const expectBookingTokenValues = async (page: Page, calls: RecordedCalls): Promise<void> => {
+    // The pointer rests where the opening click left it, and the flow's consent button can render
+    // exactly under it: a hovered button paints the hover background, not the default one the
+    // assertions below compare against. Park the pointer off the flow before any read.
+    await page.mouse.move(0, 0)
     const region = bookingRegion(page)
     const step = region.locator('ol + div')
     // The typing-indicator line carries its own `p` (the waiting sentence, body-sm at 14 px): the

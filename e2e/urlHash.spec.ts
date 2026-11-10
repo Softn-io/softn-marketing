@@ -198,6 +198,20 @@ test.describe('url hash: scroll sync and booking links (issue #118)', () => {
       await heroCta(page).click()
       await expect(page).toHaveURL(/#assistant$/)
 
+      // The flow's consent step renders a beat after the click, and its focused control scrolls
+      // itself into view (issue #118 must not regress that focus scroll). When that scroll lands
+      // after the suite's next scroll it pulls the page back to the assistant section, and the URL
+      // stops naming #services. Let the consent step and its focus scroll land before scrolling
+      // away: the steps below assert the URL contract, not the flow's focus timing.
+      await expect(consentAccept(page)).toBeVisible()
+      await expect
+        .poll(async () => {
+          const first = await page.evaluate(() => window.scrollY)
+          await page.waitForTimeout(120)
+          return page.evaluate((y) => window.scrollY === y, first)
+        })
+        .toBe(true)
+
       // The reader scrolls elsewhere: the URL follows the section in view.
       await scrollToSection(page, SECTION_IDS.offers)
       await expect(page).toHaveURL(/#services$/)
