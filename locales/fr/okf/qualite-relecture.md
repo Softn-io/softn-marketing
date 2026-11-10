@@ -12,6 +12,10 @@ verified:
   - { by: "human:mel", at: "2026-11-01T04:17:47+01:00" }
   - { by: "human:mel", at: "2026-11-04T17:43:14+01:00" }
   - { by: "human:mel", at: "2026-11-05T13:57:20+01:00" }
+  - { by: "human:mel", at: "2026-11-10T00:53:27+01:00" }
+  - { by: "human:mel", at: "2026-11-10T16:15:51+01:00" }
+  - { by: "human:mel", at: "2026-11-10T17:04:40+01:00" }
+  - { by: "human:mel", at: "2026-11-10T20:47:04+01:00" }
 sources:
   - { id: method, resource: ../method.ts, title: Section méthode }
   - { id: faq, resource: ../faq.ts, title: Questions fréquentes }
@@ -39,6 +43,7 @@ sources:
 
 - Sur ce site, le code a été écrit par des agents IA spécialisés, avec une branche par tâche ; la relecture et la fusion sont faites par un humain.[^thisSite]
 - À chaque itération, le design comme le code ont été relus, et les points relevés ont été repris.[^thisSite]
+- Chaque tâche passe par une revue de code, des tests automatisés, des vérifications d'accessibilité et un contrôle de sécurité avant validation et livraison.[^thisSite]
 
 # Voir aussi
 
