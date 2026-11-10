@@ -11,8 +11,9 @@ import { thisSite } from '../locales/fr/thisSite'
  *
  * These specs drive real pointer input at a fixed viewport, scroll the page to its bottom, and record
  * every frame of the section: how many details are displayed, how many times the selection changed,
- * and whether the page, the section or the step list moved at all. The last two sweep the six steps
- * at the two-column widths and hold that cell to one height throughout.
+ * and whether the page, the section or the step list moved at all. The last specs sweep the six steps
+ * at the two-column widths and hold that cell to one height throughout, and hold the total block to
+ * one row gap under the list, whatever step is selected.
  */
 
 /** The viewport under test: wide enough for the two columns, short enough that the page scrolls. */
@@ -207,6 +208,35 @@ test.describe('the "Ce site" steps under a pointer', () => {
 /** The two-column widths where the detail cell is reserved: the tallest detail sets the height. */
 const RESERVED_CELL_WIDTHS = [1024, 1512] as const
 
+/**
+ * Where the total block sits under the list: the distance between their edges, and the layout's own
+ * row gap. The two are compared so a change to the gap token never makes the test vacuous.
+ */
+type TotalGapMeasurement = {
+  /** Distance from the list's bottom edge to the total's top edge, in CSS pixels. */
+  gap: number
+  /** The row gap the layout separates its two rows by, in CSS pixels. */
+  rowGap: number
+}
+
+/**
+ * Reads the list-bottom-to-total-top distance and the layout's row gap. The total is the layout's
+ * last child and the list its first, so the measurement does not depend on a class name.
+ */
+const measureTotalGap = async (page: Page): Promise<TotalGapMeasurement> =>
+  page.evaluate((sectionId) => {
+    const section = document.getElementById(sectionId)
+    const root = section?.querySelector('[role="tablist"]')?.parentElement
+    const list = root?.firstElementChild
+    const total = root?.lastElementChild
+    if (root == null || list == null || total == null) throw new Error(`#${sectionId} has no two-column layout`)
+
+    return {
+      gap: total.getBoundingClientRect().top - list.getBoundingClientRect().bottom,
+      rowGap: Number.parseFloat(getComputedStyle(root).rowGap),
+    }
+  }, SECTION_IDS.thisSite)
+
 test.describe('the "Ce site" detail cell', () => {
   for (const width of RESERVED_CELL_WIDTHS) {
     test.describe(`at ${width}px`, () => {
@@ -253,6 +283,43 @@ test.describe('the "Ce site" detail cell', () => {
           })
           expect(panel.height, `inactive detail ${String(index + 1)} must hold the cell open`).toBeGreaterThan(0)
         })
+      })
+    })
+  }
+})
+
+test.describe('the "Ce site" total block', () => {
+  for (const width of RESERVED_CELL_WIDTHS) {
+    test.describe(`at ${width}px`, () => {
+      test.use({ viewport: { width, height: VIEWPORT.height } })
+
+      test('starts one row gap under the list, the same distance whatever step is selected', async ({ page }) => {
+        await page.goto('/preview')
+        const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
+        await expect(tabs).toHaveCount(thisSite.steps.length)
+        await settleAtPageBottom(page)
+
+        // The free space the tallest detail reserves belongs below the total: a spanning item's
+        // extra height is otherwise shared with the row above it, which would hold a gap between
+        // the list and the total that grows with the detail's height.
+        const measurements: TotalGapMeasurement[] = []
+        for (let position = 0; position < thisSite.steps.length; position += 1) {
+          await tabs.nth(position).click()
+          await expect(tabs.nth(position)).toHaveAttribute('aria-selected', 'true')
+          measurements.push(await measureTotalGap(page))
+        }
+
+        for (const [position, { gap, rowGap }] of measurements.entries()) {
+          expect(
+            Math.abs(gap - rowGap),
+            `step ${String(position + 1)}: the total must start one row gap (${String(rowGap)}px) under the list, ${String(gap)}px away`,
+          ).toBeLessThanOrEqual(1)
+        }
+
+        expect(
+          [...new Set(measurements.map(({ gap }) => Math.round(gap)))],
+          'the list-to-total distance must not depend on the selected step',
+        ).toHaveLength(1)
       })
     })
   }

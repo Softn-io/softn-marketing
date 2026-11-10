@@ -62,10 +62,18 @@
  * the left, the detail on the right spanning both rows. Below that the panels keep the DOM order —
  * steps, detail, total — so a tap always reveals the detail under the step it selected, and the
  * island stops selecting on hover (its query mirrors this breakpoint).
+ *
+ * The rows are sized `auto 1fr`, not left to the implicit `auto`: the detail spans both rows and is
+ * as tall as the tallest of the six, and an item that spans two auto rows has its extra height
+ * shared evenly between them — row 1 would grow past the list and push the total down, holding the
+ * free space between the list and the total instead of under it. With `auto 1fr`, row 1 keeps the
+ * list's own height, row 2 takes the rest, and the total starts one row gap under the list whatever
+ * step is selected, while the section keeps the tallest detail's height.
  */
 @media (min-width: 48rem) {
   .layout {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
     align-items: start;
   }
 
