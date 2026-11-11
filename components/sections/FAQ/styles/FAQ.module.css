@@ -1,0 +1,110 @@
+/*
+ * FAQ section. Colors, typography, spacing and radii come from --softn-* tokens: utilities in the
+ * markup, and this file for what has no utility — the fluid section rhythm, the ruled question rows,
+ * the `+` mark of the design and the panel's open and closed heights.
+ *
+ * The accordion is Base UI's: it measures the panel and writes the height into
+ * `--accordion-panel-height`, so the animation below has a length to travel between. No --softn-*
+ * variable is defined or overridden in this file.
+ */
+
+.content {
+  padding-block: clamp(var(--softn-space-12), 8vw, var(--softn-space-24));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.title {
+  margin-block: 0 clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
+}
+
+/* One question: ruled above like the design, the last row also closed by a rule. */
+.item {
+  border-block-start: 1px solid var(--softn-border-subtle);
+}
+
+.item:last-child {
+  border-block-end: 1px solid var(--softn-border-subtle);
+}
+
+/* The heading is Base UI's own `<h3>`: the browser margin would hold the rule away from the row. */
+.header {
+  margin: 0;
+}
+
+/* The whole row is the button: full width, question on the start side, `+` on the end side. */
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--softn-space-5);
+  inline-size: 100%;
+  padding-block: var(--softn-space-5);
+  padding-inline: 0;
+  border: 0;
+  background-color: transparent;
+  text-align: start;
+  cursor: pointer;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+/*
+ * The design's `+`, a lucide mark rather than a glyph so no copy is written here. Base UI marks the
+ * trigger of the open panel with `data-panel-open`: the mark turns past the diagonal, which reads as
+ * a cross on a `+`.
+ */
+.indicator {
+  flex: none;
+  inline-size: var(--softn-icon-size-md);
+  block-size: var(--softn-icon-size-md);
+  transition: transform var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.trigger[data-panel-open] .indicator {
+  transform: rotate(135deg);
+}
+
+/*
+ * The panel around an answer. Base UI reports its measured height, and marks the panel it is opening
+ * or closing: both ends of the transition are lengths, so the row grows and shrinks smoothly.
+ *
+ * A closed panel keeps the starting style — it stays mounted, hidden with `hidden="until-found"` —
+ * and the collapsed height below is what keeps it out of the layout without leaving the DOM.
+ */
+.panel {
+  block-size: var(--accordion-panel-height);
+  overflow: hidden;
+  transition: block-size var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+.panel[data-starting-style],
+.panel[data-ending-style] {
+  block-size: 0;
+}
+
+/* The answer reads as a paragraph: the design's measure, then the rule of the next question. */
+.answer {
+  margin: 0;
+  padding-block-end: var(--softn-space-6);
+  max-inline-size: 62ch;
+  transition: opacity var(--softn-duration-screen-transition) var(--softn-easing-out);
+}
+
+/* The answer fades in and out with the row it lives in, at the two ends of the height transition. */
+.panel[data-starting-style] .answer,
+.panel[data-ending-style] .answer {
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .trigger,
+  .indicator,
+  .panel,
+  .answer {
+    transition: none;
+  }
+}

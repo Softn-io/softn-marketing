@@ -9,11 +9,11 @@ import { thisSite } from '../locales/fr/thisSite'
  * settle together. The section holds it through the reserved detail cell: from the two-column
  * breakpoint the six details share one cell, and the tallest sets its height.
  *
- * These specs drive real pointer input at a fixed viewport, scroll the page to its bottom, and record
- * every frame of the section: how many details are displayed, how many times the selection changed,
- * and whether the page, the section or the step list moved at all. The last specs sweep the six steps
- * at the two-column widths and hold that cell to one height throughout, and hold the total block to
- * one row gap under the list, whatever step is selected.
+ * These specs drive real pointer input at a fixed viewport, hold the step list in view on a settled
+ * page, and record every frame of the section: how many details are displayed, how many times the
+ * selection changed, and whether the page, the section or the step list moved at all. The last
+ * specs sweep the six steps at the two-column widths and hold that cell to one height throughout,
+ * and hold the total block to one row gap under the list, whatever step is selected.
  */
 
 /** The viewport under test: wide enough for the two columns, short enough that the page scrolls. */
@@ -41,13 +41,18 @@ type FrameRecorderWindow = {
 }
 
 /**
- * Waits until the page has stopped growing and rests at its bottom, whatever hydration adds.
+ * Waits until the page has stopped growing, whatever hydration adds, and holds the step list fully
+ * in view for the pointer.
  *
  * The suite measures pixels at fixed viewport coordinates, so the instant scroll is set on purpose:
  * the site scrolls smoothly, and a scroll animation still running would move the sections under the
  * coordinates being read. The behaviour under test does not depend on the scroll motion.
+ *
+ * The list is centred in the viewport so the pointer coordinates do not depend on where the
+ * section sits on the page: a point outside the viewport is reached neither by `elementFromPoint`
+ * nor by the pointer.
  */
-const settleAtPageBottom = async (page: Page): Promise<void> => {
+const settleOnStepList = async (page: Page): Promise<void> => {
   await page.evaluate(() => {
     document.documentElement.style.scrollBehavior = 'auto'
   })
@@ -55,14 +60,19 @@ const settleAtPageBottom = async (page: Page): Promise<void> => {
   await expect
     .poll(
       async () =>
-        page.evaluate(async () => {
-          window.scrollTo(0, document.documentElement.scrollHeight)
+        page.evaluate(async (sectionId) => {
+          const list = document.getElementById(sectionId)?.querySelector('[role="tablist"]')
+          if (list == null) throw new Error(`#${sectionId} has no step list`)
+          list.scrollIntoView({ block: 'center' })
           const height = document.documentElement.scrollHeight
-          const atBottom = height - window.innerHeight - window.scrollY
           await new Promise((resolve) => setTimeout(resolve, 300))
-          return atBottom <= 1 && document.documentElement.scrollHeight === height
-        }),
-      { message: 'the page must stop growing and rest at its bottom before the pointer moves', timeout: 20_000 },
+          const rect = list.getBoundingClientRect()
+          return document.documentElement.scrollHeight === height && rect.top >= 0 && rect.bottom <= window.innerHeight
+        }, SECTION_IDS.thisSite),
+      {
+        message: 'the page must stop growing and hold the step list in view before the pointer moves',
+        timeout: 20_000,
+      },
     )
     .toBe(true)
 }
@@ -157,7 +167,7 @@ test.describe('the "Ce site" steps under a pointer', () => {
     await page.goto('/preview')
     const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
     await expect(tabs).toHaveCount(thisSite.steps.length)
-    await settleAtPageBottom(page)
+    await settleOnStepList(page)
 
     // The hover under test: the last pixel row of the third step, just above the border it shares
     // with the fourth.
@@ -184,7 +194,7 @@ test.describe('the "Ce site" steps under a pointer', () => {
     await page.goto('/preview')
     const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
     await expect(tabs).toHaveCount(thisSite.steps.length)
-    await settleAtPageBottom(page)
+    await settleOnStepList(page)
 
     // From two pixels above the border between the second and the third step to one pixel below it:
     // the drift that crosses the border.
@@ -246,7 +256,7 @@ test.describe('the "Ce site" detail cell', () => {
         await page.goto('/preview')
         const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
         await expect(tabs).toHaveCount(thisSite.steps.length)
-        await settleAtPageBottom(page)
+        await settleOnStepList(page)
 
         await startFrameRecording(page)
         for (let position = 0; position < thisSite.steps.length; position += 1) {
@@ -297,7 +307,7 @@ test.describe('the "Ce site" total block', () => {
         await page.goto('/preview')
         const tabs = page.locator(`#${SECTION_IDS.thisSite}`).getByRole('tab')
         await expect(tabs).toHaveCount(thisSite.steps.length)
-        await settleAtPageBottom(page)
+        await settleOnStepList(page)
 
         // The free space the tallest detail reserves belongs below the total: a spanning item's
         // extra height is otherwise shared with the row above it, which would hold a gap between
