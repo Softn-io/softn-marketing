@@ -16,7 +16,7 @@ const HEADING_ID = 'faq-title'
  */
 export const FAQ = () => (
   <section id={SECTION_IDS.faq} aria-labelledby={HEADING_ID}>
-    <div className={`${styles.content} mx-auto max-w-3xl`}>
+    <div className={`${styles.content} mx-auto max-w-4xl`}>
       <h2
         id={HEADING_ID}
         className={`${styles.title} font-display text-display-sm font-bold text-foreground sm:text-display-md`}
