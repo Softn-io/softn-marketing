@@ -3,6 +3,7 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { metadataContent } from '@/locales/fr/metadata'
 import { SITE_URL } from '@/lib/site'
+import { serializeJsonLd } from '@/lib/seo/serializeJsonLd'
 import { JsonLd } from './JsonLd'
 
 afterEach(cleanup)
@@ -66,11 +67,10 @@ describe('JsonLd', () => {
     }
   })
 
-  it('escapes < in the serialized output so a value can never close the script tag', () => {
+  it('serializes through serializeJsonLd, so the shared escaping rule holds here too', () => {
     const script = renderJsonLdScript()
     const data = JSON.parse(script.textContent ?? '')
-    const escaped = JSON.stringify(data).replace(/</g, '\\u003c')
 
-    expect(script.innerHTML).toBe(escaped)
+    expect(script.innerHTML).toBe(serializeJsonLd(data))
   })
 })

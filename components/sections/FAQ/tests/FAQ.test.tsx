@@ -13,10 +13,11 @@ const localeStrings = [faq.title, ...faq.items.flatMap((item) => [item.question,
 // Vitest rewrites `import.meta.url`, so the folder is resolved from the project root instead.
 const faqDirectory = join(process.cwd(), 'components', 'sections', 'FAQ')
 
-/** Text of every non-empty text node in the tree. */
+/** Text of every non-empty text node in the tree, script contents left out: JSON-LD is data, not copy. */
 const textNodes = (root: HTMLElement): readonly string[] => {
   const collected: string[] = []
   const walk = (node: Node): void => {
+    if (node.nodeName === 'SCRIPT') return
     if (node.nodeType === Node.TEXT_NODE) {
       const text = (node.textContent ?? '').trim()
       if (text !== '') collected.push(text)
@@ -67,6 +68,15 @@ describe('FAQ section', () => {
     const texts = textNodes(container.querySelector('section') ?? container)
     expect(texts.length).toBeGreaterThan(0)
     for (const text of texts) expect(localeStrings, `unexpected copy: "${text}"`).toContain(text)
+  })
+
+  it('carries its own FAQPage block, so a page without the section never gets one', () => {
+    const { container } = render(<FAQ />)
+
+    const blocks = Array.from(container.querySelectorAll('script[type="application/ld+json"]'))
+    expect(blocks, 'one block, rendered by the section itself').toHaveLength(1)
+    const data: unknown = JSON.parse(blocks[0]?.textContent ?? '')
+    expect(data).toMatchObject({ '@type': 'FAQPage' })
   })
 
   it('keeps no copy hardcoded in its own sources', () => {
