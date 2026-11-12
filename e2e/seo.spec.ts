@@ -58,6 +58,13 @@ test.describe('home page structured data', () => {
     expect(data.areaServed).toBe(professionalService.areaServed)
     expect(data.serviceType).toEqual(professionalService.serviceType)
   })
+
+  test('serves no FAQPage block: the FAQ is not visible on the coming-soon home page', async ({ page }) => {
+    await page.goto('/')
+
+    const payloads = await page.locator('script[type="application/ld+json"]').allTextContents()
+    expect(payloads.filter((payload) => payload.includes('"FAQPage"'))).toEqual([])
+  })
 })
 
 test.describe('home page indexing', () => {

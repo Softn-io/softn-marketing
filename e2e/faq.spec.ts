@@ -14,6 +14,8 @@
  *   really measured the section's text);
  * - `prefers-reduced-motion: reduce` disables the height, color and opacity transitions the
  *   component declares;
+ * - the section carries its own `FAQPage` JSON-LD, matching the visible copy (the home page
+ *   structured data, its absence of `FAQPage` included, belongs to `e2e/seo.spec.ts`);
  * - no request leaves localhost: the preview must not touch Umami or Fillout before consent.
  *
  * Copy comes from `locales/fr/faq.ts` / `locales/fr/hero.ts`, never hardcoded.
@@ -419,6 +421,47 @@ test.describe('faq: motion', () => {
         `${transition.label} must not animate under prefers-reduced-motion`,
       ).toEqual(['none', '0s'])
     }
+  })
+})
+
+test.describe('faq: structured data (FAQPage)', () => {
+  test('serves one FAQPage block from the section, identical to the visible questions and answers', async ({
+    page,
+  }) => {
+    await page.goto('/preview')
+    await expect(section(page)).toBeVisible()
+
+    // The block is rendered by the section itself, so it exists wherever the FAQ does.
+    const blocks = section(page).locator('script[type="application/ld+json"]')
+    await expect(blocks, 'one FAQPage block, inside #faq').toHaveCount(1)
+
+    const data = JSON.parse((await blocks.first().textContent()) ?? '')
+    expect(data['@context']).toBe('https://schema.org')
+    expect(data['@type']).toBe('FAQPage')
+    expect(data.mainEntity).toHaveLength(faq.items.length)
+    expect(data.mainEntity).toEqual(
+      faq.items.map((item) => ({
+        '@type': 'Question',
+        name: item.question,
+        acceptedAnswer: { '@type': 'Answer', text: item.answer },
+      })),
+    )
+    // Every question of the block is a heading the visitor can read, not copy written for crawlers.
+    for (const item of faq.items) {
+      await expect(section(page).getByRole('heading', { level: 3, name: item.question })).toHaveCount(1)
+    }
+  })
+
+  test('serves exactly one FAQPage block per page, beside the layout ProfessionalService block', async ({ page }) => {
+    await page.goto('/preview')
+    await expect(section(page)).toBeVisible()
+
+    // Page-level view: the section's block is the only FAQPage of the document, the layout's
+    // ProfessionalService block is still there, and every block parses as JSON.
+    const payloads = await page.locator('script[type="application/ld+json"]').allTextContents()
+    expect(payloads.filter((payload) => payload.includes('"FAQPage"'))).toHaveLength(1)
+    expect(payloads.some((payload) => payload.includes('"ProfessionalService"'))).toBe(true)
+    for (const payload of payloads) expect(JSON.parse(payload)).toBeInstanceOf(Object)
   })
 })
 
