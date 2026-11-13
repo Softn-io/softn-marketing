@@ -1,33 +1,14 @@
-'use client'
-
-import type { MouseEvent } from 'react'
-import { Button } from '@components/ui/Button'
-import { HERO_CTA_ID, SECTION_IDS, goToSection } from '@/lib/anchors'
-import { ASSISTANT_INTENTS, dispatchAssistantIntent } from '@/lib/assistant/intent'
-import { isPlainLeftClick } from '@/lib/pointer'
+import { BookingCta } from '@components/ui/BookingCta'
+import { HERO_CTA_ID } from '@/lib/anchors'
 import { hero } from '@/locales/fr/hero'
 
 /**
- * Primary hero call to action. Always a plain in-page link to the assistant section, so it works
- * without JavaScript, and it carries `HERO_CTA_ID`: the header watches that element to reveal its
- * own booking call to action once this one has scrolled out of view.
- *
- * Clicking additionally asks the assistant to start the booking flow (fire-and-forget event: the
- * chatbot is not implemented yet, and the browser keeps following the anchor). When the fragment
- * already names the assistant section, the browser has nothing left to navigate to: the section is
- * scrolled into view explicitly instead.
+ * Primary hero call to action: the shared booking link with the hero's label, carrying
+ * `HERO_CTA_ID` — the header watches that element to reveal its own booking call to action once this
+ * one has scrolled out of view.
  */
-export const HeroPrimaryCta = () => {
-  const handleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
-    dispatchAssistantIntent(ASSISTANT_INTENTS.booking)
-    if (!event.defaultPrevented && isPlainLeftClick(event) && window.location.hash === `#${SECTION_IDS.agent}`) {
-      goToSection(SECTION_IDS.agent)
-    }
-  }
-
-  return (
-    <Button href={`#${SECTION_IDS.agent}`} id={HERO_CTA_ID} size="lg" onClick={handleClick}>
-      {hero.cta.primary}
-    </Button>
-  )
-}
+export const HeroPrimaryCta = () => (
+  <BookingCta id={HERO_CTA_ID} size="lg">
+    {hero.cta.primary}
+  </BookingCta>
+)
