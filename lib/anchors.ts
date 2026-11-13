@@ -8,6 +8,8 @@ export const SECTION_IDS = {
   agent: 'assistant',
   thisSite: 'coulisses',
   faq: 'faq',
+  /** Final call to action, after the FAQ: not a header navigation entry, only a link target. */
+  finalCta: 'appel',
 } as const
 
 /**

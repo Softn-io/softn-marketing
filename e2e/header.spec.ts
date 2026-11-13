@@ -62,6 +62,12 @@ const header = (page: Page) => page.locator('header')
 const burger = (page: Page) => page.locator('header button[aria-expanded]')
 const drawer = (page: Page) => page.getByRole('dialog', { name: BURGER })
 const themeToggle = (page: Page) => page.getByRole('button', { name: TOGGLE_NAME })
+/**
+ * The header's booking link, scoped to the header. The #appel section's CTA (issue #21) shares the
+ * same accessible names, so the desktop suites must not ask the page for the link by role name.
+ */
+const headerCta = (page: Page, name: string, { exact = false }: { exact?: boolean } = {}) =>
+  header(page).getByRole('link', { name, exact })
 
 /** Accessible name of the element that currently holds focus (aria-label wins over text). */
 const focusedName = (page: Page) =>
@@ -235,7 +241,7 @@ test.describe('header: desktop', () => {
     // there is no visible pre-hydration state to settle away from any more. The ninth stop is
     // therefore the hero's primary call to action.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
-    await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
+    await expect(headerCta(page, CTA_LONG)).toHaveCount(0)
     const names: string[] = []
     for (let i = 0; i < 11; i += 1) {
       await page.keyboard.press('Tab')
@@ -304,7 +310,7 @@ test.describe('header: desktop', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(1000)
     const top = await header(page).evaluate((el) => el.getBoundingClientRect().top)
     expect(top).toBe(0)
-    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
+    await expect(headerCta(page, CTA_LONG)).toBeVisible()
   })
 
   test('header CTA stays hidden and inert while the hero CTA is on screen, reveals once it scrolls out of view', async ({
@@ -327,7 +333,7 @@ test.describe('header: desktop', () => {
     }, HERO_CTA_ID)
     await expect(wrapper).toHaveAttribute('data-state', 'visible')
     await expect(wrapper).toHaveJSProperty('inert', false)
-    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
+    await expect(headerCta(page, CTA_LONG)).toBeVisible()
   })
 
   test('revealed header CTA click does not throw and sets #assistant', async ({ page }) => {
@@ -346,7 +352,7 @@ test.describe('header: desktop', () => {
       window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
     }, HERO_CTA_ID)
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
-    await page.getByRole('link', { name: CTA_LONG }).click()
+    await headerCta(page, CTA_LONG).click()
     await expect(page).toHaveURL(/#assistant$/)
     expect(errors).toEqual([])
   })
@@ -409,15 +415,15 @@ test.describe('header: single CTA label per breakpoint', () => {
     await page.goto('/preview')
     // Hidden start: the CTA is neither visible nor in the accessibility tree at the top of the page.
     await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'hidden')
-    await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
+    await expect(headerCta(page, CTA_SHORT, { exact: true })).toHaveCount(0)
     await revealHeaderCta(page)
-    await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toBeVisible()
-    await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
+    await expect(headerCta(page, CTA_SHORT, { exact: true })).toBeVisible()
+    await expect(headerCta(page, CTA_LONG)).toHaveCount(0)
     await expect(page.locator("header [data-state] a[href='#assistant']")).toHaveCount(1)
 
     await page.setViewportSize({ width: 1280, height: 800 })
-    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
-    await expect(page.getByRole('link', { name: CTA_SHORT, exact: true })).toHaveCount(0)
+    await expect(headerCta(page, CTA_LONG)).toBeVisible()
+    await expect(headerCta(page, CTA_SHORT, { exact: true })).toHaveCount(0)
   })
 })
 
@@ -583,7 +589,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     await injectSections(page)
     await page.goto('/preview')
     await revealHeaderCta(page)
-    const ctaLink = page.getByRole('link', { name: CTA_LONG })
+    const ctaLink = headerCta(page, CTA_LONG)
     await expect(ctaLink).toBeVisible()
     await expect(page.locator('header [data-state]')).toHaveJSProperty('inert', false)
     // Keyboard: nine stops reach it (skip link, logo, five nav links, theme toggle, header CTA).
@@ -621,7 +627,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
     await expect(wrapper).toHaveJSProperty('inert', true)
     await expect(wrapper).toHaveCSS('visibility', 'hidden')
     // Out of the accessibility tree and out of the tab order again.
-    await expect(page.getByRole('link', { name: CTA_LONG })).toHaveCount(0)
+    await expect(headerCta(page, CTA_LONG)).toHaveCount(0)
     const boxes = await headerBoxes(page)
     expect(
       Math.abs(boxes.toggle.right - boxes.contentRight),
@@ -664,7 +670,7 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
       `reduced motion: painted ${String(hiddenState.paintedWidth)} vs layout ${String(hiddenState.layoutWidth)}`,
     ).toBeLessThanOrEqual(1)
     await revealHeaderCta(page)
-    await expect(page.getByRole('link', { name: CTA_LONG })).toBeVisible()
+    await expect(headerCta(page, CTA_LONG)).toBeVisible()
     // No movement is transitioned: the reduced-motion block keeps only `opacity` and `visibility`, at
     // the reduced duration token (150 ms) — neither `translate`, `scale` nor `transform`.
     const transition = await page.locator('header [data-state]').evaluate((el) => {
@@ -803,10 +809,11 @@ test.describe('header: CTA starts hidden in the server render (PR #75 review)', 
 test.describe('header: CTA without JavaScript', () => {
   /*
    * Mel's PR #75 decision: "without JavaScript the CTA is shown via `@media (scripting: none)`" — and
-   * shown means laid out like the revealed state and operable: the component contract
-   * (`BookingCta.tsx`: "Without JavaScript it is a plain `#assistant` link") is the baseline. This
-   * is the acceptance surface of the D-1 (no `inert` in the server markup) and D-2 (the no-JS rise
-   * reset survives the build) fixes; three separate tests so one run exposes every aspect at once.
+   * shown means laid out like the revealed state and operable: the shared component's contract
+   * (`components/ui/BookingCta/BookingCta.tsx` documents it) is a plain in-page link to the
+   * assistant section, so it works without JavaScript. This is the acceptance surface of the D-1
+   * (no `inert` in the server markup) and D-2 (the no-JS rise reset survives the build) fixes; three
+   * separate tests so one run exposes every aspect at once.
    */
   const atDesktopWidth = async (browser: Browser, width: number, label: string, exact: boolean) => {
     const context = await browser.newContext({ javaScriptEnabled: false, viewport: { width, height: 800 } })
@@ -832,7 +839,7 @@ test.describe('header: CTA without JavaScript', () => {
     // And unscaled: a leaking `0.96` would shrink the painted box by 4 % of its width.
     await expect(wrapper).toHaveCSS('scale', /^(none|1)$/)
     // The label contract still holds in this state.
-    await expect(page.getByRole('link', { name: label, exact })).toBeVisible()
+    await expect(headerCta(page, label, { exact })).toBeVisible()
     // Record the measured no-JS values in the report: this is the surface where D-2 lived, so the
     // evidence that the built CSS carries the reset should be readable, not just "green".
     const measured = await wrapper.evaluate((el) => {

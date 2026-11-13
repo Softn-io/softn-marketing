@@ -22,6 +22,7 @@ type AuditParams = {
   heroCtaId: string
   methodId: string
   offerSectionId: string
+  finalCtaId: string
 }
 /**
  * Typography box of a rendered Button: the type step and weight, the padding and height of the size
@@ -43,7 +44,7 @@ type AuditResult = {
   acceptedFluid: string[]
   fontStacks: string[]
   loadedFontFamilies: string[]
-  buttons: { primaryLg: ButtonSpec | null; headerSm: ButtonSpec | null }
+  buttons: { primaryLg: ButtonSpec | null; headerSm: ButtonSpec | null; finalCtaLg: ButtonSpec | null }
   /** First family name of `--softn-font-body` / `--softn-font-display`, as the package publishes them. */
   bodyTokenFamily: string
   displayTokenFamily: string
@@ -64,6 +65,7 @@ const auditInPage = ({
   heroCtaId,
   methodId,
   offerSectionId,
+  finalCtaId,
 }: AuditParams): AuditResult & { thirdParty: string[] } => {
   // The probe wrapper carries this color so tokens that are not colors (invalid at
   // computed-value time) resolve to it instead of leaking an inherited real color.
@@ -266,6 +268,14 @@ const auditInPage = ({
     methodStepDot: document.querySelector(`#${methodId} > ol > li > p > span`),
     methodStepTitle: document.querySelector(`#${methodId} > ol > li > h3`),
     methodStepText: document.querySelector(`#${methodId} > ol > li > h3 + p`),
+    // Final CTA (#appel): the section, its content box, the h2, the paragraph, and the booking CTA.
+    // The content box is the section's non-aria-hidden direct div child: the glow div is the first
+    // `> div` in DOM order, so a plain `> div` would audit the glow instead of the content.
+    finalCtaSection: document.getElementById(finalCtaId),
+    finalCtaContent: document.querySelector(`#${finalCtaId} > div:not([aria-hidden])`),
+    finalCtaH2: document.querySelector(`#${finalCtaId} h2`),
+    finalCtaBody: document.querySelector(`#${finalCtaId} p`),
+    finalCtaButton: document.querySelector(`#${finalCtaId} a[href='#assistant']`),
   }
 
   const mismatches: string[] = []
@@ -345,7 +355,11 @@ const auditInPage = ({
       lineHeightRatio: fontSize > 0 ? Number((lineHeight / fontSize).toFixed(3)) : 0,
     }
   }
-  const buttons = { primaryLg: readButton(elements.heroPrimaryCta), headerSm: readButton(elements.cta) }
+  const buttons = {
+    primaryLg: readButton(elements.heroPrimaryCta),
+    headerSm: readButton(elements.cta),
+    finalCtaLg: readButton(elements.finalCtaButton),
+  }
 
   wrapper.remove()
 
@@ -393,6 +407,7 @@ for (const theme of ['dark', 'light'] as const) {
       heroCtaId: HERO_CTA_ID,
       methodId: SECTION_IDS.method,
       offerSectionId: SECTION_IDS.offers,
+      finalCtaId: SECTION_IDS.finalCta,
     } satisfies AuditParams)
 
     // Sanity: the audit is meaningless if it collected no tokens.
@@ -401,10 +416,11 @@ for (const theme of ['dark', 'light'] as const) {
 
     // Button size contract: large = body-md 16 px + space-5 padding + size-lg height, small = body-sm
     // 14 px + space-3 padding + size-sm height, weight 600 on both (design-system Button SIZES).
-    const { primaryLg, headerSm } = result.buttons
+    const { primaryLg, headerSm, finalCtaLg } = result.buttons
     expect(primaryLg, 'hero primary CTA (Button lg)').not.toBeNull()
     expect(headerSm, 'header booking CTA (Button sm)').not.toBeNull()
-    if (primaryLg && headerSm) {
+    expect(finalCtaLg, '#appel booking CTA (Button lg)').not.toBeNull()
+    if (primaryLg && headerSm && finalCtaLg) {
       expect(primaryLg.fontSize, 'Button lg type step (body-md)').toBe(16)
       expect(primaryLg.fontWeight, 'Button lg weight').toBe('600')
       expect(primaryLg.paddingInline, 'Button lg inline padding (space-5)').toBe('20px')
@@ -413,6 +429,11 @@ for (const theme of ['dark', 'light'] as const) {
       expect(headerSm.fontWeight, 'Button sm weight').toBe('600')
       expect(headerSm.paddingInline, 'Button sm inline padding (space-3)').toBe('12px')
       expect(headerSm.minHeight, 'Button sm height (size-sm)').toBe(36)
+      // The #appel CTA is the same Button lg as the hero's: same type step, padding, height, face.
+      expect(finalCtaLg.fontSize, 'Button lg type step (body-md)').toBe(16)
+      expect(finalCtaLg.fontWeight, 'Button lg weight').toBe('600')
+      expect(finalCtaLg.paddingInline, 'Button lg inline padding (space-5)').toBe('20px')
+      expect(finalCtaLg.minHeight, 'Button lg height (size-lg)').toBe(52)
 
       // Button face and line-height (the loop-2 fix Mel approved): the design system's Button paints
       // the label in the *body* face — `--softn-font-body`, Plus Jakarta Sans — at line-height 1, at
@@ -424,6 +445,7 @@ for (const theme of ['dark', 'light'] as const) {
       for (const [label, spec] of [
         ['lg', primaryLg],
         ['sm', headerSm],
+        ['lg', finalCtaLg],
       ] as const) {
         expect(firstFamily(spec.fontFamily), `Button ${label} label face`).toBe(bodyFace)
         expect(spec.fontFamily.toLowerCase().includes(displayFace), `Button ${label} uses the display face`).toBe(false)

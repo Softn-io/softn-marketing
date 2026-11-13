@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { SECTION_IDS, type SectionId } from '@/lib/anchors'
-import { ActiveSectionProvider } from '../context/ActiveSectionContext'
+import { ActiveSectionProvider, useActiveSectionContext } from '../context/ActiveSectionContext'
 import { SectionLink } from '../SectionLink'
 import { getNavLinks } from '../data/navLinks'
 
@@ -84,8 +84,9 @@ const openOn = (id: SectionId): void => {
   window.history.replaceState(null, '', `/preview#${id}`)
 }
 
-const renderNav = (sectionIds: readonly SectionId[]) => {
-  sectionIds.forEach((id) => {
+const renderNav = (sectionIds: readonly SectionId[], extraSectionIds: readonly SectionId[] = []) => {
+  const allIds = [...sectionIds, ...extraSectionIds]
+  allIds.forEach((id) => {
     const section = document.createElement('section')
     section.id = id
     document.body.appendChild(section)
@@ -98,9 +99,18 @@ const renderNav = (sectionIds: readonly SectionId[]) => {
           <SectionLink key={link.id} link={link} />
         ))}
       </nav>
+      <ActiveIdProbe />
     </ActiveSectionProvider>,
   )
 }
+
+/** Reads the active id the scroll-spy publishes: the navigation only has a link for some of its values. */
+const ActiveIdProbe = () => {
+  const { activeId } = useActiveSectionContext()
+  return <span data-testid="active-section">{activeId ?? ''}</span>
+}
+
+const activeId = (): string => screen.getByTestId('active-section').textContent ?? ''
 
 const currentLinks = (): string[] =>
   screen
@@ -243,9 +253,16 @@ describe('fragment in the URL', () => {
     expect(currentLinks()).toEqual(['#methode'])
   })
 
-  it('ignores a fragment that names a section the page does not render', () => {
-    openOn(SECTION_IDS.main)
+  it('ignores a fragment whose section the page does not render', () => {
+    openOn(SECTION_IDS.finalCta)
     renderNav(ALL)
+    expect(resizers).toHaveLength(0)
+    expect(currentLinks()).toEqual([])
+  })
+
+  it('ignores a fragment that names the main landmark, the skip link target', () => {
+    openOn(SECTION_IDS.main)
+    renderNav(ALL, [SECTION_IDS.main])
     expect(resizers).toHaveLength(0)
     expect(currentLinks()).toEqual([])
   })
@@ -339,6 +356,89 @@ describe('fragment resync', () => {
     placeTop(SECTION_IDS.method, 1650)
     expect(resizers).toHaveLength(0)
     expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+})
+
+describe('fragment outside the navigation', () => {
+  it('re-applies a fragment that names a section the navigation does not list', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    // The page grew under the reader, the way the method diagram's pinned track makes it grow.
+    placeTop(SECTION_IDS.finalCta, 1650)
+    resize()
+    expect(scrollIntoView).toHaveBeenCalledTimes(1)
+    expect(scrollIntoView.mock.instances[0]).toBe(document.getElementById(SECTION_IDS.finalCta))
+  })
+
+  it('watches the section of that fragment for layout changes', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    expect(resizers[0]?.observed).toContain(document.getElementById(SECTION_IDS.finalCta))
+  })
+
+  it('leaves the navigation alone: no link active, no section observed by the spy', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    resize()
+    expect(activeId()).toBe('')
+    expect(currentLinks()).toEqual([])
+    expect(observers[0]?.observed.map((element) => element.id)).not.toContain(SECTION_IDS.finalCta)
+  })
+
+  it('still marks a navigation entry active when the fragment names one', () => {
+    openOn(SECTION_IDS.method)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    resize()
+    expect(activeId()).toBe(SECTION_IDS.method)
+  })
+
+  it('stops re-applying it once the visitor takes the scroll back', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    act(() => {
+      window.dispatchEvent(new Event('wheel'))
+    })
+    placeTop(SECTION_IDS.finalCta, 1650)
+    resize()
+    expect(scrollIntoView).not.toHaveBeenCalled()
+  })
+
+  /*
+   * What the browser observes at the `#appel` landing position: the tail of `#faq` is inside the
+   * reading band (the section is the last block, its top cannot reach the band). The hold therefore
+   * releases over a navigation section while the held fragment has none: the navigation must stay
+   * quiet and the address must keep the visitor's fragment.
+   */
+  it('leaves a held non-nav fragment alone when the hold releases on a nav section in the band', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    resize()
+    intersect(SECTION_IDS.faq, true)
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(activeId(), 'the held fragment highlights nothing').toBe('')
+    expect(window.location.hash, 'the held fragment stays in the URL').toBe(`#${SECTION_IDS.finalCta}`)
+  })
+
+  it('resumes the spy and the URL sync once a gesture ends the hold', () => {
+    openOn(SECTION_IDS.finalCta)
+    renderNav(ALL, [SECTION_IDS.finalCta])
+    resize()
+    intersect(SECTION_IDS.faq, true)
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    // The visitor takes the scroll back: the reading position drives the navigation and the URL again.
+    act(() => {
+      window.dispatchEvent(new Event('wheel'))
+    })
+    intersect(SECTION_IDS.faq, false)
+    expect(activeId(), 'the spy publishes again').toBe('')
+    expect(window.location.hash, 'the URL sync writes again').toBe('')
+    intersect(SECTION_IDS.method, true)
+    expect(currentLinks()).toEqual([`#${SECTION_IDS.method}`])
+    expect(window.location.hash).toBe(`#${SECTION_IDS.method}`)
   })
 })
 

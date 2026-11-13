@@ -4,6 +4,7 @@ import { connection } from 'next/server'
 import { Header } from '@components/layout/Header'
 import { Agent } from '@components/sections/Agent'
 import { FAQ } from '@components/sections/FAQ'
+import { FinalCta } from '@components/sections/FinalCta'
 import { Hero } from '@components/sections/Hero'
 import { Method } from '@components/sections/Method'
 import { Offers } from '@components/sections/Offers'
@@ -47,6 +48,7 @@ const Preview = async () => {
         <Agent />
         <ThisSite />
         <FAQ />
+        <FinalCta />
       </main>
     </>
   )

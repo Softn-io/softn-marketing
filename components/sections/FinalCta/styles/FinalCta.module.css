@@ -1,0 +1,90 @@
+/*
+ * Final call-to-action section. Colors, typography, spacing, radii and motion come from --softn-*
+ * tokens: utilities in the markup, and this file for what has no utility — the fluid section
+ * rhythm, the text measures of the design and the decorative glow with its slow breathing loop.
+ *
+ * The glow's geometry and its 10s ambient duration are the design's own, not scale steps. No
+ * --softn-* variable is defined or overridden in this file.
+ */
+
+.section {
+  position: relative;
+  /*
+   * `clip`, not `hidden`: both cut the glow that bleeds off the corner, but `hidden` would make the
+   * section a scroll container, and the browser's own reveal of the focused call to action could
+   * then scroll it sideways. A clipped box has no scroll offset to move.
+   */
+  overflow: clip;
+}
+
+/* The design paints the section's own column above the glow: it follows the absolutely positioned
+ * glow in DOM order, so `position: relative` puts it in the painting layer above, with no z-index step. */
+.content {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  /* The design's 18px column rhythm, held between the two space steps it sits between. */
+  gap: clamp(var(--softn-space-4), 2.2vw, var(--softn-space-5));
+  padding-block: clamp(var(--softn-space-12), 8vw, var(--softn-space-24));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+/*
+ * The title's measure. From `md` its two locale lines are set as blocks and break there; below `md`
+ * they flow inline as one sentence.
+ */
+.title {
+  max-inline-size: 20ch;
+}
+
+/* The paragraph's measure, wider than the title's. */
+.body {
+  max-inline-size: 52ch;
+  text-wrap: pretty;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--softn-space-5);
+  margin-block-start: var(--softn-space-1);
+}
+
+/*
+ * Decorative warm glow of the design, bled off the bottom-left corner: the amber aura of the brand,
+ * fading to nothing at 64% of the radius. It breathes between the two opacity floors of the
+ * design's own loop over 10s; the lower floor is also the resting opacity, so a visitor who asked
+ * for less motion keeps the glow, static and in place.
+ */
+.glow {
+  position: absolute;
+  inset-block-end: -200px;
+  inset-inline-start: -100px;
+  inline-size: 420px;
+  block-size: 420px;
+  border-radius: var(--softn-radius-pill);
+  background: radial-gradient(circle, var(--softn-brand-aura), transparent 64%);
+  opacity: var(--softn-opacity-25);
+  animation: final-cta-breathe 10s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes final-cta-breathe {
+  0%,
+  100% {
+    opacity: var(--softn-opacity-25);
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: var(--softn-opacity-45);
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glow {
+    animation: none;
+  }
+}

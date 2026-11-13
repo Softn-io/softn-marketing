@@ -305,7 +305,7 @@ test.describe('accessibility: header with the revealed booking CTA (WCAG 2.1 AA)
         window.scrollTo(0, window.scrollY + el.getBoundingClientRect().bottom + 40)
       }, HERO_CTA_ID)
       await expect(page.locator('header [data-state]')).toHaveAttribute('data-state', 'visible')
-      const cta = page.getByRole('link', { name: CTA_LONG })
+      const cta = page.locator('header').getByRole('link', { name: CTA_LONG })
       await expect(cta).toBeVisible()
       await awaitFonts(page)
       // Settled: the entrance and the CTA's own fade are over, so axe measures painted contrast,

@@ -1,10 +1,9 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HERO_CTA_ID, SECTION_IDS } from '@/lib/anchors'
-import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS } from '@/lib/assistant/intent'
 import { interpolate } from '@/lib/interpolate'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
 import { hero } from '@/locales/fr/hero'
@@ -76,41 +75,11 @@ describe('Hero', () => {
     expect(screen.getByText(hero.reassurance)).toBeTruthy()
   })
 
-  it('primary call to action: hero CTA id, in-page link to the assistant, booking intent on click', () => {
-    const received = vi.fn()
-    const listener = (event: Event): void => received((event as CustomEvent).detail)
-    window.addEventListener(ASSISTANT_INTENT_EVENT, listener)
+  it('primary call to action: hero CTA id and in-page link to the assistant', () => {
     render(<Hero />)
     const cta = screen.getByRole('link', { name: hero.cta.primary })
     expect(cta.getAttribute('id')).toBe(HERO_CTA_ID)
-    expect(cta.getAttribute('href')).toBe('#assistant')
-    const notCancelled = fireEvent.click(cta)
-    expect(received).toHaveBeenCalledWith({ intent: ASSISTANT_INTENTS.booking })
-    // Fire-and-forget event: the default anchor navigation is kept, nothing is prevented.
-    expect(notCancelled).toBe(true)
-    window.removeEventListener(ASSISTANT_INTENT_EVENT, listener)
-  })
-
-  it('primary call to action scrolls the assistant section into view when the fragment already names it', () => {
-    window.history.replaceState(null, '', `/preview#${SECTION_IDS.agent}`)
-    const section = document.createElement('section')
-    section.id = SECTION_IDS.agent
-    const scrollIntoView = vi.fn<() => void>()
-    Object.defineProperty(section, 'scrollIntoView', { configurable: true, value: scrollIntoView })
-    document.body.appendChild(section)
-    const received = vi.fn()
-    const listener = (event: Event): void => received((event as CustomEvent).detail)
-    window.addEventListener(ASSISTANT_INTENT_EVENT, listener)
-    render(<Hero />)
-    fireEvent.click(screen.getByRole('link', { name: hero.cta.primary }))
-    // The browser would see no hash change and stay put: the section is scrolled into view instead,
-    // and the booking intent still goes out.
-    expect(scrollIntoView).toHaveBeenCalledTimes(1)
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', behavior: 'smooth' })
-    expect(received).toHaveBeenCalledWith({ intent: ASSISTANT_INTENTS.booking })
-    window.removeEventListener(ASSISTANT_INTENT_EVENT, listener)
-    document.body.removeChild(section)
-    window.history.replaceState(null, '', '/')
+    expect(cta.getAttribute('href')).toBe(`#${SECTION_IDS.agent}`)
   })
 
   it('secondary call to action links to the method section', () => {
