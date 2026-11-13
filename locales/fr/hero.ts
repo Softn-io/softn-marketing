@@ -78,7 +78,10 @@ export type Hero = typeof hero
 
 /** Final call-to-action section (`#appel`). */
 export const appel = {
-  title: "L'échange Spark, offert, pour avancer sur votre projet.",
+  title: {
+    line1: "L'échange Spark offert,",
+    line2: 'pour avancer sur votre projet.',
+  },
   body: "Vous décrivez votre situation et votre projet : un site, une application, des tâches à automatiser ou l'intégration de l'IA à vos processus métier. Je vous dis ce qui est réalisable et par où commencer. Vous recevez votre plan d'action sous 3 jours, même si nous n'allons pas plus loin.",
   cta: common.cta.book,
   /** Shorter call to action wording, shown in the header between the lg and xl breakpoints. */

@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-12:
+
+- **Titre de l'appel final**: Dans `locales/fr/hero.ts`, `appel.title` est scindé en deux lignes `line1` (« L'échange Spark offert, ») et `line2` (« pour avancer sur votre projet. »), comme le titre du hero, la virgule après « Spark » étant retirée ; le texte complet devient « L'échange Spark offert, pour avancer sur votre projet. » Aucun autre texte de la source ne change.
+- **Manifeste**: L'empreinte SHA-256 de `hero.ts` est mise à jour dans `locales/fr/okf-sources.json` ; les concepts qui le citent (`delais`, `echange-spark`, `softn`, `tarifs`) restent à vérifier par Mel.
+
 ## 2026-11-10:
 
 - **Coulisses du site**: Dans `locales/fr/thisSite.ts`, les durées mesurées remplacent les marqueurs de rédaction laissés en attente : deux mesures (« Mon temps de pilotage », « Temps de travail des agents ») sur les étapes 03 à 05, « en continu » conservé seul sur l'étape 06, total mesuré (« environ 24 h » et « environ 86 h ») accompagné de sa portée et de l'origine des chiffres, et phrase technique de l'étape 06 réécrite avec trois emplacements à remplir par le rapport de recette. Aucun autre texte validé ne change : la structure, les titres, les textes et les étiquettes des six étapes restent identiques. Texte validé par Mel (proposition `docs/content-proposals/this-site-2026-11-10.md`).
