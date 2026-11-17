@@ -26,6 +26,9 @@ const lead = {
   message: 'Bonjour,\nje souhaite un devis.',
 } as const
 
+/** Every quote of an HTML part, as the email carries it. */
+const quotesOf = (html: string): readonly string[] => html.match(/<blockquote[\s\S]*?<\/blockquote>/g) ?? []
+
 /** Decodes every base64 part of a MIME message, in order. */
 const decodedParts = (message: string): readonly string[] => {
   const marker = `Content-Transfer-Encoding: base64${CRLF}${CRLF}`
@@ -93,6 +96,29 @@ describe('notificationEmailContent', () => {
     expect(content?.html).not.toContain('<strong>Bonjour,')
   })
 
+  it('renders the message as one blockquote, with no quote marker of the plain-text part', () => {
+    const content = notificationEmailContent({ ...lead, receivedAt: new Date('2026-11-16T18:42:00Z') })
+
+    expect(quotesOf(content?.html ?? '')).toHaveLength(1)
+    expect(content?.html).toContain('Bonjour,<br />\r\nje souhaite un devis.</blockquote>')
+    expect(content?.html).not.toContain('&gt; Bonjour')
+    // The marker stays in the text alternative, where it is the convention.
+    expect(content?.text).toContain('> Bonjour,\n> je souhaite un devis.')
+  })
+
+  it('gathers every paragraph of a multi-paragraph message into that one blockquote', () => {
+    const content = notificationEmailContent({
+      ...lead,
+      message: 'Bonjour,\n\nje souhaite un devis.\n\nMerci.',
+      receivedAt: new Date('2026-11-16T18:42:00Z'),
+    })
+
+    expect(quotesOf(content?.html ?? '')).toHaveLength(1)
+    expect(content?.html).toContain('Bonjour,<br /><br />\r\nje souhaite un devis.<br /><br />\r\nMerci.</blockquote>')
+    expect(content?.html).not.toContain('&gt;')
+    expect(content?.text).toContain('> Bonjour,\n> \n> je souhaite un devis.\n> \n> Merci.')
+  })
+
   it('bolds exactly the five labels of the copy, so a copy edit cannot drop one silently', () => {
     const content = notificationEmailContent({ ...lead, receivedAt: new Date('2026-11-16T18:42:00Z') })
     const labels = content?.html.match(/<strong>[^<]+<\/strong>/g) ?? []
@@ -127,6 +153,10 @@ describe('notificationEmailContent', () => {
     expect(content?.html).toContain('Adresse e-mail : autre@exemple.fr')
     expect(content?.html).not.toContain('<strong>Adresse e-mail :</strong> autre@exemple.fr')
     expect(content?.html.match(/<strong>/g)).toHaveLength(5)
+    // The visitor's line travels inside the quote, where no label is ever applied.
+    const [quote = ''] = quotesOf(content?.html ?? '')
+    expect(quote).toContain('Adresse e-mail : autre@exemple.fr')
+    expect(quote).not.toContain('<strong>')
   })
 
   it('escapes what the visitor typed, in both alternatives', () => {
@@ -227,16 +257,17 @@ describe('autoReplyEmailContent', () => {
     expect(content.html).not.toContain('localhost')
   })
 
-  it('quotes every paragraph of a message that carries blank lines of its own', () => {
+  it('gathers every paragraph of a message that carries blank lines of its own into one blockquote', () => {
     const content = autoReplyEmailContent({
       firstName: lead.firstName,
       subject: lead.subject,
       message: 'Bonjour,\n\nje souhaite un devis.',
     })
 
-    expect(content?.html.match(/<blockquote style="margin:0;/g)).toHaveLength(2)
-    expect(content?.html).toContain('Bonjour,</blockquote>')
-    expect(content?.html).toContain('je souhaite un devis.</blockquote>')
+    expect(quotesOf(content?.html ?? '')).toHaveLength(1)
+    expect(content?.html).toContain('Bonjour,<br /><br />\r\nje souhaite un devis.</blockquote>')
+    expect(content?.html).not.toContain('&gt;')
+    expect(content?.text).toContain('> Bonjour,\n> \n> je souhaite un devis.')
   })
 
   it('escapes the quoted message, so nothing a visitor typed becomes markup', () => {

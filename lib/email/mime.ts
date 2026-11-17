@@ -3,9 +3,9 @@
  *
  * Shared by every email Softn.io sends itself: the booking confirmation, update, cancellation and
  * reminder, and the two messages of the contact form. The message carries the plain-text body of the
- * copy exactly as it was validated, its minimal HTML alternative (a hidden preview line, one `<p>`
- * per paragraph, `<a>` for each link, and the signature in the grey of its token with the studio
- * line linked to the site) and, when the caller has one, a calendar file as an attachment. Both
+ * copy exactly as it was validated, its minimal HTML alternative (a hidden preview line, one element
+ * per block — a `<p>`, a quote, the styled signature — `<a>` for each link) and, when the caller has
+ * one, a calendar file as an attachment. Both
  * bodies travel base64-encoded, which keeps accents and long lines inside the format whatever the
  * mail client does — the same reason the calendar file is encoded that way.
  *
@@ -15,11 +15,10 @@
  * caller, which reads them from `locales/fr/` (`bookingEmails.ts` for the booking emails,
  * `contactEmails.ts` for the contact ones).
  *
- * Three renderings are optional and off by default, so a caller that names none keeps the plain
- * paragraph rendering: a block a caller names is rendered as a quote (the contact auto-reply quotes
- * what the visitor wrote), a label a caller names is rendered in bold (the contact notification
- * labels each answer), and a block a caller names as plain keeps its lines unbolded (the message
- * that notification carries).
+ * Two renderings are optional and off by default, so a caller that names none keeps the plain
+ * paragraph rendering: the consecutive blocks a caller names are gathered into one quote (both
+ * contact emails quote what the visitor wrote, its paragraphs inside a single box), and a label a
+ * caller names is rendered in bold (the contact notification labels each answer).
  */
 
 import { randomUUID } from 'node:crypto'
@@ -245,26 +244,20 @@ export type HtmlBodyInput = {
   /**
    * Blocks of the body rendered as a quote rather than a paragraph, escaped like every other value.
    *
-   * A text a visitor wrote may carry blank lines of its own, so the caller passes each of its blocks
-   * and each one becomes its own quote. A block named here is quoted even when it also matches the
-   * signature: what the visitor wrote is never read as the signature of the email.
+   * A text a visitor wrote may carry blank lines of its own, so the caller passes each of its blocks.
+   * The consecutive blocks named here are gathered into one quote, which keeps a message written
+   * across several paragraphs inside a single box. A block named here is quoted even when it also
+   * matches the signature: what the visitor wrote is never read as the signature of the email.
    */
   readonly quoted?: readonly string[]
   /**
    * Labels that open a line and are rendered in bold, the rest of the line left as it is.
    *
    * Used by the internal notifications, where each answer follows its label. A line that opens with
-   * anything else is rendered as it is.
+   * anything else is rendered as it is. A quoted block is never read as a label: the words of the
+   * visitor stay plain whatever they look like.
    */
   readonly boldLabels?: readonly string[]
-  /**
-   * Blocks rendered as plain paragraphs, without the bold labels.
-   *
-   * A text a visitor wrote can open a line with a colon, which would otherwise read exactly like one
-   * of the labels above: naming its blocks here keeps every one of its lines plain. The caller passes
-   * each block of the text, as it splits the body on blank lines.
-   */
-  readonly plain?: readonly string[]
 }
 
 /**
@@ -289,26 +282,33 @@ const htmlSignature = (signature: string): string => {
 }
 
 /**
- * One quoted block: the words of a visitor, escaped like every other value, their line breaks kept.
+ * One quoted message: the words of a visitor, escaped like every other value, their line breaks kept.
  *
  * The box is styled inline, because a mail client reads neither the site's stylesheet nor a CSS
  * variable: the colours come from `emailColors.ts` and the lengths from `emailLengths.ts`, both
  * traced to the token package and both checked by their own test. Background and text travel
- * together, so the quote stays readable whatever theme the client is set to.
+ * together, so the quote stays readable whatever theme the client is set to. Every block travels in
+ * the same box, one empty line apart: a message the visitor wrote across several paragraphs reads
+ * as one quote, not as a stack of boxes.
  *
- * @param block Block to quote, as the locale writes it.
- * @param links URLs the block carries, each turned into an anchor where it appears.
- * @returns The quote element, styled inline.
+ * @param blocks Blocks of the quote, in the order the visitor wrote them.
+ * @param links URLs the blocks carry, each turned into an anchor where it appears.
+ * @returns The quote element, styled inline, holding every block.
  */
-const htmlQuote = (block: string, links: readonly HtmlLink[]): string =>
+const htmlQuote = (blocks: readonly string[], links: readonly HtmlLink[]): string =>
   `<blockquote style="margin:0;padding:${EMAIL_QUOTE_PADDING};` +
   `border-left:${EMAIL_QUOTE_BORDER_WIDTH} solid ${EMAIL_QUOTE_BORDER_COLOR};` +
   `border-radius:${EMAIL_QUOTE_RADIUS};background-color:${EMAIL_QUOTE_BACKGROUND_COLOR};` +
   `color:${EMAIL_QUOTE_TEXT_COLOR}">` +
-  `${block
-    .split('\n')
-    .map((line) => htmlLine(line, links))
-    .join(`<br />${CRLF}`)}</blockquote>`
+  blocks
+    .map((block) =>
+      block
+        .split('\n')
+        .map((line) => htmlLine(line, links))
+        .join(`<br />${CRLF}`),
+    )
+    .join(`<br /><br />${CRLF}`) +
+  '</blockquote>'
 
 /**
  * One line of a paragraph, with its label in bold when the line opens with one.
@@ -329,38 +329,30 @@ const htmlLabelLine = (line: string, links: readonly HtmlLink[], boldLabels: rea
 }
 
 /**
- * One block of the HTML body: a quote, the signature, or a plain paragraph.
+ * One block of the HTML body: the signature, or a plain paragraph.
  *
- * The order matters: a quoted block is one a visitor wrote, so it stays a quote even when it reads
- * like the signature of the email.
+ * The order matters: a block a caller names as quoted never reaches here, so a text that reads like
+ * the signature of the email is only rendered as that signature when the caller did not quote it.
  *
- * @param input Block, links and the three optional renderings.
+ * @param input Block, links, signature and the labels to bold.
  * @returns The element of that block.
  */
 const htmlBlock = ({
   block,
   links,
   signature,
-  quoted,
   boldLabels,
-  plain,
 }: {
   block: string
   links: readonly HtmlLink[]
   signature: string
-  quoted: readonly string[] | undefined
   boldLabels: readonly string[] | undefined
-  plain: readonly string[] | undefined
 }): string => {
-  if (quoted !== undefined && quoted.includes(block)) return htmlQuote(block, links)
   if (block === signature) return htmlSignature(block)
-
-  // A block a visitor wrote keeps its lines plain, labels or not.
-  const labels = plain !== undefined && plain.includes(block) ? undefined : boldLabels
 
   return `<p>${block
     .split('\n')
-    .map((line) => htmlLabelLine(line, links, labels))
+    .map((line) => htmlLabelLine(line, links, boldLabels))
     .join(`<br />${CRLF}`)}</p>`
 }
 
@@ -369,18 +361,37 @@ const htmlBlock = ({
  *
  * The body is split on blank lines, one block per element, and the lines of one block are separated
  * by `<br />`: the copy writes `Date :`, `Heure :` and the rest on separate lines, and HTML would
- * otherwise join them. A block named by `quoted` becomes a quote, the block that is exactly the
- * signature is rendered apart, grey and linked, and every other block is plain text, escaped
- * everywhere except the anchors, with no image and no tracking of any kind.
+ * otherwise join them. The blocks a caller names as quoted are gathered into a single quote, however
+ * many paragraphs the visitor wrote; the block that is exactly the signature is rendered apart, grey
+ * and linked; and every other block is plain text, escaped everywhere except the anchors, with no
+ * image and no tracking of any kind.
  *
  * @param input Body, links, signature and the optional renderings.
  * @returns The blocks, in order.
  */
-const htmlParagraphs = ({ text, links, signature, quoted, boldLabels, plain }: HtmlBodyInput): string =>
-  text
-    .split(/\n{2,}/)
-    .map((block) => htmlBlock({ block, links, signature, quoted, boldLabels, plain }))
-    .join(CRLF)
+const htmlParagraphs = ({ text, links, signature, quoted, boldLabels }: HtmlBodyInput): string => {
+  const rendered: string[] = []
+  let quote: string[] = []
+
+  const closeQuote = (): void => {
+    if (quote.length === 0) return
+    rendered.push(htmlQuote(quote, links))
+    quote = []
+  }
+
+  for (const block of text.split(/\n{2,}/)) {
+    if (quoted !== undefined && quoted.includes(block)) {
+      quote.push(block)
+      continue
+    }
+
+    closeQuote()
+    rendered.push(htmlBlock({ block, links, signature, boldLabels }))
+  }
+  closeQuote()
+
+  return rendered.join(CRLF)
+}
 
 /**
  * HTML alternative of one service email: its hidden preview line, then its blocks.

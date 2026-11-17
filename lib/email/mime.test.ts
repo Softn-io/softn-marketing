@@ -255,7 +255,7 @@ describe('htmlBody', () => {
     )
   })
 
-  it('quotes every block of a message that carries blank lines of its own', () => {
+  it('gathers every paragraph of a quoted message into a single quote', () => {
     const message = 'Bonjour,\n\nje souhaite un devis.'
     const html = htmlBody({
       text: message,
@@ -265,9 +265,25 @@ describe('htmlBody', () => {
       quoted: message.split(/\n{2,}/),
     })
 
-    expect(html.match(/<blockquote style="margin:0;/g)).toHaveLength(2)
-    expect(html).toContain('Bonjour,</blockquote>')
-    expect(html).toContain('je souhaite un devis.</blockquote>')
+    expect(html.match(/<blockquote style="margin:0;/g)).toHaveLength(1)
+    expect(html).toContain('Bonjour,<br /><br />\r\nje souhaite un devis.</blockquote>')
+  })
+
+  it('keeps every line of a quote plain, even a line that reads like a named label', () => {
+    const quoted = 'Adresse e-mail : autre@exemple.fr\nEt voici mon besoin.'
+    const html = htmlBody({
+      text: `Adresse e-mail : camille@example.fr\n\n${quoted}`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      boldLabels: ['Adresse e-mail :'],
+      quoted: [quoted],
+    })
+
+    expect(html).toContain('<p><strong>Adresse e-mail :</strong> camille@example.fr</p>')
+    expect(html).toContain('Adresse e-mail : autre@exemple.fr<br />\r\nEt voici mon besoin.</blockquote>')
+    // The label of the header is the only one bolded: the visitor's line stays plain.
+    expect(html.match(/<strong>/g)).toHaveLength(1)
   })
 
   it('quotes a block that reads like the signature: what the visitor wrote wins', () => {

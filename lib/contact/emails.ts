@@ -7,9 +7,10 @@
  * signature is the one `bookingEmails.signature` already carries. The plain-text part prints each
  * link as its label followed by the raw address, while the HTML part renders the same address behind
  * that label, which is why the two alternatives are filled with different values from one template.
- * The HTML part quotes the message the visitor wrote (a blockquote per paragraph of it) and bolds
- * the labels each body carries: the answers of the notification, and the subject the auto-reply
- * repeats, so Mel and the visitor both read the shape of the message at a glance.
+ * The HTML part quotes the message the visitor wrote, its paragraphs gathered in a single blockquote,
+ * and bolds the labels each body carries: the answers of the notification, and the subject the
+ * auto-reply repeats, so Mel and the visitor both read the shape of the message at a glance. The
+ * quoted lines are never read as labels: a line the visitor wrote that looks like one stays plain.
  *
  * The notification is addressed to the owner's mailbox with the visitor's address as `Reply-To`, so
  * answering it writes back to the visitor. A failure never reaches the visitor: the caller logs the
@@ -85,13 +86,14 @@ const quoteForText = (message: string): string =>
 /**
  * Blocks of one visitor message, as the HTML body splits them.
  *
- * A message may carry blank lines of its own: each of its blocks becomes its own quote, and every
- * one of them is escaped like any other value.
+ * A message may carry blank lines of its own: every one of its blocks is escaped like any other
+ * value, and the renderer gathers them into a single quote. An empty block is no paragraph of the
+ * message and is left out.
  *
  * @param message Message as the visitor wrote it.
  * @returns The blocks of the message, in order.
  */
-const quotedBlocksOf = (message: string): readonly string[] => message.split(/\n{2,}/)
+const quotedBlocksOf = (message: string): readonly string[] => message.split(/\n{2,}/).filter((block) => block !== '')
 
 /** One `{name}` placeholder of a copy line. */
 const PLACEHOLDER_PATTERN = /\{\w+\}/g
@@ -157,17 +159,20 @@ export const notificationEmailContent = (
   }
   // The message travels quoted, line by line, like the auto-reply does: in a text-only client a raw
   // line could otherwise read as one of the labelled answers of this very email.
-  const body = interpolate(contactEmails.notification.body, {
+  const text = interpolate(contactEmails.notification.body, {
     ...values,
     message: quoteForText(input.message),
   })
-  const text = input.subject === 'dataRequest' ? `${contactEmails.notification.dataRequestNotice}\n\n${body}` : body
+  // The HTML part is built from the same copy with the message as the visitor wrote it: the marker
+  // belongs to the plain-text alternative alone, and the renderer turns the message into one quote.
+  const notice = input.subject === 'dataRequest' ? `${contactEmails.notification.dataRequestNotice}\n\n` : ''
+  const html = interpolate(contactEmails.notification.body, values)
 
   return {
     subject: interpolate(contactEmails.notification.subject, values),
-    text,
+    text: `${notice}${text}`,
     html: htmlBody({
-      text,
+      text: `${notice}${html}`,
       links: [],
       preheader: contactEmails.notification.preheader,
       // The notification closes on no signature block: an empty one matches no block.
@@ -175,7 +180,7 @@ export const notificationEmailContent = (
       // Every labelled answer is bolded, so Mel reads the shape of the message at a glance, and the
       // words of the visitor stay plain: their own lines never read as one of those labels.
       boldLabels: templateLabels(contactEmails.notification.body),
-      plain: quotedBlocksOf(input.message),
+      quoted: quotedBlocksOf(input.message),
     }),
   }
 }
@@ -242,8 +247,9 @@ export const autoReplyEmailContent = (input: {
       links,
       preheader: contactEmails.autoReply.preheader,
       signature,
-      // The message the visitor wrote is quoted, its own blank lines included: a quoted block is
-      // never bolded, so no line of it can read as one of the labels below.
+      // The message the visitor wrote is quoted, its own blank lines included: its paragraphs share
+      // one box, and a quoted block is never bolded, so no line of it can read as one of the labels
+      // below.
       quoted: quotedBlocksOf(input.message),
       // The reminder bolds the label of the subject it repeats.
       boldLabels: templateLabels(contactEmails.autoReply.body),
