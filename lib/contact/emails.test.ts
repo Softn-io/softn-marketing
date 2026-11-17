@@ -3,8 +3,20 @@ import { SITE_URL } from '@/lib/site'
 import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { contact } from '@/locales/fr/contact'
 import { contactEmails } from '@/locales/fr/contactEmails'
-import { EMAIL_QUOTE_BACKGROUND_COLOR, EMAIL_QUOTE_BORDER_COLOR, EMAIL_QUOTE_TEXT_COLOR } from '@/lib/email/emailColors'
-import { EMAIL_QUOTE_BORDER_WIDTH, EMAIL_QUOTE_PADDING, EMAIL_QUOTE_RADIUS } from '@/lib/email/emailLengths'
+import {
+  EMAIL_FOOTER_LINK_COLOR,
+  EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_QUOTE_BACKGROUND_COLOR,
+  EMAIL_QUOTE_BORDER_COLOR,
+  EMAIL_QUOTE_TEXT_COLOR,
+  EMAIL_SIGNATURE_LINK_COLOR,
+} from '@/lib/email/emailColors'
+import {
+  EMAIL_FOOTER_FONT_SIZE,
+  EMAIL_QUOTE_BORDER_WIDTH,
+  EMAIL_QUOTE_PADDING,
+  EMAIL_QUOTE_RADIUS,
+} from '@/lib/email/emailLengths'
 import {
   autoReplyEmailContent,
   notificationEmailContent,
@@ -28,6 +40,13 @@ const lead = {
 
 /** Every quote of an HTML part, as the email carries it. */
 const quotesOf = (html: string): readonly string[] => html.match(/<blockquote[\s\S]*?<\/blockquote>/g) ?? []
+
+/** Style attribute the footer links carry, small as the paragraph around them. */
+const footerLinkStyle = `color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`
+
+/** The footer paragraph of an HTML part, as the email carries it, or an empty string. */
+const footerOf = (html: string): string =>
+  html.match(new RegExp(`<p style="color:${EMAIL_FOOTER_TEXT_COLOR};[\\s\\S]*?</p>`))?.[0] ?? ''
 
 /** Decodes every base64 part of a MIME message, in order. */
 const decodedParts = (message: string): readonly string[] => {
@@ -201,9 +220,22 @@ describe('autoReplyEmailContent', () => {
   it('renders the same addresses as labelled anchors in the HTML part', () => {
     const content = contentOf()
 
-    expect(content.html).toContain(`<a href="${SITE_URL}${contact.intro.agentLink.href}">Réserver un échange Spark</a>`)
     expect(content.html).toContain(
-      '<a href="https://softn.io/politique-de-confidentialite">politique de confidentialité</a>',
+      `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a>`,
+    )
+    expect(content.html).toContain(
+      `<a href="${SITE_URL}${contact.consent.privacyLink.href}" style="${footerLinkStyle}">politique de confidentialité</a>`,
+    )
+  })
+
+  it('paints the booking link of the body in the accent violet, not the signature one', () => {
+    const content = contentOf()
+
+    const agent = `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a>`
+    expect(content.html).toContain(agent)
+    // The signature link keeps the violet of the booking emails, unchanged.
+    expect(content.html).toContain(
+      `<a href="https://softn.io" style="color:${EMAIL_SIGNATURE_LINK_COLOR}">Softn.io</a>`,
     )
   })
 
@@ -229,20 +261,53 @@ describe('autoReplyEmailContent', () => {
     expect(content.html.match(/<strong>/g)).toHaveLength(1)
   })
 
-  it('turns both footer mentions of softn.io into links, built from the site URL', () => {
+  it('turns the two footer mentions of the copy into links, built from the site URL', () => {
     const content = contentOf()
 
-    expect(content.html).toContain(`<a href="${SITE_URL}">softn.io</a>`)
-    expect(content.html).toContain(`<a href="${SITE_URL}${contact.link.href}">softn.io</a>`)
-    expect(content.text).toContain(`softn.io (${SITE_URL})`)
-    expect(content.text).toContain(`softn.io (${SITE_URL}${contact.link.href})`)
+    expect(content.html).toContain(`<a href="${SITE_URL}${contact.link.href}" style="${footerLinkStyle}">Contact</a>`)
+    expect(content.html).toContain(
+      `<a href="${SITE_URL}${contact.consent.privacyLink.href}" style="${footerLinkStyle}">politique de confidentialité</a>`,
+    )
+    expect(content.text).toContain(`Contact (${SITE_URL}${contact.link.href})`)
+    expect(content.text).toContain(`politique de confidentialité (${SITE_URL}${contact.consent.privacyLink.href})`)
   })
 
-  it('starts the personal-data sentence on its own line, in both alternatives', () => {
+  it('dresses the footer of the HTML part in the small grey type of the email', () => {
+    const content = contentOf()
+    const footer = footerOf(content.html)
+
+    expect(
+      footer.startsWith(`<p style="color:${EMAIL_FOOTER_TEXT_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">—<br />`),
+    ).toBe(true)
+    expect(footer).toContain('Vous recevez cet email parce que vous avez écrit à Softn.io.')
+    // One styled paragraph and the two links it carries: nothing else of the email is dressed.
+    expect(content.html.match(new RegExp(`font-size:${EMAIL_FOOTER_FONT_SIZE}`, 'g'))).toHaveLength(3)
+    // The plain-text part keeps the footer exactly as the copy writes it.
+    expect(content.text).toContain('Vous recevez cet email parce que vous avez écrit à Softn.io.')
+  })
+
+  it('carries no unsubscribe link and no legal-notice link in the footer', () => {
     const content = contentOf()
 
-    expect(content.text).toContain('\nPour exercer un droit sur vos données personnelles')
-    expect(content.html).toContain('<br />\r\nPour exercer un droit sur vos données personnelles')
+    expect(footerOf(content.html).match(/<a /g)).toHaveLength(2)
+    expect(content.text).not.toContain('désinscri')
+    expect(content.text).not.toContain('mentions légales')
+  })
+
+  it('starts every line of the footer on its own line, in both alternatives', () => {
+    const content = contentOf()
+    const lines = [
+      'Vous recevez cet email parce que vous avez écrit à Softn.io. Vos informations servent uniquement à répondre à votre message.',
+      "Vous disposez d'un droit d'accès, de rectification et d'effacement de vos données personnelles.",
+      'Pour exercer ces droits, envoyez une demande via la page ',
+      'Vous pouvez également consulter le détail de la ',
+    ]
+
+    for (const line of lines) {
+      expect(content.text).toContain(`\n${line}`)
+      // The HTML part escapes the apostrophes, as it escapes every value of the copy.
+      expect(content.html).toContain(`<br />\r\n${line.replaceAll("'", '&#39;')}`)
+    }
   })
 
   it('builds every link from the canonical site URL, whatever origin the request came from', () => {
@@ -293,8 +358,9 @@ describe('autoReplyEmailContent', () => {
     const content = contentOf()
 
     expect(content.text).toContain(
-      'le détail figure dans la politique de confidentialité (https://softn.io/politique-de-confidentialite).',
+      'Vous pouvez également consulter le détail de la politique de confidentialité (https://softn.io/politique-de-confidentialite).',
     )
+    expect(content.text.match(/politique de confidentialité/g)).toHaveLength(1)
   })
 })
 

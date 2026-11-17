@@ -47,15 +47,13 @@ Répondre à cet e-mail écrit directement à l'expéditeur.`,
     agentLinkLabel: 'Réserver un échange Spark',
     /** Words the privacy-policy link shows in the HTML part; the plain-text part prints the address. */
     privacyLinkLabel: 'politique de confidentialité',
-    /** Words the site link of the footer shows in the HTML part. */
-    siteLinkLabel: 'softn.io',
     /** Words the contact-page link of the footer shows in the HTML part. */
-    contactLinkLabel: 'softn.io',
+    contactLinkLabel: 'Contact',
     body: `Bonjour {firstName},
 
 Votre message est bien arrivé. J'étudie votre demande avec attention et je reviens vers vous dans les plus brefs délais.
 
-Pour mémoire, voici ce que vous m'avez envoyé.
+Pour mémoire, voici une copie de votre message :
 
 Objet : {subjectLabel}
 
@@ -70,8 +68,10 @@ Vous pouvez aussi répondre à cet e-mail si vous souhaitez compléter votre mes
 {signature}
 
 —
-Vous recevez ce message parce que vous avez écrit à Softn.io par le formulaire de contact de {siteLink}. Vos informations servent uniquement à répondre à votre message.
-Pour exercer un droit sur vos données personnelles (accès, rectification, suppression…), vous pouvez envoyer une demande via le formulaire de contact de {contactLink} : le détail figure dans la {privacyLink}.`,
+Vous recevez cet email parce que vous avez écrit à Softn.io. Vos informations servent uniquement à répondre à votre message.
+Vous disposez d'un droit d'accès, de rectification et d'effacement de vos données personnelles.
+Pour exercer ces droits, envoyez une demande via la page {contactLink}.
+Vous pouvez également consulter le détail de la {privacyLink}.`,
   },
 } as const
 

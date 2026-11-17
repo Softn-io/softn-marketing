@@ -15,22 +15,31 @@
  * caller, which reads them from `locales/fr/` (`bookingEmails.ts` for the booking emails,
  * `contactEmails.ts` for the contact ones).
  *
- * Two renderings are optional and off by default, so a caller that names none keeps the plain
+ * Three renderings are optional and off by default, so a caller that names none keeps the plain
  * paragraph rendering: the consecutive blocks a caller names are gathered into one quote (both
- * contact emails quote what the visitor wrote, its paragraphs inside a single box), and a label a
- * caller names is rendered in bold (the contact notification labels each answer).
+ * contact emails quote what the visitor wrote, its paragraphs inside a single box), a label a caller
+ * names is rendered in bold (the contact notification labels each answer), and the blocks a caller
+ * names are rendered as the footer, in the smallest type of the scale and the lightest grey that
+ * stays legible (the automatic reply closes on the paragraph that says why it was sent).
  */
 
 import { randomUUID } from 'node:crypto'
 import { SITE_URL } from '@/lib/site'
 import {
+  EMAIL_FOOTER_LINK_COLOR,
+  EMAIL_FOOTER_TEXT_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
   EMAIL_SIGNATURE_LINK_COLOR,
   EMAIL_SIGNATURE_TEXT_COLOR,
 } from './emailColors'
-import { EMAIL_QUOTE_BORDER_WIDTH, EMAIL_QUOTE_PADDING, EMAIL_QUOTE_RADIUS } from './emailLengths'
+import {
+  EMAIL_FOOTER_FONT_SIZE,
+  EMAIL_QUOTE_BORDER_WIDTH,
+  EMAIL_QUOTE_PADDING,
+  EMAIL_QUOTE_RADIUS,
+} from './emailLengths'
 
 /** Line ending of every line of the message, as RFC 5322 requires. */
 const CRLF = '\r\n'
@@ -178,6 +187,11 @@ export type HtmlLink = {
   readonly url: string
   /** Words of the anchor, the URL itself when the copy prints the address. */
   readonly label: string
+  /**
+   * Declarations of the anchor's own `style` attribute, when its words carry a colour of their own;
+   * a link without one takes the style of the paragraph it sits in, or the client's own.
+   */
+  readonly style?: string
 }
 
 /**
@@ -185,9 +199,18 @@ export type HtmlLink = {
  *
  * Every other value is HTML-escaped, links included: the URL inside the `href` attribute and the
  * label the guest reads are escaped, so a typed answer can neither become markup nor a link. Links
- * are matched longest first, so a URL that starts with another one keeps its anchors.
+ * are matched longest first, so a URL that starts with another one keeps its anchors. A caller that
+ * passes a style gives the anchors their own declarations, which a mail client needs to paint a link
+ * inside a paragraph whose own colour it would otherwise override; a link that carries a style of
+ * its own keeps it, and the rest of the body leaves the attribute out, so the client's own link
+ * style applies.
+ *
+ * @param line Line as the locale writes it.
+ * @param links URLs the line carries, each turned into an anchor where it appears.
+ * @param linkStyle Declarations of the anchors' `style` attribute, or `undefined` to leave it out.
+ * @returns The line, ready to be written into a paragraph.
  */
-const htmlLine = (line: string, links: readonly HtmlLink[]): string => {
+const htmlLine = (line: string, links: readonly HtmlLink[], linkStyle?: string): string => {
   const pending = links
     .filter((link) => link.url !== '')
     .map((link) => ({ ...link, length: link.url.length }))
@@ -206,7 +229,9 @@ const htmlLine = (line: string, links: readonly HtmlLink[]): string => {
       break
     }
 
-    result += `${escapeHtml(rest.slice(0, match.index))}<a href="${escapeHtml(match.link.url)}">${escapeHtml(match.link.label)}</a>`
+    const declarations = match.link.style ?? linkStyle
+    const style = declarations === undefined ? '' : ` style="${declarations}"`
+    result += `${escapeHtml(rest.slice(0, match.index))}<a href="${escapeHtml(match.link.url)}"${style}>${escapeHtml(match.link.label)}</a>`
     rest = rest.slice(match.index + match.link.url.length)
   }
 
@@ -258,6 +283,19 @@ export type HtmlBodyInput = {
    * visitor stay plain whatever they look like.
    */
   readonly boldLabels?: readonly string[]
+  /**
+   * Blocks rendered as the footer of the email, escaped like every other value.
+   *
+   * The copy closes on a footer of its own, one paragraph after the signature, and the caller names
+   * it here so the HTML part dresses it apart: the smallest step of the type scale, in the grey
+   * `emailColors.ts` traces for it, its links given a style of their own because a mail client paints
+   * an anchor with its own colours otherwise. The plain-text part is untouched: the footer is one
+   * paragraph of the body there, like any other.
+   *
+   * A block the caller quotes is never read as the footer, and a block that is exactly the signature
+   * stays the signature: what the visitor wrote is never dressed as one of the email's own blocks.
+   */
+  readonly footer?: readonly string[]
 }
 
 /**
@@ -329,26 +367,50 @@ const htmlLabelLine = (line: string, links: readonly HtmlLink[], boldLabels: rea
 }
 
 /**
- * One block of the HTML body: the signature, or a plain paragraph.
+ * Footer block of the HTML body: the smallest step of the type scale, in the lightest grey that
+ * stays legible.
+ *
+ * An email cannot read a CSS variable, so the size comes from `emailLengths.ts` and the two colours
+ * from `emailColors.ts`, each traced to its token and checked by its own test. The links keep a style
+ * of their own at that size: a mail client paints an anchor with its own colours otherwise, which
+ * would clash with the grey of the paragraph around it.
+ *
+ * @param block Block the caller names as the footer.
+ * @param links URLs the block carries, each turned into an anchor where it appears.
+ * @returns The paragraph, styled inline.
+ */
+const htmlFooter = (block: string, links: readonly HtmlLink[]): string =>
+  `<p style="color:${EMAIL_FOOTER_TEXT_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">` +
+  block
+    .split('\n')
+    .map((line) => htmlLine(line, links, `color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`))
+    .join(`<br />${CRLF}`) +
+  '</p>'
+
+/**
+ * One block of the HTML body: the signature, the footer, or a plain paragraph.
  *
  * The order matters: a block a caller names as quoted never reaches here, so a text that reads like
  * the signature of the email is only rendered as that signature when the caller did not quote it.
  *
- * @param input Block, links, signature and the labels to bold.
+ * @param input Block, links, signature, footer and the labels to bold.
  * @returns The element of that block.
  */
 const htmlBlock = ({
   block,
   links,
   signature,
+  footer,
   boldLabels,
 }: {
   block: string
   links: readonly HtmlLink[]
   signature: string
+  footer: readonly string[] | undefined
   boldLabels: readonly string[] | undefined
 }): string => {
   if (block === signature) return htmlSignature(block)
+  if (footer?.includes(block) === true) return htmlFooter(block, links)
 
   return `<p>${block
     .split('\n')
@@ -363,13 +425,14 @@ const htmlBlock = ({
  * by `<br />`: the copy writes `Date :`, `Heure :` and the rest on separate lines, and HTML would
  * otherwise join them. The blocks a caller names as quoted are gathered into a single quote, however
  * many paragraphs the visitor wrote; the block that is exactly the signature is rendered apart, grey
- * and linked; and every other block is plain text, escaped everywhere except the anchors, with no
- * image and no tracking of any kind.
+ * and linked; a block the caller names as the footer is rendered in the small grey type of the email;
+ * and every other block is plain text, escaped everywhere except the anchors, with no image and no
+ * tracking of any kind.
  *
  * @param input Body, links, signature and the optional renderings.
  * @returns The blocks, in order.
  */
-const htmlParagraphs = ({ text, links, signature, quoted, boldLabels }: HtmlBodyInput): string => {
+const htmlParagraphs = ({ text, links, signature, quoted, boldLabels, footer }: HtmlBodyInput): string => {
   const rendered: string[] = []
   let quote: string[] = []
 
@@ -386,7 +449,7 @@ const htmlParagraphs = ({ text, links, signature, quoted, boldLabels }: HtmlBody
     }
 
     closeQuote()
-    rendered.push(htmlBlock({ block, links, signature, boldLabels }))
+    rendered.push(htmlBlock({ block, links, signature, footer, boldLabels }))
   }
   closeQuote()
 

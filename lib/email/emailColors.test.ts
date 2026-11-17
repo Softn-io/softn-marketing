@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
+  EMAIL_FOOTER_LINK_COLOR,
+  EMAIL_FOOTER_TEXT_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
@@ -70,9 +72,56 @@ const hexOf = ([lightness, chroma, hue]: readonly [number, number, number]): str
     .join('')}`
 }
 
+/**
+ * sRGB channels of one `#rrggbb` colour, as the bytes a mail client paints.
+ *
+ * @param hex Colour as `#rrggbb`, lowercase.
+ * @returns Red, green and blue, each between 0 and 1.
+ */
+const channelsOf = (hex: string): readonly [number, number, number] => [
+  Number.parseInt(hex.slice(1, 3), 16) / 255,
+  Number.parseInt(hex.slice(3, 5), 16) / 255,
+  Number.parseInt(hex.slice(5, 7), 16) / 255,
+]
+
+/**
+ * WCAG 2.1 relative luminance of one colour.
+ *
+ * The ratio is measured on the bytes the mail client reads, not on the token behind them: the hex is
+ * what the message carries, so the hex is what the accessibility rule applies to.
+ *
+ * @param hex Colour as `#rrggbb`, lowercase.
+ * @returns Relative luminance, between 0 and 1.
+ */
+const luminanceOf = (hex: string): number => {
+  const [red = 0, green = 0, blue = 0] = channelsOf(hex).map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  )
+
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+}
+
+/**
+ * WCAG 2.1 contrast ratio of two colours.
+ *
+ * @param foreground Colour of the text.
+ * @param background Colour behind it.
+ * @returns The ratio, between 1 and 21.
+ */
+const contrastOf = (foreground: string, background: string): number => {
+  const first = luminanceOf(foreground)
+  const second = luminanceOf(background)
+  const [lightest, darkest] = first > second ? [first, second] : [second, first]
+
+  return (lightest + 0.05) / (darkest + 0.05)
+}
+
 describe('email colours', () => {
   const colorsCss = readFileSync(join(TOKENS_ROOT, 'core', 'colors.css'), 'utf8')
   const lightCss = readFileSync(join(TOKENS_ROOT, 'themes', 'light.css'), 'utf8')
+
+  /** Hex of the surface a mail client paints a message on: the white of the panel light token. */
+  const emailBackground = (): string => hexOf(oklchOf(colorsCss, 'softn-color-surface-panel-light') ?? [0, 0, 0])
 
   it('inlines the grey of the text-tertiary light token', () => {
     const grey = oklchOf(colorsCss, 'softn-color-text-tertiary-light')
@@ -89,12 +138,12 @@ describe('email colours', () => {
     expect(lightCss).toContain('--softn-brand-vivid: var(--softn-color-violet500)')
   })
 
-  it('inlines the light surface a quoted message sits on', () => {
-    const surface = oklchOf(colorsCss, 'softn-color-surface-elevated-light')
+  it('inlines the light page surface a quoted message sits on', () => {
+    const surface = oklchOf(colorsCss, 'softn-color-surface-page-light')
 
     expect(surface).not.toBeNull()
     expect(hexOf(surface ?? [0, 0, 0])).toBe(EMAIL_QUOTE_BACKGROUND_COLOR)
-    expect(lightCss).toContain('--softn-background-elevated: var(--softn-color-surface-elevated-light)')
+    expect(lightCss).toContain('--softn-background: var(--softn-color-surface-page-light)')
   })
 
   it('inlines the soft violet of the quote edge', () => {
@@ -110,6 +159,37 @@ describe('email colours', () => {
     expect(ink).not.toBeNull()
     expect(hexOf(ink ?? [0, 0, 0])).toBe(EMAIL_QUOTE_TEXT_COLOR)
     expect(lightCss).toContain('--softn-color: var(--softn-color-text-primary-light)')
+  })
+
+  it('inlines the lightest grey of the light theme for the footer, and keeps it legible', () => {
+    const grey = oklchOf(colorsCss, 'softn-color-text-placeholder-light')
+    const background = emailBackground()
+
+    expect(grey).not.toBeNull()
+    expect(hexOf(grey ?? [0, 0, 0])).toBe(EMAIL_FOOTER_TEXT_COLOR)
+    expect(background).toBe('#ffffff')
+    expect(lightCss).toContain('--softn-background-surface: var(--softn-color-surface-panel-light)')
+    // Text this small is body text: the accessibility rules ask 4.5:1 of it.
+    expect(contrastOf(EMAIL_FOOTER_TEXT_COLOR, background)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it('leaves no lighter text token unused: the footer grey is the lightest of them all', () => {
+    const lightGrey = [...colorsCss.matchAll(/--softn-color-text-[\w-]+-light:\s*oklch\(([\d.]+)/g)].map((match) =>
+      Number(match[1]),
+    )
+    const footer = oklchOf(colorsCss, 'softn-color-text-placeholder-light')
+
+    expect(lightGrey.length).toBeGreaterThan(1)
+    expect(Math.max(...lightGrey)).toBe(footer?.[0])
+  })
+
+  it('inlines the violet the light theme paints its links with, dark enough for the footer size', () => {
+    const accent = oklchOf(colorsCss, 'softn-color-violet600')
+
+    expect(accent).not.toBeNull()
+    expect(hexOf(accent ?? [0, 0, 0])).toBe(EMAIL_FOOTER_LINK_COLOR)
+    expect(lightCss).toContain('--softn-brand-accent: var(--softn-color-violet600)')
+    expect(contrastOf(EMAIL_FOOTER_LINK_COLOR, emailBackground())).toBeGreaterThanOrEqual(4.5)
   })
 
   it('refuses a token the stylesheet does not carry', () => {

@@ -17,6 +17,7 @@
  * non-personal code returned here, and the message itself is already stored in Baserow.
  */
 
+import { EMAIL_FOOTER_LINK_COLOR } from '@/lib/email/emailColors'
 import { htmlBody, mimeMessage, type HtmlLink } from '@/lib/email/mime'
 import { readEnv } from '@/lib/env'
 import { sendGmailMessage, type GmailFailure } from '@/lib/google/gmail'
@@ -94,6 +95,25 @@ const quoteForText = (message: string): string =>
  * @returns The blocks of the message, in order.
  */
 const quotedBlocksOf = (message: string): readonly string[] => message.split(/\n{2,}/).filter((block) => block !== '')
+
+/**
+ * Blocks of an auto-reply body that follow the signature: the footer the HTML part dresses apart.
+ *
+ * The copy closes on its footer, on its own paragraph after the signature, and the HTML part renders
+ * those blocks in the small grey type of the email. Reading them from the body keeps the wording in
+ * one place — nothing is written twice — and a copy that gains a second footer paragraph is dressed
+ * the same way.
+ *
+ * @param text Body of the email, its parameters filled.
+ * @param signature Signature block the copy fills in.
+ * @returns The blocks after the signature, or none when the body carries no signature.
+ */
+const footerBlocksOf = (text: string, signature: string): readonly string[] => {
+  const blocks = text.split(/\n{2,}/)
+  const signatureIndex = blocks.indexOf(signature)
+
+  return signatureIndex === -1 ? [] : blocks.slice(signatureIndex + 1)
+}
 
 /** One `{name}` placeholder of a copy line. */
 const PLACEHOLDER_PATTERN = /\{\w+\}/g
@@ -188,8 +208,9 @@ export const notificationEmailContent = (
 /**
  * Automatic reply sent to the visitor: subject and both bodies, or `null` when a value is missing.
  *
- * The message the visitor wrote is quoted, and the two links the copy carries are rendered as
- * `label (address)` in the plain-text part and as anchors in the HTML part. The signature is
+ * The message the visitor wrote is quoted, and the links the copy carries are rendered as
+ * `label (address)` in the plain-text part and as anchors in the HTML part. The paragraph the copy
+ * closes on is the footer, dressed apart in the HTML part. The signature is
  * `bookingEmails.signature`, filled into the `{signature}` placeholder, so the HTML part styles and
  * links the same three lines as the booking emails.
  *
@@ -207,10 +228,9 @@ export const autoReplyEmailContent = (input: {
   const signature = bookingEmails.signature
   if (signature.trim() === '') return null
 
-  const { agentLinkLabel, privacyLinkLabel, siteLinkLabel, contactLinkLabel } = contactEmails.autoReply
+  const { agentLinkLabel, privacyLinkLabel, contactLinkLabel } = contactEmails.autoReply
   const agentLink = contactAgentLink()
   const privacyLink = contactPrivacyLink()
-  const siteLink = SITE_URL
   const contactLink = contactPageLink()
   const values = {
     firstName: input.firstName,
@@ -223,27 +243,27 @@ export const autoReplyEmailContent = (input: {
     message: quoteForText(input.message),
     agentLink: `${agentLinkLabel} (${agentLink})`,
     privacyLink: `${privacyLinkLabel} (${privacyLink})`,
-    siteLink: `${siteLinkLabel} (${siteLink})`,
     contactLink: `${contactLinkLabel} (${contactLink})`,
   })
   const links: readonly HtmlLink[] = [
-    { url: agentLink, label: agentLinkLabel },
+    // The booking link of the body carries the accent violet of the footer links: a mail client
+    // paints a body anchor with its own colour otherwise.
+    { url: agentLink, label: agentLinkLabel, style: `color:${EMAIL_FOOTER_LINK_COLOR}` },
     { url: privacyLink, label: privacyLinkLabel },
-    { url: siteLink, label: siteLinkLabel },
     { url: contactLink, label: contactLinkLabel },
   ]
+  const htmlText = interpolate(contactEmails.autoReply.body, {
+    ...values,
+    agentLink,
+    privacyLink,
+    contactLink,
+  })
 
   return {
     subject: contactEmails.autoReply.subject,
     text,
     html: htmlBody({
-      text: interpolate(contactEmails.autoReply.body, {
-        ...values,
-        agentLink,
-        privacyLink,
-        siteLink,
-        contactLink,
-      }),
+      text: htmlText,
       links,
       preheader: contactEmails.autoReply.preheader,
       signature,
@@ -251,6 +271,9 @@ export const autoReplyEmailContent = (input: {
       // one box, and a quoted block is never bolded, so no line of it can read as one of the labels
       // below.
       quoted: quotedBlocksOf(input.message),
+      // The paragraph the copy closes on carries why the visitor receives this message: the HTML part
+      // gives it the small grey type of the email, the plain-text part keeps it as it is.
+      footer: footerBlocksOf(htmlText, signature),
       // The reminder bolds the label of the subject it repeats.
       boldLabels: templateLabels(contactEmails.autoReply.body),
     }),

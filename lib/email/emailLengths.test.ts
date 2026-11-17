@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { EMAIL_QUOTE_BORDER_WIDTH, EMAIL_QUOTE_PADDING, EMAIL_QUOTE_RADIUS } from './emailLengths'
+import {
+  EMAIL_FOOTER_FONT_SIZE,
+  EMAIL_QUOTE_BORDER_WIDTH,
+  EMAIL_QUOTE_PADDING,
+  EMAIL_QUOTE_RADIUS,
+} from './emailLengths'
 
 /** Package that holds the single source of every Softn token. */
 const TOKENS_ROOT = join(process.cwd(), 'node_modules', '@softnio-labs', 'tokens')
@@ -25,6 +30,7 @@ const remOf = (css: string, property: string): number | null => {
 describe('email lengths', () => {
   const spacingCss = readFileSync(join(TOKENS_ROOT, 'core', 'spacing.css'), 'utf8')
   const radiusCss = readFileSync(join(TOKENS_ROOT, 'core', 'radius.css'), 'utf8')
+  const typographyCss = readFileSync(join(TOKENS_ROOT, 'core', 'typography.css'), 'utf8')
 
   it('inlines the padding of the space-3 and space-4 tokens', () => {
     expect(remOf(spacingCss, 'softn-space-3')).toBe(12)
@@ -41,6 +47,17 @@ describe('email lengths', () => {
     expect(EMAIL_QUOTE_BORDER_WIDTH).toBe('3px')
     expect(spacingCss).not.toContain('--softn-border-width')
     expect(radiusCss).not.toContain('--softn-border-width')
+  })
+
+  it('inlines the smallest step of the type scale for the footer', () => {
+    const steps = [...typographyCss.matchAll(/--softn-font-size-[\w-]+:\s*([\d.]+)rem;/g)].map(
+      (match) => Number(match[1]) * ROOT_FONT_SIZE,
+    )
+
+    expect(remOf(typographyCss, 'softn-font-size-caption')).toBe(11)
+    expect(steps.length).toBeGreaterThan(1)
+    expect(Math.min(...steps)).toBe(11)
+    expect(EMAIL_FOOTER_FONT_SIZE).toBe('11px')
   })
 
   it('refuses a token the stylesheet does not carry', () => {
