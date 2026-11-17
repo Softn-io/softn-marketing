@@ -162,4 +162,19 @@ describe('readEnv', () => {
     vi.stubEnv('VERCEL_ENV', '   ')
     expect(readEnv().VERCEL_ENV).toBeUndefined()
   })
+
+  it('keeps an anti-bot secret of at least 32 characters, and treats a blank one as unset', () => {
+    vi.stubEnv('ALTCHA_HMAC_KEY', 'a'.repeat(32))
+
+    expect(readEnv().ALTCHA_HMAC_KEY).toBe('a'.repeat(32))
+
+    vi.stubEnv('ALTCHA_HMAC_KEY', '   ')
+    expect(readEnv().ALTCHA_HMAC_KEY).toBeUndefined()
+  })
+
+  it('rejects an anti-bot secret that is too short', () => {
+    vi.stubEnv('ALTCHA_HMAC_KEY', 'too-short')
+
+    expect(() => readEnv()).toThrow('ALTCHA_HMAC_KEY')
+  })
 })

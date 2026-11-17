@@ -46,6 +46,10 @@ describe('buildStaticContentSecurityPolicy', () => {
     expect(buildStaticContentSecurityPolicy({ isDev: true })).toContain("'unsafe-eval'")
     expect(buildStaticContentSecurityPolicy({ isDev: false })).not.toContain("'unsafe-eval'")
   })
+
+  it('allows the blob workers of the anti-bot widget, and no other worker source', () => {
+    expect(directiveOf(buildStaticContentSecurityPolicy({ isDev: false }), 'worker-src')).toBe('worker-src blob:')
+  })
 })
 
 describe('buildNonceContentSecurityPolicy', () => {
@@ -82,6 +86,10 @@ describe('buildNonceContentSecurityPolicy', () => {
   it("allows 'unsafe-eval' in development only", () => {
     expect(policyOf(true)).toContain("'unsafe-eval'")
     expect(policyOf(false)).not.toContain("'unsafe-eval'")
+  })
+
+  it('keeps the blob worker source the anti-bot widget needs, without opening a third-party origin', () => {
+    expect(directiveOf(policyOf(), 'worker-src')).toBe('worker-src blob:')
   })
 })
 

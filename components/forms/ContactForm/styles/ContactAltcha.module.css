@@ -1,0 +1,72 @@
+/*
+ * Altcha widget of the contact form.
+ *
+ * The widget draws its own control in the light DOM and brings its own stylesheet; its colours,
+ * radii and lengths reach it as the CSS custom properties set in `ContactAltcha.tsx`, all of them
+ * `--softn-*` tokens. Three things have no custom property of their own — the border of the off
+ * state, the disabled look and the error look — so they are set here, on the class names the
+ * widget's stylesheet uses (altcha 3.6.0, pinned). The focus ring is not one of them: the widget's
+ * own `.altcha-switch:focus-within` rule already takes `--altcha-checkbox-outline`, which
+ * `ContactAltcha.tsx` sets to the input focus token.
+ */
+
+.widget {
+  display: block;
+  inline-size: 100%;
+  max-inline-size: 100%;
+}
+@media (min-width: 40rem) {
+  .widget {
+    max-inline-size: 50%;
+  }
+}
+
+/* The off state borrows the border of the other fields: the widget draws none of its own. */
+.widget :global(.altcha-switch) {
+  border: 1px solid var(--softn-input-border-subtle);
+  transition: border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.widget :global(.altcha-switch:hover) {
+  border-color: var(--softn-input-border-strong);
+}
+
+/*
+ * The challenge could not be served: the group shows its error copy, and the switch takes the border
+ * of the other invalid fields. The widget's own state drives this, not the form's validation, which
+ * speaks through the group's message.
+ */
+.widget :global([data-state='error'] .altcha-switch) {
+  border-color: var(--softn-input-border-error);
+}
+
+/*
+ * The widget never disables its own switch today; if it ever does, the control looks like the other
+ * disabled ones instead of like an active one.
+ */
+.widget :global(.altcha-switch:has(input:disabled)) {
+  border-color: var(--softn-input-border-subtle);
+  background-color: var(--softn-background-elevated);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .widget :global(.altcha-switch),
+  .widget :global(.altcha-switch-toggle) {
+    transition: none;
+  }
+}
+
+/*
+ * Forced colours: the browser replaces the palette, and both the track and the thumb would land on
+ * the same system colour. The thumb is pinned to the text colour so it stays visible, and the state
+ * is told by its position alone, as a switch should be.
+ */
+@media (forced-colors: active) {
+  .widget :global(.altcha-switch) {
+    border-color: ButtonText;
+  }
+
+  .widget :global(.altcha-switch-toggle) {
+    background-color: ButtonText;
+  }
+}

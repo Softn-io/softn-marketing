@@ -1,0 +1,112 @@
+/*
+ * Contact screen: the heading, the intro and what replaces them once the message was accepted.
+ *
+ * The pieces the server renders — the eyebrow, the title, the intro with its link to the assistant —
+ * keep the layout of the design bundle here, and the success state swaps the title and the intro for
+ * the confirmation copy, so the page keeps exactly one `<h1>` in both states. Colours, lengths and
+ * type come from --softn-* tokens.
+ */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-8);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--softn-brand-glow);
+  font-size: var(--softn-font-size-label);
+  font-weight: var(--softn-font-weight-label);
+  letter-spacing: var(--softn-font-letter-spacing-label);
+  line-height: var(--softn-font-line-height-label);
+  text-transform: uppercase;
+}
+
+/*
+ * Light theme: the glow violet is a dark-theme accent, and as text on the light surfaces it measures
+ * 2.5:1. The accent violet paints it instead (5.2:1 on the page, 5.7:1 on the consent panel), and
+ * the richer violet keeps a hover that stays above the same bar. Both cases of the light theme are
+ * covered, the explicit choice and the system preference with no choice recorded, exactly like the
+ * token package's own light variant.
+ */
+:global([data-theme='light']) .eyebrow {
+  color: var(--softn-brand-accent);
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme='dark'])) .eyebrow {
+    color: var(--softn-brand-accent);
+  }
+}
+
+.title {
+  margin: 0;
+  color: var(--softn-color);
+  font-family: var(--softn-font-display);
+  font-size: var(--softn-font-size-display-md);
+  font-weight: var(--softn-font-weight-display-md);
+  letter-spacing: var(--softn-font-letter-spacing-display-md);
+  line-height: var(--softn-font-line-height-display-md);
+  text-wrap: balance;
+}
+
+/*
+ * From the small breakpoint up, the heading takes the next step of the type scale, as the mockup
+ * does. The step lives here rather than in a utility class: this module is emitted unlayered, so an
+ * unlayered rule always wins over the utility layer whatever the utility says. 40rem is the small
+ * breakpoint of the token package, which a media query cannot read from a custom property.
+ */
+@media (min-width: 40rem) {
+  .title {
+    font-size: var(--softn-font-size-display-lg);
+    font-weight: var(--softn-font-weight-display-lg);
+    letter-spacing: var(--softn-font-letter-spacing-display-lg);
+    line-height: var(--softn-font-line-height-display-lg);
+  }
+}
+
+/*
+ * The heading is focused when the success state replaces it, and a heading is not an interactive
+ * control: the browser does not mark that focus as visible, so no outline appears. The rule below
+ * keeps that true even in a browser that would, without hiding the focus of anything a visitor
+ * reaches with the keyboard.
+ */
+.title:focus {
+  outline: none;
+}
+
+.intro {
+  margin: 0;
+  max-inline-size: var(--softn-container-xl);
+  color: var(--softn-color-secondary);
+  font-size: var(--softn-font-size-body-md);
+  line-height: var(--softn-font-line-height-body-md);
+  text-wrap: pretty;
+}
+
+/* Emphasis on the visitor's first name uses a Softn weight token, not the browser default. */
+.intro strong {
+  font-weight: var(--softn-font-weight-title-sm);
+}
+
+.success-link {
+  color: var(--softn-brand-glow);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.success-link:hover {
+  color: var(--softn-brand-vivid);
+}
+
+.success-link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}

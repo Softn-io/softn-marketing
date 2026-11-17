@@ -26,6 +26,23 @@
   color: var(--softn-button-primary-text-default);
 }
 
+/*
+ * Disabled look of the primary intent: the pair the design system uses, whether the button carries
+ * the native attribute or only `aria-disabled` (the state that keeps it focusable and announced).
+ */
+.intent-primary:disabled,
+.intent-primary[aria-disabled='true'] {
+  background-color: var(--softn-button-disabled-background-default);
+  color: var(--softn-button-disabled-text-default);
+  cursor: not-allowed;
+}
+
+.intent-primary:disabled:hover,
+.intent-primary[aria-disabled='true']:hover {
+  background-color: var(--softn-button-disabled-background-default);
+  color: var(--softn-button-disabled-text-default);
+}
+
 .intent-primary:hover {
   background-color: var(--softn-button-primary-background-hover);
   color: var(--softn-button-primary-text-hover);
