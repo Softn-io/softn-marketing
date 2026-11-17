@@ -11,7 +11,7 @@
  *   one renders "L'appel a déjà commencé". The route's own 403 and `Cache-Control: no-store` for a
  *   forged token are unit-covered in `app/api/booking/manage/route.test.ts`, not here: on a
  *   production server without the Upstash store the rate limiter fails closed before the token
- *   check (503 — the intended behaviour, see `lib/assistant/rateLimit.ts`), so that answer cannot
+ *   check (503 — the intended behaviour, see `lib/rateLimit.ts`), so that answer cannot
  *   be exercised by a browser run and no suite depends on a live store.
  * - The fail-closed answer of the page: a validly signed token still only renders the unavailable
  *   state with its retry when the calendar cannot answer, never a management UI.
