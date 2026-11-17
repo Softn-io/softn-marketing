@@ -26,12 +26,11 @@
 import { randomUUID } from 'node:crypto'
 import { SITE_URL } from '@/lib/site'
 import {
-  EMAIL_FOOTER_LINK_COLOR,
   EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_LINK_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
-  EMAIL_SIGNATURE_LINK_COLOR,
   EMAIL_SIGNATURE_TEXT_COLOR,
 } from './emailColors'
 import {
@@ -314,7 +313,7 @@ const htmlSignature = (signature: string): string => {
   const studio = lines[lines.length - 1] ?? ''
   const name = lines.slice(0, -1).map(escapeHtml)
 
-  const link = `<a href="${escapeHtml(SITE_URL)}" style="color:${EMAIL_SIGNATURE_LINK_COLOR}">${escapeHtml(studio)}</a>`
+  const link = `<a href="${escapeHtml(SITE_URL)}" style="color:${EMAIL_LINK_COLOR}">${escapeHtml(studio)}</a>`
 
   return `<p style="color:${EMAIL_SIGNATURE_TEXT_COLOR}">${[...name, link].join(`<br />${CRLF}`)}</p>`
 }
@@ -383,7 +382,7 @@ const htmlFooter = (block: string, links: readonly HtmlLink[]): string =>
   `<p style="color:${EMAIL_FOOTER_TEXT_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">` +
   block
     .split('\n')
-    .map((line) => htmlLine(line, links, `color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`))
+    .map((line) => htmlLine(line, links, `color:${EMAIL_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`))
     .join(`<br />${CRLF}`) +
   '</p>'
 

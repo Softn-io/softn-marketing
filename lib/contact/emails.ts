@@ -17,7 +17,7 @@
  * non-personal code returned here, and the message itself is already stored in Baserow.
  */
 
-import { EMAIL_FOOTER_LINK_COLOR } from '@/lib/email/emailColors'
+import { EMAIL_LINK_COLOR } from '@/lib/email/emailColors'
 import { htmlBody, mimeMessage, type HtmlLink } from '@/lib/email/mime'
 import { readEnv } from '@/lib/env'
 import { sendGmailMessage, type GmailFailure } from '@/lib/google/gmail'
@@ -246,9 +246,9 @@ export const autoReplyEmailContent = (input: {
     contactLink: `${contactLinkLabel} (${contactLink})`,
   })
   const links: readonly HtmlLink[] = [
-    // The booking link of the body carries the accent violet of the footer links: a mail client
-    // paints a body anchor with its own colour otherwise.
-    { url: agentLink, label: agentLinkLabel, style: `color:${EMAIL_FOOTER_LINK_COLOR}` },
+    // The booking link of the body carries the service-email link colour: a mail client paints a
+    // body anchor with its own colour otherwise.
+    { url: agentLink, label: agentLinkLabel, style: `color:${EMAIL_LINK_COLOR}` },
     { url: privacyLink, label: privacyLinkLabel },
     { url: contactLink, label: contactLinkLabel },
   ]
