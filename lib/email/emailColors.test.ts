@@ -1,7 +1,13 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { EMAIL_SIGNATURE_LINK_COLOR, EMAIL_SIGNATURE_TEXT_COLOR } from './emailColors'
+import {
+  EMAIL_QUOTE_BACKGROUND_COLOR,
+  EMAIL_QUOTE_BORDER_COLOR,
+  EMAIL_QUOTE_TEXT_COLOR,
+  EMAIL_SIGNATURE_LINK_COLOR,
+  EMAIL_SIGNATURE_TEXT_COLOR,
+} from './emailColors'
 
 /** Package that holds the single source of every Softn token. */
 const TOKENS_ROOT = join(process.cwd(), 'node_modules', '@softnio-labs', 'tokens')
@@ -81,6 +87,29 @@ describe('email colours', () => {
     expect(vivid).not.toBeNull()
     expect(hexOf(vivid ?? [0, 0, 0])).toBe(EMAIL_SIGNATURE_LINK_COLOR)
     expect(lightCss).toContain('--softn-brand-vivid: var(--softn-color-violet500)')
+  })
+
+  it('inlines the light surface a quoted message sits on', () => {
+    const surface = oklchOf(colorsCss, 'softn-color-surface-elevated-light')
+
+    expect(surface).not.toBeNull()
+    expect(hexOf(surface ?? [0, 0, 0])).toBe(EMAIL_QUOTE_BACKGROUND_COLOR)
+    expect(lightCss).toContain('--softn-background-elevated: var(--softn-color-surface-elevated-light)')
+  })
+
+  it('inlines the soft violet of the quote edge', () => {
+    const violet = oklchOf(colorsCss, 'softn-color-violet400')
+
+    expect(violet).not.toBeNull()
+    expect(hexOf(violet ?? [0, 0, 0])).toBe(EMAIL_QUOTE_BORDER_COLOR)
+  })
+
+  it('inlines the ink of the quote, the one the light theme paints its text with', () => {
+    const ink = oklchOf(colorsCss, 'softn-color-text-primary-light')
+
+    expect(ink).not.toBeNull()
+    expect(hexOf(ink ?? [0, 0, 0])).toBe(EMAIL_QUOTE_TEXT_COLOR)
+    expect(lightCss).toContain('--softn-color: var(--softn-color-text-primary-light)')
   })
 
   it('refuses a token the stylesheet does not carry', () => {

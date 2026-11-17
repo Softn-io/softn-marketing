@@ -14,13 +14,17 @@ const calendarMock = vi.hoisted(() => ({
 
 const baserowMock = vi.hoisted(() => ({ createBaserowRow: vi.fn() }))
 
-const rateLimitMock = vi.hoisted(() => ({ checkRateLimit: vi.fn(), trustedClientIp: vi.fn() }))
+const rateLimitMock = vi.hoisted(() => ({
+  checkRateLimit: vi.fn(),
+  trustedClientIp: vi.fn(),
+  ASSISTANT_RATE_LIMIT_POLICY: { keyPrefix: 'assistant:rl:', windowMs: 60_000, maxRequests: 10 },
+}))
 
 const emailMock = vi.hoisted(() => ({ sendBookingConfirmationEmail: vi.fn() }))
 
 vi.mock('@/lib/google/calendar', () => calendarMock)
 vi.mock('@/lib/baserow', () => baserowMock)
-vi.mock('@/lib/assistant/rateLimit', () => rateLimitMock)
+vi.mock('@/lib/rateLimit', () => rateLimitMock)
 vi.mock('@/lib/booking/emails', () => emailMock)
 
 let errorSpy: MockInstance

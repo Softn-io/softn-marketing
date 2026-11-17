@@ -1,22 +1,37 @@
 /*
- * MIME message of a booking email, built by hand in RFC 5322 and MIME.
+ * MIME message of a service email, built by hand in RFC 5322 and MIME.
  *
- * The message carries the plain-text body of the copy exactly as it was validated, its minimal HTML
- * alternative (a hidden preview line, one `<p>` per paragraph, `<a>` for each link, and the
- * signature in the grey of its token with the studio line linked to the site) and the booking's
- * calendar file as an attachment. Both bodies travel base64-encoded, which keeps accents and long
- * lines inside the format whatever the mail client does — the same reason the calendar file is
- * encoded that way.
+ * Shared by every email Softn.io sends itself: the booking confirmation, update, cancellation and
+ * reminder, and the two messages of the contact form. The message carries the plain-text body of the
+ * copy exactly as it was validated, its minimal HTML alternative (a hidden preview line, one `<p>`
+ * per paragraph, `<a>` for each link, and the signature in the grey of its token with the studio
+ * line linked to the site) and, when the caller has one, a calendar file as an attachment. Both
+ * bodies travel base64-encoded, which keeps accents and long lines inside the format whatever the
+ * mail client does — the same reason the calendar file is encoded that way.
  *
  * Two rules hold here. A value that goes into a header can never carry a line break: a bare CR or
  * LF would start a new header, so a forged name or address could add a `Bcc`. And nothing of this
  * module is locale copy: the subject, the bodies and the attachment filename are handed in by the
- * caller, which reads them from `locales/fr/bookingEmails.ts`.
+ * caller, which reads them from `locales/fr/` (`bookingEmails.ts` for the booking emails,
+ * `contactEmails.ts` for the contact ones).
+ *
+ * Three renderings are optional and off by default, so a caller that names none keeps the plain
+ * paragraph rendering: a block a caller names is rendered as a quote (the contact auto-reply quotes
+ * what the visitor wrote), a label a caller names is rendered in bold (the contact notification
+ * labels each answer), and a block a caller names as plain keeps its lines unbolded (the message
+ * that notification carries).
  */
 
 import { randomUUID } from 'node:crypto'
 import { SITE_URL } from '@/lib/site'
-import { EMAIL_SIGNATURE_LINK_COLOR, EMAIL_SIGNATURE_TEXT_COLOR } from './emailColors'
+import {
+  EMAIL_QUOTE_BACKGROUND_COLOR,
+  EMAIL_QUOTE_BORDER_COLOR,
+  EMAIL_QUOTE_TEXT_COLOR,
+  EMAIL_SIGNATURE_LINK_COLOR,
+  EMAIL_SIGNATURE_TEXT_COLOR,
+} from './emailColors'
+import { EMAIL_QUOTE_BORDER_WIDTH, EMAIL_QUOTE_PADDING, EMAIL_QUOTE_RADIUS } from './emailLengths'
 
 /** Line ending of every line of the message, as RFC 5322 requires. */
 const CRLF = '\r\n'
@@ -217,7 +232,7 @@ const htmlLine = (line: string, links: readonly HtmlLink[]): string => {
 const htmlPreheader = (preheader: string): string =>
   `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all" aria-hidden="true">${escapeHtml(preheader)}</div>`
 
-/** What one HTML alternative of a booking email carries. */
+/** What one HTML alternative of a service email carries. */
 export type HtmlBodyInput = {
   /** Body as the locale writes it, its parameters filled. */
   readonly text: string
@@ -227,6 +242,29 @@ export type HtmlBodyInput = {
   readonly preheader: string
   /** Signature block of the email, as the locale writes it; styled and linked in the HTML alone. */
   readonly signature: string
+  /**
+   * Blocks of the body rendered as a quote rather than a paragraph, escaped like every other value.
+   *
+   * A text a visitor wrote may carry blank lines of its own, so the caller passes each of its blocks
+   * and each one becomes its own quote. A block named here is quoted even when it also matches the
+   * signature: what the visitor wrote is never read as the signature of the email.
+   */
+  readonly quoted?: readonly string[]
+  /**
+   * Labels that open a line and are rendered in bold, the rest of the line left as it is.
+   *
+   * Used by the internal notifications, where each answer follows its label. A line that opens with
+   * anything else is rendered as it is.
+   */
+  readonly boldLabels?: readonly string[]
+  /**
+   * Blocks rendered as plain paragraphs, without the bold labels.
+   *
+   * A text a visitor wrote can open a line with a colon, which would otherwise read exactly like one
+   * of the labels above: naming its blocks here keeps every one of its lines plain. The caller passes
+   * each block of the text, as it splits the body on blank lines.
+   */
+  readonly plain?: readonly string[]
 }
 
 /**
@@ -251,42 +289,109 @@ const htmlSignature = (signature: string): string => {
 }
 
 /**
+ * One quoted block: the words of a visitor, escaped like every other value, their line breaks kept.
+ *
+ * The box is styled inline, because a mail client reads neither the site's stylesheet nor a CSS
+ * variable: the colours come from `emailColors.ts` and the lengths from `emailLengths.ts`, both
+ * traced to the token package and both checked by their own test. Background and text travel
+ * together, so the quote stays readable whatever theme the client is set to.
+ *
+ * @param block Block to quote, as the locale writes it.
+ * @param links URLs the block carries, each turned into an anchor where it appears.
+ * @returns The quote element, styled inline.
+ */
+const htmlQuote = (block: string, links: readonly HtmlLink[]): string =>
+  `<blockquote style="margin:0;padding:${EMAIL_QUOTE_PADDING};` +
+  `border-left:${EMAIL_QUOTE_BORDER_WIDTH} solid ${EMAIL_QUOTE_BORDER_COLOR};` +
+  `border-radius:${EMAIL_QUOTE_RADIUS};background-color:${EMAIL_QUOTE_BACKGROUND_COLOR};` +
+  `color:${EMAIL_QUOTE_TEXT_COLOR}">` +
+  `${block
+    .split('\n')
+    .map((line) => htmlLine(line, links))
+    .join(`<br />${CRLF}`)}</blockquote>`
+
+/**
+ * One line of a paragraph, with its label in bold when the line opens with one.
+ *
+ * The label is matched on the raw line and escaped on its own, then the rest of the line goes
+ * through {@link htmlLine}: a visitor's value is escaped and linked exactly as it is elsewhere.
+ *
+ * @param line Line as the locale writes it.
+ * @param links URLs the line carries, each turned into an anchor where it appears.
+ * @param boldLabels Labels the caller wants in bold; absent, every line is rendered as it is.
+ * @returns The line, ready to be written into a paragraph.
+ */
+const htmlLabelLine = (line: string, links: readonly HtmlLink[], boldLabels: readonly string[] | undefined): string => {
+  const label = boldLabels?.find((candidate) => candidate !== '' && line.startsWith(candidate))
+  if (label === undefined) return htmlLine(line, links)
+
+  return `<strong>${escapeHtml(label)}</strong>${htmlLine(line.slice(label.length), links)}`
+}
+
+/**
+ * One block of the HTML body: a quote, the signature, or a plain paragraph.
+ *
+ * The order matters: a quoted block is one a visitor wrote, so it stays a quote even when it reads
+ * like the signature of the email.
+ *
+ * @param input Block, links and the three optional renderings.
+ * @returns The element of that block.
+ */
+const htmlBlock = ({
+  block,
+  links,
+  signature,
+  quoted,
+  boldLabels,
+  plain,
+}: {
+  block: string
+  links: readonly HtmlLink[]
+  signature: string
+  quoted: readonly string[] | undefined
+  boldLabels: readonly string[] | undefined
+  plain: readonly string[] | undefined
+}): string => {
+  if (quoted !== undefined && quoted.includes(block)) return htmlQuote(block, links)
+  if (block === signature) return htmlSignature(block)
+
+  // A block a visitor wrote keeps its lines plain, labels or not.
+  const labels = plain !== undefined && plain.includes(block) ? undefined : boldLabels
+
+  return `<p>${block
+    .split('\n')
+    .map((line) => htmlLabelLine(line, links, labels))
+    .join(`<br />${CRLF}`)}</p>`
+}
+
+/**
  * Paragraphs of one HTML body, without the preview line.
  *
- * The body is split on blank lines, one `<p>` per block, and the lines of one block are separated
+ * The body is split on blank lines, one block per element, and the lines of one block are separated
  * by `<br />`: the copy writes `Date :`, `Heure :` and the rest on separate lines, and HTML would
- * otherwise join them. The block that is exactly the signature is rendered apart, grey and linked;
- * every other block is plain text, escaped everywhere except the anchors, with no image and no
- * tracking of any kind.
+ * otherwise join them. A block named by `quoted` becomes a quote, the block that is exactly the
+ * signature is rendered apart, grey and linked, and every other block is plain text, escaped
+ * everywhere except the anchors, with no image and no tracking of any kind.
  *
- * @param text Body as the locale writes it.
- * @param links URLs the body carries, each turned into an anchor where it appears.
- * @param signature Signature block of the email, the one block that is styled.
- * @returns The paragraphs, one `<p>` per block.
+ * @param input Body, links, signature and the optional renderings.
+ * @returns The blocks, in order.
  */
-const htmlParagraphs = (text: string, links: readonly HtmlLink[], signature: string): string =>
+const htmlParagraphs = ({ text, links, signature, quoted, boldLabels, plain }: HtmlBodyInput): string =>
   text
     .split(/\n{2,}/)
-    .map((block) =>
-      block === signature
-        ? htmlSignature(block)
-        : `<p>${block
-            .split('\n')
-            .map((line) => htmlLine(line, links))
-            .join(`<br />${CRLF}`)}</p>`,
-    )
+    .map((block) => htmlBlock({ block, links, signature, quoted, boldLabels, plain }))
     .join(CRLF)
 
 /**
- * HTML alternative of one booking email: its hidden preview line, then its paragraphs.
+ * HTML alternative of one service email: its hidden preview line, then its blocks.
  *
- * @param input Body, links, preview text and signature of the email.
+ * @param input Body, links, preview text, signature and the optional renderings.
  * @returns The HTML body, preview line first.
  */
-export const htmlBody = ({ text, links, preheader, signature }: HtmlBodyInput): string =>
-  `${htmlPreheader(preheader)}${CRLF}${htmlParagraphs(text, links, signature)}`
+export const htmlBody = (input: HtmlBodyInput): string =>
+  `${htmlPreheader(input.preheader)}${CRLF}${htmlParagraphs(input)}`
 
-/** What one booking email carries into the message. */
+/** What one service email carries into the message. */
 export type MimeMessageInput = {
   /** Sender, as the guest reads it in their mail client. */
   from: { readonly name: string; readonly address: string }
@@ -317,7 +422,7 @@ export type MimeMessageInput = {
 }
 
 /**
- * Builds the RFC 5322 message one booking email sends.
+ * Builds the RFC 5322 message one service email sends.
  *
  * A message with a calendar file is `multipart/mixed` holding the `multipart/alternative` of the two
  * bodies and the file as an attachment, so a client that understands calendar files updates its

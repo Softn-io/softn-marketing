@@ -27,7 +27,7 @@ import type { BookingSlot } from './availability'
 import { bookingEventTitle } from './event'
 import { bookingInvitation, emailSequenceOf } from './ics'
 import { formatBookingDateLabel, formatBookingTimeLabel } from './labels'
-import { htmlBody, type HtmlLink, mimeMessage } from './mime'
+import { htmlBody, type HtmlLink, mimeMessage } from '@/lib/email/mime'
 import type { BookingRules } from './rules'
 
 /** Name of the calendar file, as the guest's mail client shows it. */
