@@ -1,4 +1,17 @@
 import { describe, expect, it } from 'vitest'
+import {
+  EMAIL_FOOTER_LINK_COLOR,
+  EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_QUOTE_BACKGROUND_COLOR,
+  EMAIL_QUOTE_BORDER_COLOR,
+  EMAIL_QUOTE_TEXT_COLOR,
+} from './emailColors'
+import {
+  EMAIL_FOOTER_FONT_SIZE,
+  EMAIL_QUOTE_BORDER_WIDTH,
+  EMAIL_QUOTE_PADDING,
+  EMAIL_QUOTE_RADIUS,
+} from './emailLengths'
 import { htmlBody, mimeMessage, type HtmlLink, type MimeMessageInput } from './mime'
 
 const SENT_AT = new Date('2026-11-05T08:15:00.000Z')
@@ -207,6 +220,22 @@ describe('htmlBody', () => {
     )
   })
 
+  it('paints a link with the style the caller gives it, over the client default', () => {
+    const link = 'https://softn.io/#assistant'
+
+    expect(
+      htmlBody({
+        text: `Réservez un échange Spark : ${link}`,
+        links: [{ url: link, label: 'Réserver un échange Spark', style: `color:${EMAIL_FOOTER_LINK_COLOR}` }],
+        preheader: PREHEADER,
+        signature: SIGNATURE,
+      }),
+    ).toBe(
+      `${hidden(PREHEADER)}\r\n` +
+        `<p>Réservez un échange Spark : <a href="${link}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a></p>`,
+    )
+  })
+
   it('renders the signature apart: grey lines, the studio line linked to the site', () => {
     const html = body(`À bientôt,\n\n${SIGNATURE}\n\n—\nVous recevez ce message parce que vous avez réservé.`)
 
@@ -231,5 +260,186 @@ describe('htmlBody', () => {
       `${hidden(PREHEADER)}\r\n` +
         '<p>Lien : <a href="https://softn.io/rendez-vous/token?a=1&amp;b=&quot;2&quot;">https://softn.io/rendez-vous/token?a=1&amp;b=&quot;2&quot;</a></p>',
     )
+  })
+
+  it('renders a block the caller names as a quote, styled inline and keeping its line breaks', () => {
+    const quoted = 'Bonjour,\nje souhaite un devis.'
+    const html = htmlBody({
+      text: `Avant.\n\n${quoted}\n\nAprès.`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      quoted: [quoted],
+    })
+
+    expect(html).toBe(
+      `${hidden(PREHEADER)}\r\n<p>Avant.</p>\r\n` +
+        `<blockquote style="margin:0;padding:${EMAIL_QUOTE_PADDING};` +
+        `border-left:${EMAIL_QUOTE_BORDER_WIDTH} solid ${EMAIL_QUOTE_BORDER_COLOR};` +
+        `border-radius:${EMAIL_QUOTE_RADIUS};background-color:${EMAIL_QUOTE_BACKGROUND_COLOR};` +
+        `color:${EMAIL_QUOTE_TEXT_COLOR}">` +
+        `Bonjour,<br />\r\nje souhaite un devis.</blockquote>\r\n<p>Après.</p>`,
+    )
+  })
+
+  it('gathers every paragraph of a quoted message into a single quote', () => {
+    const message = 'Bonjour,\n\nje souhaite un devis.'
+    const html = htmlBody({
+      text: message,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      quoted: message.split(/\n{2,}/),
+    })
+
+    expect(html.match(/<blockquote style="margin:0;/g)).toHaveLength(1)
+    expect(html).toContain('Bonjour,<br /><br />\r\nje souhaite un devis.</blockquote>')
+  })
+
+  it('keeps every line of a quote plain, even a line that reads like a named label', () => {
+    const quoted = 'Adresse e-mail : autre@exemple.fr\nEt voici mon besoin.'
+    const html = htmlBody({
+      text: `Adresse e-mail : camille@example.fr\n\n${quoted}`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      boldLabels: ['Adresse e-mail :'],
+      quoted: [quoted],
+    })
+
+    expect(html).toContain('<p><strong>Adresse e-mail :</strong> camille@example.fr</p>')
+    expect(html).toContain('Adresse e-mail : autre@exemple.fr<br />\r\nEt voici mon besoin.</blockquote>')
+    // The label of the header is the only one bolded: the visitor's line stays plain.
+    expect(html.match(/<strong>/g)).toHaveLength(1)
+  })
+
+  it('quotes a block that reads like the signature: what the visitor wrote wins', () => {
+    const html = htmlBody({
+      text: SIGNATURE,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      quoted: [SIGNATURE],
+    })
+
+    expect(html).toContain('<blockquote style="margin:0;')
+    expect(html).toContain('Mélanie<br />\r\nFounder<br />\r\nSoftn.io</blockquote>')
+    expect(html).not.toContain('style="color:#5e577f"')
+  })
+
+  it('escapes the quoted text and keeps its links, like every other value', () => {
+    const quoted = '<script>alert(1)</script> et https://softn.io/contact'
+    const html = htmlBody({
+      text: quoted,
+      links: plainLinks(['https://softn.io/contact']),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      quoted: [quoted],
+    })
+
+    expect(html).toContain(
+      '&lt;script&gt;alert(1)&lt;/script&gt; et <a href="https://softn.io/contact">https://softn.io/contact</a></blockquote>',
+    )
+    expect(html).not.toContain('<script>')
+  })
+
+  it('bolds a line that opens with one of the named labels, and nothing else', () => {
+    const html = htmlBody({
+      text: 'Nom : Camille Durand\nAdresse e-mail : camille@example.fr\n\nMessage :\nUn mot de Camille.',
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      boldLabels: ['Nom :', 'Adresse e-mail :', 'Message :'],
+    })
+
+    expect(html).toContain(
+      '<p><strong>Nom :</strong> Camille Durand<br />\r\n<strong>Adresse e-mail :</strong> camille@example.fr</p>',
+    )
+    // A label alone on its line is bolded, and the words of the visitor stay unbolded.
+    expect(html).toContain('<p><strong>Message :</strong><br />\r\nUn mot de Camille.</p>')
+  })
+
+  it('escapes a label and a value of the notification like every other value', () => {
+    const html = htmlBody({
+      text: 'Nom : <script>alert(1)</script>',
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      boldLabels: ['Nom :'],
+    })
+
+    expect(html).toContain('<p><strong>Nom :</strong> &lt;script&gt;alert(1)&lt;/script&gt;</p>')
+    expect(html).not.toContain('<script>')
+  })
+
+  it('leaves every block and line alone when the caller names no quote and no label', () => {
+    const text = 'Nom : Camille\n\nBonjour,\nje souhaite un devis.'
+
+    expect(htmlBody({ text, links: plainLinks(), preheader: PREHEADER, signature: SIGNATURE })).toBe(body(text))
+  })
+
+  it('renders a block the caller names as the footer in the small grey type of the email', () => {
+    const footer = '—\nVous recevez ce message parce que vous avez réservé.'
+    const html = htmlBody({
+      text: `À bientôt,\n\n${SIGNATURE}\n\n${footer}`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      footer: [footer],
+    })
+
+    expect(html).toContain(
+      `<p style="color:${EMAIL_FOOTER_TEXT_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">` +
+        '—<br />\r\nVous recevez ce message parce que vous avez réservé.</p>',
+    )
+    // The signature keeps its own style, and the footer is not read as it.
+    expect(html).toContain(signatureHtml)
+  })
+
+  it('dresses the links of the footer too, so they stay links inside its grey', () => {
+    const link = 'https://softn.io/politique-de-confidentialite'
+    const footer = `Le détail figure dans la ${link}.`
+    const html = htmlBody({
+      text: `À bientôt,\n\n${SIGNATURE}\n\n${footer}`,
+      links: plainLinks([link]),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      footer: [footer],
+    })
+
+    expect(html).toContain(
+      `<a href="${link}" style="color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">${link}</a>`,
+    )
+  })
+
+  it('dresses every block the caller names as the footer, and no other one', () => {
+    const footer = '—\nVous recevez ce message parce que vous avez réservé.'
+    const after = 'Une dernière ligne.'
+    const html = htmlBody({
+      text: `Bonjour Marie,\n\n${footer}\n\n${after}`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      footer: [footer],
+    })
+
+    expect(html).toContain(`font-size:${EMAIL_FOOTER_FONT_SIZE}">—<br />\r\nVous recevez`)
+    expect(html).toContain(`\r\n<p>${after}</p>`)
+    expect(html.match(/font-size:/g)).toHaveLength(1)
+  })
+
+  it('never reads a quoted block as the footer: what the visitor wrote stays plain', () => {
+    const footer = '—\nVous recevez ce message parce que vous avez réservé.'
+    const html = htmlBody({
+      text: `${footer}`,
+      links: plainLinks(),
+      preheader: PREHEADER,
+      signature: SIGNATURE,
+      quoted: [footer],
+      footer: [footer],
+    })
+
+    expect(html).toContain('<blockquote style="margin:0;')
+    expect(html).not.toContain('font-size:')
   })
 })

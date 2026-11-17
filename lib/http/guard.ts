@@ -1,9 +1,9 @@
 /*
- * Request guards shared by the booking Route Handlers.
+ * Request guards shared by the Route Handlers.
  *
- * They keep the two booking endpoints reachable only from the site's own pages, in the same way as
- * the assistant route: a request from another origin, or one sent without a browser context at all,
- * is refused before any work is done.
+ * They keep an endpoint reachable only from the site's own pages: a request from another origin, or
+ * one sent without a browser context at all, is refused before any work is done. The booking routes
+ * and the contact routes both use them.
  */
 
 /**

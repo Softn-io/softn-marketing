@@ -1,0 +1,104 @@
+/*
+ * Contact page shell: the centred column, the skip link, the no-JavaScript notice and the anchor the
+ * skip link points at. The heading, the intro and the form belong to the client screen that fills
+ * that column, and its own stylesheet holds their layout. Colours, lengths and type come from
+ * --softn-* tokens; the page itself is a server component.
+ */
+
+.main {
+  flex: 1;
+  padding: var(--softn-space-10) clamp(var(--softn-space-5), 5vw, var(--softn-space-12)) var(--softn-space-16);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-8);
+  inline-size: 100%;
+  max-inline-size: var(--softn-container-3xl);
+  margin-inline: auto;
+}
+
+.agent-link {
+  color: var(--softn-brand-glow);
+  text-decoration: underline;
+  text-underline-offset: var(--softn-space-1);
+}
+
+.agent-link:hover {
+  color: var(--softn-brand-vivid);
+}
+
+/*
+ * Light theme: the glow violet is a dark-theme accent, and as text on the light surfaces it measures
+ * 2.5:1. The accent violet paints it instead (5.2:1 on the page, 5.7:1 on the consent panel), and
+ * the richer violet keeps a hover that stays above the same bar. Both cases of the light theme are
+ * covered, the explicit choice and the system preference with no choice recorded, exactly like the
+ * token package's own light variant.
+ */
+:global([data-theme='light']) .agent-link {
+  color: var(--softn-brand-accent);
+}
+
+:global([data-theme='light']) .agent-link:hover {
+  color: var(--softn-brand-rich);
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme='dark'])) .agent-link {
+    color: var(--softn-brand-accent);
+  }
+
+  :global(:root:not([data-theme='dark'])) .agent-link:hover {
+    color: var(--softn-brand-rich);
+  }
+}
+
+.agent-link:focus-visible,
+.skip-link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.noscript {
+  margin: 0;
+  padding: var(--softn-space-4);
+  border: 1px solid var(--softn-error-border);
+  border-radius: var(--softn-radius-lg);
+  background-color: var(--softn-error-background);
+  color: var(--softn-color-secondary);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.form-anchor {
+  scroll-margin-block-start: var(--softn-space-6);
+}
+
+.form-anchor:focus-visible {
+  outline: none;
+}
+
+/* Off-screen until it takes focus, like the header's own skip link. */
+.skip-link {
+  position: fixed;
+  top: var(--softn-space-2);
+  left: var(--softn-space-2);
+  z-index: var(--softn-z-toast);
+  padding: var(--softn-space-3) var(--softn-space-4);
+  border: 1px solid var(--softn-border-active);
+  border-radius: var(--softn-radius-md);
+  background-color: var(--softn-background-elevated);
+  color: var(--softn-color);
+  transform: translateY(calc(-100% - var(--softn-space-2)));
+}
+
+.skip-link:focus-visible {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skip-link {
+    transition: none;
+  }
+}

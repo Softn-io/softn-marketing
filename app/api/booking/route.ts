@@ -1,4 +1,4 @@
-import { checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/assistant/rateLimit'
+import { ASSISTANT_RATE_LIMIT_POLICY, checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/rateLimit'
 import { createBaserowRow, type BaserowFailure } from '@/lib/baserow'
 import {
   bookingDayKeyOfInstant,
@@ -13,7 +13,7 @@ import {
   bookingManageUrlOfEvent,
   type BookingLead,
 } from '@/lib/booking/event'
-import { hasJsonContentType, isSameOriginRequest } from '@/lib/booking/guard'
+import { hasJsonContentType, isSameOriginRequest } from '@/lib/http/guard'
 import { sendBookingConfirmationEmail } from '@/lib/booking/emails'
 import { bookingLeadFields, BOOKING_LEAD_REQUIRED_FIELD_CHECKS } from '@/lib/booking/lead'
 import { readBookingLinkSecret } from '@/lib/booking/manageToken'
@@ -153,7 +153,7 @@ export const POST = async (request: Request): Promise<Response> => {
   if (!isSameOriginRequest(request)) return errorResponse('invalid', 403)
   if (!hasJsonContentType(request)) return errorResponse('invalid', 415)
 
-  const limit = await checkRateLimit(trustedClientIp(request))
+  const limit = await checkRateLimit(trustedClientIp(request), ASSISTANT_RATE_LIMIT_POLICY)
   if (!limit.ok) {
     logFailure(`unavailable: rate-limit ${rateLimitFailureDetail(limit)}`)
     return errorResponse('unavailable', 503)

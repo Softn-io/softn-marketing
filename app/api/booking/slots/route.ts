@@ -1,6 +1,6 @@
-import { checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/assistant/rateLimit'
+import { ASSISTANT_RATE_LIMIT_POLICY, checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/rateLimit'
 import { bookingQueryWindow, findFreeSlots } from '@/lib/booking/availability'
-import { isSameOriginRequest } from '@/lib/booking/guard'
+import { isSameOriginRequest } from '@/lib/http/guard'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { readSubjectToken } from '@/lib/google/auth'
 import { countBookedCallsPerDay, queryBusyIntervals, type CalendarFailure } from '@/lib/google/calendar'
@@ -58,7 +58,7 @@ const logUnavailable = (detail: string): void => {
 export const GET = async (request: Request): Promise<Response> => {
   if (!isSameOriginRequest(request)) return errorResponse('invalid', 403)
 
-  const limit = await checkRateLimit(trustedClientIp(request))
+  const limit = await checkRateLimit(trustedClientIp(request), ASSISTANT_RATE_LIMIT_POLICY)
   if (!limit.ok) {
     logUnavailable(`rate-limit ${rateLimitFailureDetail(limit)}`)
     return errorResponse('unavailable', 503)

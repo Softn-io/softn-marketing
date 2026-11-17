@@ -58,7 +58,9 @@ export const cspHashSourceOf = (script: string): string =>
  * `script-src-attr 'none'` blocks the inline event-handler attributes (`on*=`) that
  * `'unsafe-inline'` would otherwise allow, in every environment. `style-src` keeps
  * `'unsafe-inline'` for the inline style attributes and `<style>` tags that React and Next.js
- * emit.
+ * emit. `worker-src blob:` is what the Altcha widget of the contact form needs: it solves its
+ * proof of work in Web Workers built from Blob URLs of its own bundled code. The workers inherit
+ * this policy, and the widget uses neither WebAssembly nor `eval`, so no other source is opened.
  */
 const buildPolicy = ({ scriptSources, isDev }: { scriptSources: string[]; isDev: boolean }): string =>
   [
@@ -68,6 +70,7 @@ const buildPolicy = ({ scriptSources, isDev }: { scriptSources: string[]; isDev:
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' blob: data:",
     "font-src 'self'",
+    'worker-src blob:',
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

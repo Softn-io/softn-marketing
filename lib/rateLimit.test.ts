@@ -1,6 +1,12 @@
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { checkRateLimit, RATE_LIMIT_MAX_REQUESTS, RATE_LIMIT_WINDOW_MS, trustedClientIp } from './rateLimit'
+import {
+  ASSISTANT_RATE_LIMIT_MAX_REQUESTS,
+  ASSISTANT_RATE_LIMIT_POLICY,
+  ASSISTANT_RATE_LIMIT_WINDOW_MS,
+  checkRateLimit,
+  trustedClientIp,
+} from './rateLimit'
 
 const REST_URL = 'https://eu1-example.upstash.io'
 const TOKEN = 'test-store-token'
@@ -37,15 +43,15 @@ afterEach(() => {
 })
 
 describe('checkRateLimit', () => {
-  it('keeps the 60 s window and the 10 question cap', () => {
-    expect(RATE_LIMIT_WINDOW_MS).toBe(60_000)
-    expect(RATE_LIMIT_MAX_REQUESTS).toBe(10)
+  it('keeps the assistant 60 s window and its 10 question cap', () => {
+    expect(ASSISTANT_RATE_LIMIT_WINDOW_MS).toBe(60_000)
+    expect(ASSISTANT_RATE_LIMIT_MAX_REQUESTS).toBe(10)
   })
 
   it('counts one pipeline request under an HMAC of the IP, never the raw IP', async () => {
     fetchMock.mockResolvedValue(pipeline(1))
 
-    const result = await checkRateLimit(CLIENT_IP)
+    const result = await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)
 
     expect(result).toEqual({ ok: true, data: 'allowed' })
     expect(fetchMock).toHaveBeenCalledTimes(1)
@@ -73,20 +79,51 @@ describe('checkRateLimit', () => {
       return pipeline(storedCount)
     })
 
-    for (let index = 0; index < RATE_LIMIT_MAX_REQUESTS; index += 1) {
-      expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: true, data: 'allowed' })
+    for (let index = 0; index < ASSISTANT_RATE_LIMIT_MAX_REQUESTS; index += 1) {
+      expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'allowed' })
     }
 
     vi.resetModules()
     const freshModule = await import('./rateLimit')
 
-    expect(await freshModule.checkRateLimit(CLIENT_IP)).toEqual({ ok: true, data: 'limited' })
+    expect(await freshModule.checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: true,
+      data: 'limited',
+    })
   })
 
   it('limits on the returned count instead of a local counter', async () => {
-    fetchMock.mockResolvedValue(pipeline(RATE_LIMIT_MAX_REQUESTS + 1))
+    fetchMock.mockResolvedValue(pipeline(ASSISTANT_RATE_LIMIT_MAX_REQUESTS + 1))
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: true, data: 'limited' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'limited' })
+  })
+
+  it('counts another surface under its own prefix, window and cap when a policy is given', async () => {
+    fetchMock.mockResolvedValue(pipeline(6))
+
+    const policy = { keyPrefix: 'contact:rl:', windowMs: 600_000, maxRequests: 5 }
+    const result = await checkRateLimit(CLIENT_IP, policy)
+
+    expect(result).toEqual({ ok: true, data: 'limited' })
+
+    const [, init] = fetchMock.mock.calls[0] ?? []
+    expect(JSON.parse(String(init?.body))).toEqual([
+      ['INCR', `contact:rl:${createHmac('sha256', TOKEN).update(CLIENT_IP).digest('hex')}`],
+      ['EXPIRE', `contact:rl:${createHmac('sha256', TOKEN).update(CLIENT_IP).digest('hex')}`, 600, 'NX'],
+    ])
+  })
+
+  it('keeps the assistant counters apart from another surface, in the in-memory window', async () => {
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
+    vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
+    const clientIp = '198.51.100.8'
+    const policy = { keyPrefix: 'contact:rl:', windowMs: 600_000, maxRequests: 1 }
+
+    expect(await checkRateLimit(clientIp, policy)).toEqual({ ok: true, data: 'allowed' })
+    expect(await checkRateLimit(clientIp, policy)).toEqual({ ok: true, data: 'limited' })
+    // The assistant's own window is untouched by the contact surface's counter.
+    expect(await checkRateLimit(clientIp, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'allowed' })
   })
 
   it('fails closed on a non-2xx store response and keeps its status', async () => {
@@ -94,7 +131,11 @@ describe('checkRateLimit', () => {
       new Response(JSON.stringify({ error: 'ERR max requests limit exceeded' }), { status: 500 }),
     )
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unavailable', status: 500 })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unavailable',
+      status: 500,
+    })
   })
 
   it('fails closed when Redis rejects a command', async () => {
@@ -104,7 +145,10 @@ describe('checkRateLimit', () => {
       }),
     )
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unavailable' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unavailable',
+    })
   })
 
   it('fails closed when the lifetime could not be set', async () => {
@@ -112,40 +156,61 @@ describe('checkRateLimit', () => {
       new Response(JSON.stringify([{ result: 1 }, { error: 'ERR invalid expire' }]), { status: 200 }),
     )
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unavailable' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unavailable',
+    })
   })
 
   it('fails closed on a malformed store response', async () => {
     fetchMock.mockResolvedValue(new Response('not-json', { status: 200 }))
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-invalid-response' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-invalid-response',
+    })
 
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ result: 1 }), { status: 200 }))
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-invalid-response' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-invalid-response',
+    })
 
     fetchMock.mockResolvedValue(new Response(JSON.stringify([{ result: 'many' }, { result: 1 }]), { status: 200 }))
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-invalid-response' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-invalid-response',
+    })
   })
 
   it('fails closed on a timeout and on a network error', async () => {
     fetchMock.mockRejectedValue(timeoutError())
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-timeout' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: false, error: 'store-timeout' })
 
     fetchMock.mockRejectedValue(new TypeError('fetch failed'))
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unavailable' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unavailable',
+    })
   })
 
   it('fails closed in production when the store is not configured', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_URL', '')
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unconfigured' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unconfigured',
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('fails closed in production when only one store variable is set', async () => {
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unconfigured' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unconfigured',
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -155,11 +220,11 @@ describe('checkRateLimit', () => {
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
     const clientIp = '198.51.100.7'
 
-    for (let index = 0; index < RATE_LIMIT_MAX_REQUESTS; index += 1) {
-      expect(await checkRateLimit(clientIp)).toEqual({ ok: true, data: 'allowed' })
+    for (let index = 0; index < ASSISTANT_RATE_LIMIT_MAX_REQUESTS; index += 1) {
+      expect(await checkRateLimit(clientIp, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'allowed' })
     }
 
-    expect(await checkRateLimit(clientIp)).toEqual({ ok: true, data: 'limited' })
+    expect(await checkRateLimit(clientIp, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'limited' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -167,7 +232,7 @@ describe('checkRateLimit', () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('UPSTASH_REDIS_REST_TOKEN', '')
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: true, data: 'allowed' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({ ok: true, data: 'allowed' })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -175,7 +240,10 @@ describe('checkRateLimit', () => {
     vi.stubEnv('NODE_ENV', 'development')
     vi.stubEnv('UPSTASH_REDIS_REST_URL', 'http://not-https.example')
 
-    expect(await checkRateLimit(CLIENT_IP)).toEqual({ ok: false, error: 'store-unconfigured' })
+    expect(await checkRateLimit(CLIENT_IP, ASSISTANT_RATE_LIMIT_POLICY)).toEqual({
+      ok: false,
+      error: 'store-unconfigured',
+    })
     expect(fetchMock).not.toHaveBeenCalled()
   })
 })

@@ -9,10 +9,14 @@ const calendarMock = vi.hoisted(() => ({
   countBookedCallsPerDay: vi.fn(),
 }))
 
-const rateLimitMock = vi.hoisted(() => ({ checkRateLimit: vi.fn(), trustedClientIp: vi.fn() }))
+const rateLimitMock = vi.hoisted(() => ({
+  checkRateLimit: vi.fn(),
+  trustedClientIp: vi.fn(),
+  ASSISTANT_RATE_LIMIT_POLICY: { keyPrefix: 'assistant:rl:', windowMs: 60_000, maxRequests: 10 },
+}))
 
 vi.mock('@/lib/google/calendar', () => calendarMock)
-vi.mock('@/lib/assistant/rateLimit', () => rateLimitMock)
+vi.mock('@/lib/rateLimit', () => rateLimitMock)
 
 let errorSpy: MockInstance
 

@@ -22,7 +22,7 @@ export const contact = {
     body: 'Une question, une demande de devis ou un projet à décrire : laissez-moi un message. Vous pouvez aussi réserver directement {agentLink}.',
     agentLink: {
       label: "votre échange Spark avec {assistantName}, l'assistant virtuel",
-      href: '/#agent',
+      href: '/#assistant',
     },
   },
   form: {
@@ -64,6 +64,20 @@ export const contact = {
     honeypot: {
       label: 'Ne pas remplir ce champ',
     },
+    altcha: {
+      /** Group title of the anti-bot check, above the widget; it is also its accessible group name. */
+      title: 'Vérification anti-robot',
+      /** Label the widget shows next to its checkbox. */
+      label: 'Je ne suis pas un robot',
+      help: 'Cette vérification s’effectue dans votre navigateur, sans cookie et sans service tiers.',
+      /** Short states the widget displays; the fuller wording read by screen readers is in `a11y.altcha`. */
+      states: {
+        verifying: 'Vérification en cours…',
+        verified: 'Vérification réussie.',
+        error: 'La vérification a échoué. Veuillez réessayer.',
+        expired: 'La vérification a expiré. Veuillez la relancer.',
+      },
+    },
   },
   consent: {
     notice:
@@ -78,6 +92,9 @@ export const contact = {
   },
   errors: {
     consent: 'Veuillez accepter pour envoyer votre message.',
+    altcha: {
+      required: "Veuillez effectuer la vérification anti-robot avant d'envoyer votre message.",
+    },
     firstName: {
       required: 'Veuillez indiquer votre prénom.',
     },
@@ -128,6 +145,13 @@ export const contact = {
       error: "L'envoi du message a échoué.",
     },
     skipLink: 'Aller au formulaire de contact',
+    /** Fuller wording of the anti-bot states, announced through the form's live region. */
+    altcha: {
+      verifying: 'Vérification anti-robot en cours.',
+      verified: 'Vérification anti-robot réussie.',
+      error: 'La vérification anti-robot a échoué. Veuillez réessayer.',
+      expired: 'La vérification anti-robot a expiré. Veuillez la relancer.',
+    },
   },
   fallback: {
     unavailable: 'Le formulaire est momentanément indisponible. Veuillez réessayer plus tard.',

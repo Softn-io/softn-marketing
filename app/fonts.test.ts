@@ -7,6 +7,7 @@ import * as bookingManage from '@/locales/fr/bookingManage'
 import * as chatbot from '@/locales/fr/chatbot'
 import * as comingSoon from '@/locales/fr/comingSoon'
 import * as contact from '@/locales/fr/contact'
+import * as contactEmails from '@/locales/fr/contactEmails'
 import * as faq from '@/locales/fr/faq'
 import * as footer from '@/locales/fr/footer'
 import * as hero from '@/locales/fr/hero'
@@ -28,6 +29,7 @@ const LOCALE_MODULES: Record<string, unknown> = {
   'chatbot.ts': chatbot,
   'comingSoon.ts': comingSoon,
   'contact.ts': contact,
+  'contactEmails.ts': contactEmails,
   'faq.ts': faq,
   'footer.ts': footer,
   'hero.ts': hero,

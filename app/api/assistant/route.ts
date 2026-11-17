@@ -2,7 +2,7 @@ import { buildAssistantSystemPrompt } from '@/lib/assistant/systemPrompt'
 import { requestChatCompletion, type MistralFailure } from '@/lib/assistant/mistral'
 import { getOkfBundle } from '@/lib/assistant/okf'
 import { resolveAssistantAnswer } from '@/lib/assistant/answer'
-import { checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/assistant/rateLimit'
+import { ASSISTANT_RATE_LIMIT_POLICY, checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/rateLimit'
 import { AssistantRequestSchema, type AssistantErrorCode } from '@/schemas/assistant'
 
 /** Route Handlers that read the bundle from disk must run on the Node.js runtime. */
@@ -74,7 +74,7 @@ export const POST = async (request: Request): Promise<Response> => {
   const contentType = request.headers.get('content-type')?.split(';')[0]?.trim().toLowerCase()
   if (contentType !== 'application/json') return errorResponse('invalid', 415)
 
-  const limit = await checkRateLimit(trustedClientIp(request))
+  const limit = await checkRateLimit(trustedClientIp(request), ASSISTANT_RATE_LIMIT_POLICY)
   if (!limit.ok) {
     logUnavailable(`rate-limit ${rateLimitFailureDetail(limit)}`)
     return errorResponse('unavailable', 503)

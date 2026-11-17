@@ -2,20 +2,37 @@ import { createHmac } from 'node:crypto'
 import { z } from 'zod'
 import { readEnv } from '@/lib/env'
 
-/** Fixed window of the assistant rate limit, in milliseconds. */
-export const RATE_LIMIT_WINDOW_MS = 60_000
+/** Fixed window of the assistant's own rate limit, in milliseconds. */
+export const ASSISTANT_RATE_LIMIT_WINDOW_MS = 60_000
 
-/** Questions accepted per client and per window. */
-export const RATE_LIMIT_MAX_REQUESTS = 10
-
-/** Window in whole seconds, the unit `EXPIRE` expects. */
-const RATE_LIMIT_WINDOW_SECONDS = RATE_LIMIT_WINDOW_MS / 1000
+/** Questions the assistant accepts per client and per window. */
+export const ASSISTANT_RATE_LIMIT_MAX_REQUESTS = 10
 
 /** Upper bound on one store call: a slow store must not eat the route's time budget. */
 const STORE_TIMEOUT_MS = 1500
 
-/** Namespace of the counter keys inside the shared Redis database. */
-const STORE_KEY_PREFIX = 'assistant:rl:'
+/** Namespace of the assistant counter keys inside the shared Redis database. */
+const ASSISTANT_STORE_KEY_PREFIX = 'assistant:rl:'
+
+/** Limits of one rate-limited surface: the counter namespace, the window and the accepted count. */
+export type RateLimitPolicy = {
+  /** Namespace of the counter keys, so two surfaces never share a counter. */
+  readonly keyPrefix: string
+  /** Length of the fixed window, in milliseconds. */
+  readonly windowMs: number
+  /** Requests accepted per client and per window. */
+  readonly maxRequests: number
+}
+
+/**
+ * Policy of the assistant route, the values its window and its cap have always had. Every caller
+ * passes a policy explicitly, so no surface can silently count in another one's bucket.
+ */
+export const ASSISTANT_RATE_LIMIT_POLICY: RateLimitPolicy = {
+  keyPrefix: ASSISTANT_STORE_KEY_PREFIX,
+  windowMs: ASSISTANT_RATE_LIMIT_WINDOW_MS,
+  maxRequests: ASSISTANT_RATE_LIMIT_MAX_REQUESTS,
+}
 
 /** Bucket used when no platform header carries a client IP. */
 const UNKNOWN_CLIENT = 'unknown'
@@ -82,42 +99,53 @@ const isTimeoutError = (error: unknown): boolean =>
  *
  * It only protects the instance that serves the request: a second serverless instance keeps its
  * own map and a restart forgets every counter. The IP stays in process memory and disappears with
- * the entry, at the end of the window.
+ * the entry, at the end of the window. The key carries the policy prefix, so two surfaces counted
+ * by the same process never share an entry.
  */
 const memoryLimits = new Map<string, { count: number; resetAt: number }>()
 
-const isMemoryLimited = (clientIp: string): boolean => {
+const isMemoryLimited = (clientIp: string, policy: RateLimitPolicy): boolean => {
   const now = Date.now()
   for (const [key, entry] of memoryLimits) {
     if (entry.resetAt <= now) memoryLimits.delete(key)
   }
 
-  const entry = memoryLimits.get(clientIp)
+  const key = `${policy.keyPrefix}${clientIp}`
+  const entry = memoryLimits.get(key)
   if (entry === undefined || entry.resetAt <= now) {
-    memoryLimits.set(clientIp, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS })
+    memoryLimits.set(key, { count: 1, resetAt: now + policy.windowMs })
     return false
   }
 
   entry.count += 1
-  return entry.count > RATE_LIMIT_MAX_REQUESTS
+  return entry.count > policy.maxRequests
 }
 
 /**
- * Counts one question in the shared store.
+ * Counts one request in the shared store.
  *
  * The key is an HMAC of the client IP keyed with the store token, so the stored value is
- * pseudonymised and a plain hash of an IPv4 address cannot be brute-forced back. One pipeline
- * request runs `INCR` then `EXPIRE <key> 60 NX`: `NX` sets the lifetime on the first hit only, so
- * the counter expires with the window and nothing outlives it. Any error fails closed: the caller
- * answers the generic error instead of letting an unverified request through.
+ * pseudonymised and a plain hash of an IPv4 address cannot be brute-forced back, under the prefix
+ * of the policy. One pipeline request runs `INCR` then `EXPIRE <key> <window> NX`: `NX` sets the
+ * lifetime on the first hit only, so the counter expires with the window and nothing outlives it.
+ * Any error fails closed: the caller answers the generic error instead of letting an unverified
+ * request through.
  *
  * @param url Validated https base URL of the store.
  * @param token Store token, also used as the HMAC key.
  * @param clientIp Trusted client IP, never sent nor logged.
+ * @param policy Namespace, window and accepted count of the surface being counted.
  * @returns The verdict, or a failure code with the HTTP status when a response answered.
  */
-const countInSharedWindow = async (url: string, token: string, clientIp: string): Promise<RateLimitResult> => {
-  const key = `${STORE_KEY_PREFIX}${createHmac('sha256', token).update(clientIp).digest('hex')}`
+const countInSharedWindow = async (
+  url: string,
+  token: string,
+  clientIp: string,
+  policy: RateLimitPolicy,
+): Promise<RateLimitResult> => {
+  const key = `${policy.keyPrefix}${createHmac('sha256', token).update(clientIp).digest('hex')}`
+  // `EXPIRE` counts in whole seconds; a window under one second still keeps its key for one.
+  const windowSeconds = Math.max(1, Math.ceil(policy.windowMs / 1000))
 
   try {
     const response = await fetch(`${url}/pipeline`, {
@@ -128,7 +156,7 @@ const countInSharedWindow = async (url: string, token: string, clientIp: string)
       },
       body: JSON.stringify([
         ['INCR', key],
-        ['EXPIRE', key, RATE_LIMIT_WINDOW_SECONDS, 'NX'],
+        ['EXPIRE', key, windowSeconds, 'NX'],
       ]),
       cache: 'no-store',
       signal: AbortSignal.timeout(STORE_TIMEOUT_MS),
@@ -151,7 +179,7 @@ const countInSharedWindow = async (url: string, token: string, clientIp: string)
     // Without the lifetime the counter would never expire: refuse rather than keep a key forever.
     if ('error' in expiry) return { ok: false, error: 'store-unavailable' }
 
-    return { ok: true, data: increment.result > RATE_LIMIT_MAX_REQUESTS ? 'limited' : 'allowed' }
+    return { ok: true, data: increment.result > policy.maxRequests ? 'limited' : 'allowed' }
   } catch (error) {
     if (isTimeoutError(error)) return { ok: false, error: 'store-timeout' }
     return { ok: false, error: 'store-unavailable' }
@@ -159,7 +187,7 @@ const countInSharedWindow = async (url: string, token: string, clientIp: string)
 }
 
 /**
- * Decides whether one client may ask another question.
+ * Decides whether one client may send another request to a rate-limited surface.
  *
  * The environment is read at request time. With both Upstash variables set, the shared window in
  * Redis is authoritative. Without them, a production deployment fails closed (`store-unconfigured`)
@@ -168,9 +196,11 @@ const countInSharedWindow = async (url: string, token: string, clientIp: string)
  * unconfigured. Never throws for these recoverable failures.
  *
  * @param clientIp Trusted client IP from {@link trustedClientIp}.
+ * @param policy Namespace, window and accepted count of the surface being counted. Required: the
+ *   caller states whose bucket it counts in.
  * @returns The verdict, or the failure that must answer the caller with the generic 503.
  */
-export const checkRateLimit = async (clientIp: string): Promise<RateLimitResult> => {
+export const checkRateLimit = async (clientIp: string, policy: RateLimitPolicy): Promise<RateLimitResult> => {
   let environment: ReturnType<typeof readEnv>
   try {
     environment = readEnv()
@@ -180,9 +210,9 @@ export const checkRateLimit = async (clientIp: string): Promise<RateLimitResult>
 
   const url = environment.UPSTASH_REDIS_REST_URL
   const token = environment.UPSTASH_REDIS_REST_TOKEN
-  if (url !== undefined && token !== undefined) return countInSharedWindow(url, token, clientIp)
+  if (url !== undefined && token !== undefined) return countInSharedWindow(url, token, clientIp, policy)
 
   if (environment.NODE_ENV === 'production') return { ok: false, error: 'store-unconfigured' }
 
-  return { ok: true, data: isMemoryLimited(clientIp) ? 'limited' : 'allowed' }
+  return { ok: true, data: isMemoryLimited(clientIp, policy) ? 'limited' : 'allowed' }
 }

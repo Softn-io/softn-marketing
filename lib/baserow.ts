@@ -8,7 +8,7 @@ export type BaserowFieldValue = string | number | boolean | readonly string[]
 export type BaserowFields = Readonly<Record<string, BaserowFieldValue>>
 
 /** Actual Baserow column type of a field a create must give back unchanged. */
-export type BaserowFieldKind = 'text' | 'email' | 'date' | 'date-time' | 'boolean'
+export type BaserowFieldKind = 'text' | 'email' | 'date' | 'date-time' | 'boolean' | 'single-select'
 
 /** One field a create must verify, with the comparison its Baserow column type needs. */
 export type BaserowFieldCheck = {
@@ -100,18 +100,32 @@ const isSameInstant = (sent: string, returned: string): boolean => {
 }
 
 /**
+ * True when the value is a plain object: the shape Baserow gives back for a select cell.
+ *
+ * @param value Value read from a Baserow row.
+ * @returns True when the value can carry named properties.
+ */
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
  * True when Baserow gave back the value that was sent for one column.
  *
  * A date with time is compared as an instant: Baserow may return `2026-11-05T09:00:00Z` for a sent
  * `2026-11-05T09:00:00.000Z`. A date without time and every text column are compared as the exact
- * string sent; a boolean as the exact boolean. A missing key, `null` or a value of another type never
- * matches.
+ * string sent; a boolean as the exact boolean. A single select answers an object carrying the option
+ * (`{ id, value, color }`) where the write sent the option name, so its `value` is compared with the
+ * string sent. A missing key, `null` or a value of another type never matches.
  */
 const isSameBaserowValue = (check: BaserowFieldCheck, sent: BaserowFieldValue, returned: unknown): boolean => {
   if (check.kind === 'date-time') {
     return typeof sent === 'string' && typeof returned === 'string' && isSameInstant(sent, returned)
   }
   if (check.kind === 'boolean') return sent === returned
+  if (check.kind === 'single-select') {
+    if (typeof sent !== 'string' || !isRecord(returned)) return false
+    return typeof returned.value === 'string' && returned.value === sent
+  }
   return typeof sent === 'string' && typeof returned === 'string' && sent === returned
 }
 

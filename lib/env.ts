@@ -112,6 +112,14 @@ const cronSecret = z.preprocess(blankToUndefined, z.string().min(32).optional())
 const vercelEnv = z.preprocess(blankToUndefined, optionalString)
 
 /**
+ * Secret that signs the Altcha challenges of the contact form, at least 32 characters (a keyed
+ * digest of the challenge parameters, so the strength is in the secret itself). Optional: unset, the
+ * challenge route answers its generic error and the contact form refuses every submission instead of
+ * running without an anti-bot check. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const altchaHmacKey = z.preprocess(blankToUndefined, z.string().min(32).optional())
+
+/**
  * Server-side environment schema, validated at every `readEnv` call. Every
  * consumer goes through this module — never `process.env` directly.
  *
@@ -150,6 +158,11 @@ const vercelEnv = z.preprocess(blankToUndefined, optionalString)
  * optional bearer secret of the reminder route, shared with the GitHub Actions
  * repository secret of the same name: unset, that route fails closed. All of
  * them stay server-side and must never be prefixed with `NEXT_PUBLIC_`.
+ *
+ * `ALTCHA_HMAC_KEY` is the optional secret that signs the anti-bot challenges
+ * of the contact form: unset, the challenge route answers its generic error
+ * and no message can be sent through the form. It stays server-side and must
+ * never be prefixed with `NEXT_PUBLIC_`.
  */
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -172,6 +185,7 @@ const EnvSchema = z.object({
   BOOKING_LINK_SECRET: bookingLinkSecret,
   CRON_SECRET: cronSecret,
   VERCEL_ENV: vercelEnv,
+  ALTCHA_HMAC_KEY: altchaHmacKey,
 })
 
 export type Env = z.infer<typeof EnvSchema>

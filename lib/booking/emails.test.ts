@@ -15,7 +15,7 @@ import {
   updateEmailContent,
   type BookingEmailContent,
 } from './emails'
-import { htmlBody } from './mime'
+import { htmlBody } from '@/lib/email/mime'
 
 const gmailMock = vi.hoisted(() => ({ sendGmailMessage: vi.fn() }))
 const calendarMock = vi.hoisted(() => ({

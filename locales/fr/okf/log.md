@@ -1,5 +1,15 @@
 # Journal de la base de connaissances
 
+## 2026-11-17:
+
+- **Lien vers l'assistant**: Dans `locales/fr/contact.ts`, `intro.agentLink.href` passe de `/#agent` à `/#assistant`, l'ancre réelle de la section de l'assistant (`lib/anchors.ts`). Aucun fait cité par les concepts ne change : ni l'objet du formulaire, ni les objets proposés, ni la formulation de la réponse.
+- **Vérification**: Les concepts `contact` et `hors-perimetre`, les deux seuls à citer `contact.ts`, reçoivent une entrée `verified` au `2026-11-17T00:48:00+01:00` ; leurs contenus ne changent pas. L'empreinte de `contact.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
+## 2026-11-16:
+
+- **Formulaire de contact**: Dans `locales/fr/contact.ts`, les textes du contrôle anti-robot sont ajoutés : titre du groupe (« Vérification anti-robot »), libellé de la case (« Je ne suis pas un robot »), texte d'aide, les quatre états (vérification en cours, réussie, échouée, expirée), les annonces correspondantes pour les lecteurs d'écran et le message affiché lorsqu'un envoi part sans vérification. Aucun fait cité par les concepts ne change : ni l'objet du formulaire, ni les objets proposés, ni les champs obligatoires, ni la formulation de la réponse.
+- **Vérification**: Les concepts `contact` et `hors-perimetre`, les deux seuls à citer `contact.ts`, reçoivent une entrée `verified` au `2026-11-16T22:37:00+01:00` ; leurs contenus ne changent pas. L'empreinte de `contact.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
 ## 2026-11-12:
 
 - **Titre de l'appel final**: Dans `locales/fr/hero.ts`, `appel.title` est scindé en deux lignes `line1` (« L'échange Spark offert, ») et `line2` (« pour avancer sur votre projet. »), comme le titre du hero, la virgule après « Spark » étant retirée ; le texte complet devient « L'échange Spark offert, pour avancer sur votre projet. » Aucun autre texte de la source ne change.

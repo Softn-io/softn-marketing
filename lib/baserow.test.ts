@@ -312,4 +312,52 @@ describe('createBaserowRow with verifyFields', () => {
 
     expect(result).toEqual({ ok: false, error: 'request-failed', status: 400 })
   })
+
+  it('accepts a single select whose answer carries the option that was sent', async () => {
+    const singleSelectFields = { Subject: 'Nouveau projet' }
+    respondWith({ id: 42, Subject: { id: 3040950, value: 'Nouveau projet', color: 'dark-blue' } })
+
+    const result = await createBaserowRow({
+      tableId: '123456',
+      fields: singleSelectFields,
+      verifyFields: [{ field: 'Subject', kind: 'single-select' }],
+    })
+
+    expect(result).toEqual({ ok: true, data: { id: 42 } })
+  })
+
+  it('reports a single select answered with another option, a bare string or a null as a schema-mismatch', async () => {
+    const singleSelectFields = { Subject: 'Nouveau projet' }
+    const verify = [{ field: 'Subject', kind: 'single-select' }] as const
+
+    respondWith({ id: 42, Subject: { id: 1, value: 'Autre', color: 'dark-blue' } })
+    expect(await createBaserowRow({ tableId: '123456', fields: singleSelectFields, verifyFields: verify })).toEqual({
+      ok: false,
+      error: 'schema-mismatch',
+      rowId: 42,
+    })
+
+    // A missing column is answered without the key, and an emptied one with a null cell.
+    respondWith({ id: 42 })
+    expect(await createBaserowRow({ tableId: '123456', fields: singleSelectFields, verifyFields: verify })).toEqual({
+      ok: false,
+      error: 'schema-mismatch',
+      rowId: 42,
+    })
+
+    respondWith({ id: 42, Subject: null })
+    expect(await createBaserowRow({ tableId: '123456', fields: singleSelectFields, verifyFields: verify })).toEqual({
+      ok: false,
+      error: 'schema-mismatch',
+      rowId: 42,
+    })
+
+    // A cell Baserow answered as a plain string never matches either: the column is not the select.
+    respondWith({ id: 42, Subject: 'Nouveau projet' })
+    expect(await createBaserowRow({ tableId: '123456', fields: singleSelectFields, verifyFields: verify })).toEqual({
+      ok: false,
+      error: 'schema-mismatch',
+      rowId: 42,
+    })
+  })
 })

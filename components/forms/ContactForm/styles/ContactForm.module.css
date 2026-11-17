@@ -1,0 +1,366 @@
+/*
+ * Contact form. Colours, radii, spacing and type come from --softn-* tokens; the input composite
+ * colour pairs have no Tailwind utility, so they are read here as custom properties, in this
+ * component's own stylesheet. The visible focus ring is an outline, never a colour change alone.
+ */
+
+.form {
+  inline-size: 100%;
+}
+
+.form-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-6);
+}
+
+.note {
+  color: var(--softn-color-tertiary);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  text-wrap: pretty;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--softn-container-3xs)), 1fr));
+  gap: var(--softn-space-6);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+  margin: 0;
+}
+
+.label {
+  color: var(--softn-input-label);
+  font-size: var(--softn-font-size-label);
+  font-weight: var(--softn-font-weight-label);
+  line-height: var(--softn-font-line-height-label);
+}
+
+/*
+ * Required marker: every field of this form is required, and the marker is drawn here rather than
+ * written in the copy. The alternative-text syntax keeps it out of the accessible name; the
+ * requirement itself travels on the control's `required` attribute, or on `aria-required` where the
+ * control belongs to the anti-bot widget and cannot carry one.
+ */
+.required::after {
+  content: '*' / '';
+  margin-inline-start: var(--softn-space-1);
+  color: var(--softn-brand-glow);
+}
+
+.input,
+.select,
+.textarea {
+  inline-size: 100%;
+  min-block-size: var(--softn-size-lg);
+  padding-block: var(--softn-space-3);
+  padding-inline: var(--softn-space-4);
+  border: 1px solid var(--softn-input-border-default);
+  border-radius: var(--softn-radius-xl);
+  background-color: var(--softn-input-background);
+  color: var(--softn-input-text);
+  font-family: inherit;
+  font-size: var(--softn-font-size-body-md);
+  line-height: var(--softn-font-line-height-body-md);
+  transition: border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--softn-input-placeholder);
+}
+
+.input:hover,
+.select:hover,
+.textarea:hover {
+  border-color: var(--softn-input-border-strong);
+}
+
+.input:focus-visible,
+.select:focus-visible,
+.textarea:focus-visible {
+  outline: 2px solid var(--softn-input-border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--softn-input-focus-ring);
+}
+
+.textarea {
+  min-block-size: var(--softn-space-30);
+  resize: vertical;
+}
+
+.select {
+  cursor: pointer;
+  appearance: none;
+}
+
+.input-error {
+  border-color: var(--softn-input-border-error);
+}
+
+.error {
+  color: var(--softn-input-error-text);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.help,
+.subject-help {
+  color: var(--softn-color-tertiary);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.subject-help {
+  margin: 0;
+}
+
+.link {
+  color: var(--softn-brand-glow);
+  text-decoration: underline;
+  text-underline-offset: var(--softn-space-1);
+}
+
+.link:hover {
+  color: var(--softn-brand-vivid);
+}
+
+/*
+ * Light theme: the glow violet is a dark-theme accent, and as text on the light surfaces it measures
+ * 2.5:1. The accent violet paints it instead (5.2:1 on the page, 5.7:1 on the consent panel), and
+ * the richer violet keeps a hover that stays above the same bar. Both cases of the light theme are
+ * covered, the explicit choice and the system preference with no choice recorded, exactly like the
+ * token package's own light variant.
+ */
+:global([data-theme='light']) .link {
+  color: var(--softn-brand-accent);
+}
+
+:global([data-theme='light']) .link:hover {
+  color: var(--softn-brand-rich);
+}
+
+@media (prefers-color-scheme: light) {
+  :global(:root:not([data-theme='dark'])) .link {
+    color: var(--softn-brand-accent);
+  }
+
+  :global(:root:not([data-theme='dark'])) .link:hover {
+    color: var(--softn-brand-rich);
+  }
+}
+
+.consent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+  padding: var(--softn-space-4);
+  border-top: 1px solid var(--softn-border-default);
+  border-radius: var(--softn-radius-xl);
+  background-color: var(--softn-background-surface);
+}
+
+.consent-notice {
+  margin: 0;
+  color: var(--softn-color-secondary);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.consent-field {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--softn-space-3);
+}
+
+/*
+ * Consent checkbox: a native `input[type=checkbox]` — native semantics, native keyboard, no hand-set
+ * role — whose browser rendering is replaced by the same box as the other fields. The border, the
+ * background, the radius, the focus ring and the error colour are the input tokens; the box is a grid
+ * that centres the check mark, which is drawn below in `currentColor`, so no colour is written here
+ * and both themes follow.
+ */
+.checkbox {
+  flex: none;
+  display: grid;
+  place-content: center;
+  inline-size: var(--softn-icon-size-md);
+  block-size: var(--softn-icon-size-md);
+  margin: 0;
+  appearance: none;
+  border: 1px solid var(--softn-input-border-default);
+  border-radius: var(--softn-radius-sm);
+  background-color: var(--softn-input-background);
+  color: var(--softn-input-text);
+  cursor: pointer;
+  transition:
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
+    background-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.checkbox:hover {
+  border-color: var(--softn-input-border-strong);
+}
+
+.checkbox:checked {
+  border-color: var(--softn-brand-vivid);
+  background-color: var(--softn-brand-vivid);
+  color: var(--softn-brand-foreground);
+}
+
+/*
+ * The check mark: a polygon of `currentColor`, sized from the control size and centred by the grid of
+ * the box. It is drawn, not written, so nothing of it reaches the accessible name, and it is hidden
+ * while the box is unchecked.
+ */
+.checkbox::before {
+  content: '';
+  inline-size: calc(var(--softn-icon-size-md) * 0.55);
+  block-size: calc(var(--softn-icon-size-md) * 0.45);
+  background-color: currentColor;
+  clip-path: polygon(14% 44%, 0 65%, 45% 100%, 100% 12%, 82% 0%, 43% 62%);
+  transform: scale(0);
+}
+
+.checkbox:checked::before {
+  transform: scale(1);
+}
+
+/* The mark grows into place, and only when the visitor allows motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .checkbox::before {
+    transition: transform var(--softn-duration-micro) var(--softn-easing-out);
+  }
+}
+
+.checkbox:focus-visible {
+  outline: 2px solid var(--softn-input-border-focus);
+  outline-offset: 2px;
+  box-shadow: var(--softn-input-focus-ring);
+}
+
+.checkbox[aria-invalid='true'] {
+  border-color: var(--softn-input-border-error);
+}
+
+.checkbox:disabled {
+  border-color: var(--softn-input-border-default);
+  background-color: var(--softn-background-elevated);
+  color: var(--softn-color-tertiary);
+  cursor: not-allowed;
+}
+
+.consent-label {
+  color: var(--softn-color);
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+}
+
+.altcha {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+}
+
+.altcha:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+/* Reserves the height of the widget before its chunk lands, so the group never shifts the page. */
+.altcha-mount {
+  min-block-size: var(--softn-size-lg);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.failure {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--softn-space-3);
+  padding: var(--softn-space-5);
+  border: 1px solid var(--softn-error-border);
+  border-radius: var(--softn-radius-lg);
+  background-color: var(--softn-error-background);
+}
+
+.failure-title {
+  margin: 0;
+  color: var(--softn-color);
+}
+
+.failure-body,
+.failure-kept {
+  margin: 0;
+  font-size: var(--softn-font-size-body-sm);
+  line-height: var(--softn-font-line-height-body-sm);
+  text-wrap: pretty;
+}
+
+.failure-body {
+  color: var(--softn-color-secondary);
+}
+
+.failure-kept {
+  color: var(--softn-color-tertiary);
+}
+
+/* Keeps the honeypot out of the layout and out of the accessibility tree without display: none,
+   which some bots detect. The input is also removed from the tab order in the markup. */
+.honeypot {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .input,
+  .select,
+  .textarea,
+  .checkbox {
+    transition: none;
+  }
+}
+
+/*
+ * Forced colours: the browser replaces the palette, so the box, its border and the check mark are
+ * pinned to the system colours it exposes — the mark on the colour of the box it sits in.
+ */
+@media (forced-colors: active) {
+  .checkbox {
+    border-color: ButtonText;
+    background-color: Canvas;
+    color: ButtonText;
+  }
+
+  .checkbox::before {
+    background-color: CanvasText;
+  }
+
+  .checkbox:checked {
+    border-color: Highlight;
+    background-color: Highlight;
+    color: HighlightText;
+  }
+
+  .checkbox:checked::before {
+    background-color: HighlightText;
+  }
+
+  .checkbox:disabled {
+    border-color: GrayText;
+    color: GrayText;
+  }
+}
