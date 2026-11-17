@@ -16,11 +16,14 @@
 export const EMAIL_SIGNATURE_TEXT_COLOR = '#5e577f'
 
 /**
- * Violet of the signature's site link, the hex of `--softn-brand-vivid` in the light theme, which
- * `@softnio-labs/tokens/themes/light.css` maps to `--softn-color-violet500`
- * (`oklch(0.6056 0.2189 292.72)`).
+ * Violet of every link the service emails carry — the site line of the signature, the links of the
+ * footer and the anchors of the bodies — the hex of `--softn-brand-accent` in the light theme, which
+ * `@softnio-labs/tokens/themes/light.css` maps to `--softn-color-violet600`
+ * (`oklch(0.5413 0.2466 293.01)`, `@softnio-labs/tokens/core/colors.css`): the link colour the light
+ * theme paints the site with, dark enough to stay legible at the small size of the footer and at the
+ * body size of the other links (5.70:1 on the white of the email background).
  */
-export const EMAIL_SIGNATURE_LINK_COLOR = '#8b5cf6'
+export const EMAIL_LINK_COLOR = '#7c3aed'
 
 /**
  * Background of a quoted message, the hex of `--softn-color-surface-page-light`
@@ -57,12 +60,3 @@ export const EMAIL_QUOTE_TEXT_COLOR = '#100720'
  * that ratio from the package.
  */
 export const EMAIL_FOOTER_TEXT_COLOR = '#655d88'
-
-/**
- * Violet of the links the footer carries and of the booking link of the automatic reply, the hex of
- * `--softn-brand-accent` in the light theme, which `@softnio-labs/tokens/themes/light.css` maps to
- * `--softn-color-violet600` (`oklch(0.5413 0.2466 293.01)`): the link colour the light theme paints
- * the site with, dark enough to stay readable at the small size of the footer (5.70:1 on the same
- * white).
- */
-export const EMAIL_FOOTER_LINK_COLOR = '#7c3aed'

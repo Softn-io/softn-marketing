@@ -2,12 +2,11 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  EMAIL_FOOTER_LINK_COLOR,
   EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_LINK_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
-  EMAIL_SIGNATURE_LINK_COLOR,
   EMAIL_SIGNATURE_TEXT_COLOR,
 } from './emailColors'
 
@@ -130,12 +129,14 @@ describe('email colours', () => {
     expect(hexOf(grey ?? [0, 0, 0])).toBe(EMAIL_SIGNATURE_TEXT_COLOR)
   })
 
-  it('inlines the violet of the brand-vivid token, which the light theme maps to violet500', () => {
-    const vivid = oklchOf(colorsCss, 'softn-color-violet500')
+  it('inlines the brand-accent violet for every link, legible on the email background', () => {
+    const accent = oklchOf(colorsCss, 'softn-color-violet600')
 
-    expect(vivid).not.toBeNull()
-    expect(hexOf(vivid ?? [0, 0, 0])).toBe(EMAIL_SIGNATURE_LINK_COLOR)
-    expect(lightCss).toContain('--softn-brand-vivid: var(--softn-color-violet500)')
+    expect(accent).not.toBeNull()
+    expect(hexOf(accent ?? [0, 0, 0])).toBe(EMAIL_LINK_COLOR)
+    expect(lightCss).toContain('--softn-brand-accent: var(--softn-color-violet600)')
+    // The links are body text: the accessibility rules ask 4.5:1 of them.
+    expect(contrastOf(EMAIL_LINK_COLOR, emailBackground())).toBeGreaterThanOrEqual(4.5)
   })
 
   it('inlines the light page surface a quoted message sits on', () => {
@@ -181,15 +182,6 @@ describe('email colours', () => {
 
     expect(lightGrey.length).toBeGreaterThan(1)
     expect(Math.max(...lightGrey)).toBe(footer?.[0])
-  })
-
-  it('inlines the violet the light theme paints its links with, dark enough for the footer size', () => {
-    const accent = oklchOf(colorsCss, 'softn-color-violet600')
-
-    expect(accent).not.toBeNull()
-    expect(hexOf(accent ?? [0, 0, 0])).toBe(EMAIL_FOOTER_LINK_COLOR)
-    expect(lightCss).toContain('--softn-brand-accent: var(--softn-color-violet600)')
-    expect(contrastOf(EMAIL_FOOTER_LINK_COLOR, emailBackground())).toBeGreaterThanOrEqual(4.5)
   })
 
   it('refuses a token the stylesheet does not carry', () => {

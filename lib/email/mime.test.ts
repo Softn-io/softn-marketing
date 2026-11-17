@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  EMAIL_FOOTER_LINK_COLOR,
   EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_LINK_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
@@ -170,7 +170,7 @@ describe('htmlBody', () => {
   const signatureHtml =
     '<p style="color:#5e577f">Mélanie<br />\r\n' +
     'Founder<br />\r\n' +
-    '<a href="https://softn.io" style="color:#8b5cf6">Softn.io</a></p>'
+    '<a href="https://softn.io" style="color:#7c3aed">Softn.io</a></p>'
 
   it('starts with the hidden preview line, out of sight and out of a screen reader speech', () => {
     const html = body('Bonjour Marie,')
@@ -226,13 +226,13 @@ describe('htmlBody', () => {
     expect(
       htmlBody({
         text: `Réservez un échange Spark : ${link}`,
-        links: [{ url: link, label: 'Réserver un échange Spark', style: `color:${EMAIL_FOOTER_LINK_COLOR}` }],
+        links: [{ url: link, label: 'Réserver un échange Spark', style: `color:${EMAIL_LINK_COLOR}` }],
         preheader: PREHEADER,
         signature: SIGNATURE,
       }),
     ).toBe(
       `${hidden(PREHEADER)}\r\n` +
-        `<p>Réservez un échange Spark : <a href="${link}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a></p>`,
+        `<p>Réservez un échange Spark : <a href="${link}" style="color:${EMAIL_LINK_COLOR}">Réserver un échange Spark</a></p>`,
     )
   })
 
@@ -408,7 +408,7 @@ describe('htmlBody', () => {
     })
 
     expect(html).toContain(
-      `<a href="${link}" style="color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">${link}</a>`,
+      `<a href="${link}" style="color:${EMAIL_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}">${link}</a>`,
     )
   })
 
