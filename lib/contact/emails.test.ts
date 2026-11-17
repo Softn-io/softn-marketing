@@ -4,12 +4,11 @@ import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { contact } from '@/locales/fr/contact'
 import { contactEmails } from '@/locales/fr/contactEmails'
 import {
-  EMAIL_FOOTER_LINK_COLOR,
   EMAIL_FOOTER_TEXT_COLOR,
+  EMAIL_LINK_COLOR,
   EMAIL_QUOTE_BACKGROUND_COLOR,
   EMAIL_QUOTE_BORDER_COLOR,
   EMAIL_QUOTE_TEXT_COLOR,
-  EMAIL_SIGNATURE_LINK_COLOR,
 } from '@/lib/email/emailColors'
 import {
   EMAIL_FOOTER_FONT_SIZE,
@@ -42,7 +41,7 @@ const lead = {
 const quotesOf = (html: string): readonly string[] => html.match(/<blockquote[\s\S]*?<\/blockquote>/g) ?? []
 
 /** Style attribute the footer links carry, small as the paragraph around them. */
-const footerLinkStyle = `color:${EMAIL_FOOTER_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`
+const footerLinkStyle = `color:${EMAIL_LINK_COLOR};font-size:${EMAIL_FOOTER_FONT_SIZE}`
 
 /** The footer paragraph of an HTML part, as the email carries it, or an empty string. */
 const footerOf = (html: string): string =>
@@ -221,22 +220,20 @@ describe('autoReplyEmailContent', () => {
     const content = contentOf()
 
     expect(content.html).toContain(
-      `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a>`,
+      `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_LINK_COLOR}">Réserver un échange Spark</a>`,
     )
     expect(content.html).toContain(
       `<a href="${SITE_URL}${contact.consent.privacyLink.href}" style="${footerLinkStyle}">politique de confidentialité</a>`,
     )
   })
 
-  it('paints the booking link of the body in the accent violet, not the signature one', () => {
+  it('paints the body booking link and the signature link in the same service-email colour', () => {
     const content = contentOf()
 
-    const agent = `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_FOOTER_LINK_COLOR}">Réserver un échange Spark</a>`
-    expect(content.html).toContain(agent)
-    // The signature link keeps the violet of the booking emails, unchanged.
     expect(content.html).toContain(
-      `<a href="https://softn.io" style="color:${EMAIL_SIGNATURE_LINK_COLOR}">Softn.io</a>`,
+      `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_LINK_COLOR}">Réserver un échange Spark</a>`,
     )
+    expect(content.html).toContain(`<a href="https://softn.io" style="color:${EMAIL_LINK_COLOR}">Softn.io</a>`)
   })
 
   it('quotes the message line by line in the text part, and as a styled blockquote in the HTML part', () => {

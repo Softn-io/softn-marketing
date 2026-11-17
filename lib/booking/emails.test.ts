@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { interpolate } from '@/lib/interpolate'
+import { EMAIL_LINK_COLOR } from '@/lib/email/emailColors'
 import { bookingManage } from '@/locales/fr/bookingManage'
 import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { BOOKING_RULES } from './rules'
@@ -558,7 +559,7 @@ describe('rendered copy of the four booking emails', () => {
       expect(content.html).toContain(
         '<p style="color:#5e577f">Mélanie<br />\r\n' +
           'Founder<br />\r\n' +
-          '<a href="https://softn.io" style="color:#8b5cf6">Softn.io</a></p>',
+          '<a href="https://softn.io" style="color:#7c3aed">Softn.io</a></p>',
       )
       // ...started by its own closing paragraph, which the blank line of the text produced.
       expect(content.html).toMatch(/<p>[^<]*<\/p>\r\n<p style="color:#5e577f">/)
@@ -580,18 +581,32 @@ describe('rendered copy of the four booking emails', () => {
         expect(content.text).not.toContain(bookingEmails.cancellation.bookingLinkLabel)
         // ...while the HTML part shows it behind the validated label of the cancellation copy.
         expect(content.html).toContain(
-          `<a href="https://softn.io/?rdv#assistant">${bookingEmails.cancellation.bookingLinkLabel}</a>`,
+          `<a href="https://softn.io/?rdv#assistant" style="color:${EMAIL_LINK_COLOR}">${bookingEmails.cancellation.bookingLinkLabel}</a>`,
         )
         expect(content.html).not.toContain('>https://softn.io/?rdv#assistant</a>')
       } else {
         expect(content.text).toContain(MEET_LINK)
         expect(content.text).toContain(MANAGE_LINK)
-        // The Meet address is printed as it is...
-        expect(content.html).toContain(`<a href="${MEET_LINK}">${MEET_LINK}</a>`)
+        // The Meet address is printed as it is, in the accent violet of the email bodies...
+        expect(content.html).toContain(`<a href="${MEET_LINK}" style="color:${EMAIL_LINK_COLOR}">${MEET_LINK}</a>`)
         // ...and the manage link is shown behind the validated label, its raw URL never reaching the
         // guest's eyes.
-        expect(content.html).toContain(`<a href="${MANAGE_LINK}">${bookingManage.calendarEvent.linkLabel}</a>`)
+        expect(content.html).toContain(
+          `<a href="${MANAGE_LINK}" style="color:${EMAIL_LINK_COLOR}">${bookingManage.calendarEvent.linkLabel}</a>`,
+        )
         expect(content.html).not.toContain(`>${MANAGE_LINK}</a>`)
+      }
+    })
+
+    it(`the ${kind} paints every anchor of its HTML part with the service-email link colour`, () => {
+      const content = contentOf(kind)
+
+      // Every anchor the part carries — body links and the studio line of the signature alike —
+      // declares the colour, so no mail client paints one with its own default.
+      const anchors = content.html.match(/<a\b[^>]*>/g) ?? []
+      expect(anchors.length).toBeGreaterThan(0)
+      for (const anchor of anchors) {
+        expect(anchor).toContain(`style="color:${EMAIL_LINK_COLOR}`)
       }
     })
   }
@@ -604,8 +619,11 @@ describe('rendered copy of the four booking emails', () => {
     expect(content.text).toContain(
       "Si vous changez d'avis, vous pouvez réserver un nouvel échange quand vous le souhaitez : https://softn.io/?rdv#assistant",
     )
-    // ...and the HTML part replaces it with the words Mel validated, exactly like the manage link.
-    expect(content.html).toContain('<a href="https://softn.io/?rdv#assistant">Réserver un nouvel échange</a>')
+    // ...and the HTML part replaces it with the words Mel validated, exactly like the manage link,
+    // painted in the accent violet so no mail client paints it in a colour of its own.
+    expect(content.html).toContain(
+      `<a href="https://softn.io/?rdv#assistant" style="color:${EMAIL_LINK_COLOR}">Réserver un nouvel échange</a>`,
+    )
     expect(content.html).not.toContain('>https://softn.io/?rdv#assistant</a>')
   })
 

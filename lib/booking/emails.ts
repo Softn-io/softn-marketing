@@ -27,6 +27,7 @@ import type { BookingSlot } from './availability'
 import { bookingEventTitle } from './event'
 import { bookingInvitation, emailSequenceOf } from './ics'
 import { formatBookingDateLabel, formatBookingTimeLabel } from './labels'
+import { EMAIL_LINK_COLOR } from '@/lib/email/emailColors'
 import { htmlBody, type HtmlLink, mimeMessage } from '@/lib/email/mime'
 import type { BookingRules } from './rules'
 
@@ -80,11 +81,12 @@ export const bookingOpenLink = (): string => `${SITE_URL}/?${BOOKING_OPEN_QUERY_
  *
  * The Meet address is printed as it is; the manage link is signed and long, so the HTML shows the
  * validated label of `bookingManage.calendarEvent.linkLabel` instead of the URL, while the
- * plain-text part keeps the raw address.
+ * plain-text part keeps the raw address. Both anchors carry the service-email link colour: a mail
+ * client paints a body anchor with its own colour otherwise.
  */
 const meetAndManageLinks = (meetLink: string, manageLink: string): readonly HtmlLink[] => [
-  { url: meetLink, label: meetLink },
-  { url: manageLink, label: bookingManage.calendarEvent.linkLabel },
+  { url: meetLink, label: meetLink, style: `color:${EMAIL_LINK_COLOR}` },
+  { url: manageLink, label: bookingManage.calendarEvent.linkLabel, style: `color:${EMAIL_LINK_COLOR}` },
 ]
 
 /**
@@ -256,7 +258,9 @@ export const cancellationEmailContent = (input: {
     text,
     html: htmlBody({
       text,
-      links: [{ url: bookingLink, label: bookingLinkLabel }],
+      // The rebooking link carries the service-email link colour: a mail client paints a body anchor
+      // with its own colour otherwise.
+      links: [{ url: bookingLink, label: bookingLinkLabel, style: `color:${EMAIL_LINK_COLOR}` }],
       preheader: interpolate(preheader, parameters),
       signature: bookingEmails.signature,
     }),
