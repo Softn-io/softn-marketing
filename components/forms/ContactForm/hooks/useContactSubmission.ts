@@ -4,9 +4,10 @@
  * Submission state of the contact form.
  *
  * One POST to the contact Route Handler, with a hard timeout so a hung request never locks the form,
- * and one failure code per situation the copy knows how to word: the generic incident, the lost
- * connection, the rate limit, and the route failing closed. The body is built by the form at each
- * attempt, so a retry re-reads the anti-bot payload and picks up a fresh verification.
+ * and one failure code per situation the copy knows how to word: the generic incident — a rejected
+ * request, or an error body that cannot be read — the lost connection, the rate limit, and the route
+ * failing closed. The body is built by the form at each attempt, so a retry re-reads the anti-bot
+ * payload and picks up a fresh verification.
  */
 
 import { useCallback, useState } from 'react'
@@ -30,7 +31,12 @@ export type ContactSubmissionStatus = 'idle' | 'sending' | 'sent'
  */
 export type ContactSubmissionError = 'generic' | 'network' | 'rate-limit' | 'unavailable'
 
-/** Outcome of one attempt: what the form needs to decide what to show, and what to reset. */
+/**
+ * Outcome of one attempt: what the form needs to decide what to show, and what to reset.
+ *
+ * An answer whose error body cannot be read counts as `invalid`, the same code the copy words as
+ * the generic incident, so the outcome never names a failure the visitor was not shown.
+ */
 export type ContactSubmissionOutcome =
   { readonly ok: true } | { readonly ok: false; readonly error: ContactErrorCode | 'network' }
 
@@ -74,10 +80,10 @@ export const useContactSubmission = (): ContactSubmission => {
         return { ok: true }
       }
 
-      const code = isContactErrorResponse(payload) ? payload.error : null
+      const code = isContactErrorResponse(payload) ? payload.error : 'invalid'
       setStatus('idle')
       setError(code === 'rate-limited' ? 'rate-limit' : code === 'unavailable' ? 'unavailable' : 'generic')
-      return { ok: false, error: code ?? 'unavailable' }
+      return { ok: false, error: code }
     } catch {
       // A timeout and a lost connection are the same thing to the visitor: nothing was sent.
       setStatus('idle')

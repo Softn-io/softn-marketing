@@ -367,6 +367,18 @@ describe('ContactForm submission', () => {
     expect(altchaMock.resetToken).toBe(1)
   })
 
+  it('shows the generic incident and resets the widget when the error body cannot be read', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('<html>Bad Gateway</html>', { status: 502, headers: { 'Content-Type': 'text/html' } }),
+    )
+    render(<ContactForm onSent={onSent} />)
+    fillValidForm()
+    await submit()
+
+    expect(await screen.findByText(contact.error.generic.body)).toBeTruthy()
+    expect(altchaMock.resetToken).toBe(1)
+  })
+
   it('leaves the solved payload alone when the rate limit refused the submission before it was spent', async () => {
     fetchMock.mockResolvedValue(jsonResponse({ error: 'rate-limited' }, 429))
     render(<ContactForm onSent={onSent} />)
