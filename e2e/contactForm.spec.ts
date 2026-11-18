@@ -430,7 +430,9 @@ test.describe('contact page accessibility (WCAG 2.1 AA)', () => {
         { name: 'email', locator: page.getByLabel(contact.form.email.label) },
         { name: 'subject', locator: page.getByLabel(contact.form.subject.label) },
         { name: 'message', locator: page.getByLabel(contact.form.message.label) },
-        { name: 'privacyLink', locator: page.getByRole('link', { name: PRIVACY_LINK_LABEL }) },
+        // Scoped to the main: since issue #22 the footer also links to the privacy policy, with
+        // the same name, and only the form's own link is a step of this walk.
+        { name: 'privacyLink', locator: page.getByRole('main').getByRole('link', { name: PRIVACY_LINK_LABEL }) },
         { name: 'consent', locator: page.getByLabel(CONSENT_LABEL) },
         { name: 'altcha', locator: widgetSwitch(page) },
       ]
