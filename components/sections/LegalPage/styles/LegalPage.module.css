@@ -1,0 +1,82 @@
+/*
+ * Legal page: the reading column, the heading block and the sections.
+ *
+ * The typography steps come from the Tailwind theme utilities in the markup; this file holds what has
+ * no utility: the page rhythm, the reading measure and the line breaks of the copy. Every length and
+ * colour comes from a --softn-* token.
+ */
+
+.main {
+  flex: 1;
+  padding-block: clamp(var(--softn-space-10), 6vw, var(--softn-space-20));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(var(--softn-space-8), 4vw, var(--softn-space-12));
+  max-inline-size: 65ch;
+  margin-inline: auto;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+}
+
+.title {
+  margin: 0;
+  color: var(--softn-color);
+  text-wrap: balance;
+}
+
+.updated {
+  margin: 0;
+  color: var(--softn-color-tertiary);
+}
+
+.intro {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+}
+
+.section-title {
+  margin: 0;
+  color: var(--softn-color);
+  text-wrap: balance;
+}
+
+/*
+ * The copy writes a line break as `\n` inside one template: `pre-line` renders it as a line break in
+ * the browser while the paragraph stays a single text node, so no sentence is ever assembled from
+ * fragments in code.
+ */
+.paragraph {
+  margin: 0;
+  white-space: pre-line;
+  text-wrap: pretty;
+}
+
+/* A link inside a sentence keeps the sentence colour and gains the underline (WCAG 1.4.1). */
+.link {
+  color: currentColor;
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+.link:hover {
+  color: var(--softn-color);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}

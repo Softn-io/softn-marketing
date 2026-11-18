@@ -1,4 +1,9 @@
-/** Footer copy. `{year}` is a computed parameter, never hardcoded. */
+/**
+ * Footer copy. `{year}` is computed parameters, never hardcoded.
+ *
+ * The cookie-settings link is absent on purpose: it reopens the consent banner, which does not exist
+ * yet, so the key lands with the banner rather than pointing visitors at nothing.
+ */
 export const footer = {
   copyright: '© {year} softn.io. Tous droits réservés.',
   legal: {
@@ -7,12 +12,9 @@ export const footer = {
     privacy: 'Politique de confidentialité',
     cookies: 'Politique de cookies',
   },
-  cookieSettings: 'Gérer mes cookies',
   nav: {
     ariaLabel: 'Liens du pied de page',
   },
-  contactLine:
-    "Une question ? {assistantName}, l'assistant virtuel du site, vous répond et vous aide à réserver votre échange Spark.",
 } as const
 
 export type Footer = typeof footer

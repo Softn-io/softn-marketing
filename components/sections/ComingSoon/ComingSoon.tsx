@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { FooterNav } from '@components/layout/Footer'
 import { Logo } from '@components/ui/Logo'
 import { PointerGlow } from '@components/ui/PointerGlow'
 import { ThemeToggle } from '@components/ui/ThemeToggle'
@@ -14,12 +15,14 @@ const copyright = interpolate(comingSoon.footer.copyright, { year: String(new Da
 
 /**
  * Coming-soon home page: header with the wordmark and the theme toggle, the left-aligned launch
- * copy and giant decorative wordmark, the waitlist form and the copyright footer, over the hero's
- * shared pointer glow and brand orbs.
+ * copy and giant decorative wordmark, the waitlist form and the footer with the copyright and the
+ * links to the contact page and the three legal pages, over the hero's shared pointer glow and brand
+ * orbs.
  *
  * Server component: only the theme toggle and the form are client islands. Every string comes from
- * `locales/fr/comingSoon.ts` and `locales/fr/hero.ts`; the footer's Contact and legal links are
- * omitted because their routes do not exist yet.
+ * `locales/fr/comingSoon.ts`, `locales/fr/hero.ts` and, in the footer, `locales/fr/footer.ts`. The
+ * footer keeps its own tighter shape — the launch screen sits in one full-height column — and
+ * renders the site's shared `FooterNav`.
  */
 export const ComingSoon = () => {
   return (
@@ -66,7 +69,8 @@ export const ComingSoon = () => {
         </div>
       </main>
       <footer className={styles.footer}>
-        <p className="text-body-sm">{copyright}</p>
+        <p className={`${styles.copyright} text-body-sm`}>{copyright}</p>
+        <FooterNav />
       </footer>
     </div>
   )

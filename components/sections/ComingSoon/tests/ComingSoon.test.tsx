@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FOOTER_LINKS } from '@/lib/footerLinks'
 import { interpolate } from '@/lib/interpolate'
 import { comingSoon } from '@/locales/fr/comingSoon'
 import { footer } from '@/locales/fr/footer'
@@ -34,6 +35,11 @@ const localeStrings = [
   comingSoon.form.privacyNotice,
   comingSoon.form.honeypotLabel,
   comingSoon.footer.copyright,
+  footer.legal.contact,
+  footer.legal.mentions,
+  footer.legal.privacy,
+  footer.legal.cookies,
+  footer.nav.ariaLabel,
   nav.logo.name,
   nav.logo.suffix,
   nav.logo.ariaLabel,
@@ -127,14 +133,20 @@ describe('ComingSoon', () => {
     expect(screen.getByText(comingSoon.form.honeypotLabel)).toBeTruthy()
   })
 
-  it('renders the footer copyright with the computed year and no dead links', () => {
+  it('renders the footer copyright with the computed year and a live link per footer entry', () => {
     render(<ComingSoon />)
     const expected = interpolate(comingSoon.footer.copyright, { year: String(new Date().getFullYear()) })
 
     expect(screen.getByText(expected)).toBeTruthy()
-    expect(screen.queryByRole('link', { name: footer.legal.contact })).toBeNull()
-    expect(screen.queryByRole('link', { name: footer.legal.mentions })).toBeNull()
-    expect(screen.getAllByRole('link')).toHaveLength(1)
+
+    const nav = screen.getByRole('navigation', { name: footer.nav.ariaLabel })
+    for (const link of FOOTER_LINKS) {
+      const rendered = within(nav).getByRole('link', { name: link.label })
+      expect(rendered.getAttribute('href')).toBe(link.href)
+    }
+
+    // The wordmark and the footer links: no other link on the launch screen.
+    expect(screen.getAllByRole('link')).toHaveLength(1 + FOOTER_LINKS.length)
   })
 
   it('hides the decorative backdrop from assistive technology', () => {
