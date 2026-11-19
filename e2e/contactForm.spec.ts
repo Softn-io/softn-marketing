@@ -31,6 +31,7 @@ import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
 import { create, deriveHmacKeySecret } from 'altcha-lib/frameworks/nextjs'
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2'
+import { SITE_ROUTES } from '../lib/routes'
 import { contact } from '../locales/fr/contact'
 import { minimalHeader } from '../locales/fr/minimalHeader'
 
@@ -163,14 +164,14 @@ test.describe('contact page shell and metadata', () => {
     // The metadata API resolves the canonical against the site origin: it is absolute.
     await expect(canonical).toHaveAttribute(
       'href',
-      new RegExp(`^https?://[^/]+${contact.link.href.replace('/', '\\/')}$`),
+      new RegExp(`^https?://[^/]+${SITE_ROUTES.contact.replace('/', '\\/')}$`),
     )
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', contact.meta.description)
     await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', contact.meta.robots)
 
     const response = await page.request.get('/sitemap.xml')
     expect(response.ok()).toBe(true)
-    expect(await response.text()).toContain(contact.link.href)
+    expect(await response.text()).toContain(SITE_ROUTES.contact)
   })
 
   test('keeps exactly one h1, with the header chrome the issue asks for', async ({ page }) => {

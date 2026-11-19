@@ -18,6 +18,7 @@ verified:
   - { by: "human:mel", at: "2026-11-10T16:15:51+01:00" }
   - { by: "human:mel", at: "2026-11-10T17:04:40+01:00" }
   - { by: "human:mel", at: "2026-11-10T20:47:04+01:00" }
+  - { by: "human:mel", at: "2026-11-19T02:33:00+01:00" }
 sources:
   - { id: chatbot, resource: ../chatbot.ts, title: Textes de l'assistant }
   - { id: agent, resource: ../agent.ts, title: Section de l'assistant }

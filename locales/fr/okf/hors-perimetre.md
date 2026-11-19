@@ -14,6 +14,7 @@ verified:
   - { by: "human:mel", at: "2026-11-05T13:57:20+01:00" }
   - { by: "human:mel", at: "2026-11-16T22:37:00+01:00" }
   - { by: "human:mel", at: "2026-11-17T00:48:00+01:00" }
+  - { by: "human:mel", at: "2026-11-19T02:33:00+01:00" }
 sources:
   - { id: agent, resource: ../agent.ts, title: Section de l'assistant }
   - { id: chatbot, resource: ../chatbot.ts, title: Réponses de l'assistant }

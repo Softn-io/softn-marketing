@@ -8,6 +8,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SITE_ROUTES } from '@/lib/routes'
 import { contact } from '@/locales/fr/contact'
 import { CONTACT_FIELDS, CONTACT_MESSAGE_MIN_LENGTH, CONTACT_MIN_FILL_MS } from '@/schemas/contactLimits'
 import { ContactForm } from '../ContactForm'
@@ -405,5 +406,22 @@ describe('ContactForm submission', () => {
     await submit()
 
     expect(await screen.findByText(contact.error.generic.body)).toBeTruthy()
+  })
+})
+
+describe('ContactForm privacy links', () => {
+  it('points the privacy links of the notice and the personal-data help at the route map path', () => {
+    render(<ContactForm onSent={onSent} />)
+
+    // The consent notice carries the link from mount; the personal-data help adds a second one
+    // when that subject is picked. Both read their path from `SITE_ROUTES`, never from the copy.
+    const noticeLinks = screen.getAllByRole('link', { name: contact.consent.privacyLink.label })
+    expect(noticeLinks).toHaveLength(1)
+    expect(noticeLinks[0]?.getAttribute('href')).toBe(SITE_ROUTES.privacyPolicy)
+
+    fireEvent.change(screen.getByLabelText(contact.form.subject.label), { target: { value: 'dataRequest' } })
+    const links = screen.getAllByRole('link', { name: contact.consent.privacyLink.label })
+    expect(links).toHaveLength(2)
+    for (const link of links) expect(link.getAttribute('href')).toBe(SITE_ROUTES.privacyPolicy)
   })
 })

@@ -20,6 +20,7 @@ import Link from 'next/link'
 import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { Button } from '@components/ui/Button'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_ROUTES } from '@/lib/routes'
 import { interpolateSegments } from '@/lib/text/interpolateSegments'
 import { contact } from '@/locales/fr/contact'
 import {
@@ -136,7 +137,7 @@ const PrivacySentence = ({ template }: { template: string }) => (
   <>
     {interpolateSegments(template, { privacyLink: contact.consent.privacyLink.label }).map((segment, index) =>
       segment.kind === 'placeholder' ? (
-        <Link key={index} href={contact.consent.privacyLink.href} className={styles.link}>
+        <Link key={index} href={SITE_ROUTES.privacyPolicy} className={styles.link}>
           {segment.value}
         </Link>
       ) : (

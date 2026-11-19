@@ -155,7 +155,6 @@ export const chatbot = {
     link: {
       label: 'Politique de confidentialité',
       inlineLabel: 'politique de confidentialité',
-      href: '/politique-de-confidentialite',
     },
     // 2. The accepted label is the one Mel validated in her review: short, explicit, still a click.
     accept: 'Continuer',

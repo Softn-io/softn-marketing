@@ -1,3 +1,4 @@
+import { SITE_ROUTES } from '@/lib/routes'
 import { contact } from '@/locales/fr/contact'
 import { ASSISTANT_NAME, chatbot } from '@/locales/fr/chatbot'
 import styles from './styles/Agent.module.css'
@@ -32,10 +33,10 @@ export type AgentMessageTextProps = {
  * Renders one message, turning its link placeholders into real links.
  *
  * Everything is rendered as text: a model answer never becomes HTML. `{contactPageLink}` targets the
- * contact page from `locales/fr/contact.ts` and `{privacyPolicyLink}` the privacy policy from
- * `locales/fr/chatbot.ts`; each label comes from the calling copy, so the words a sentence places
- * inside a link are the words a visitor reads. A placeholder a caller does not fill renders as the
- * locale writes it, never as an empty link.
+ * contact page and `{privacyPolicyLink}` the privacy policy, both paths read from `lib/routes.ts`;
+ * each label comes from the calling copy, so the words a sentence places inside a link are the words
+ * a visitor reads. A placeholder a caller does not fill renders as the locale writes it, never as an
+ * empty link.
  */
 export const AgentMessageText = ({
   template,
@@ -46,14 +47,14 @@ export const AgentMessageText = ({
     {splitOnPlaceholders(fillAssistantName(template)).map((segment, index) => {
       if (segment === CONTACT_LINK_PLACEHOLDER) {
         return (
-          <a key={index} className={styles.messageLink} href={contact.link.href}>
+          <a key={index} className={styles.messageLink} href={SITE_ROUTES.contact}>
             {contactLinkLabel}
           </a>
         )
       }
       if (segment === PRIVACY_POLICY_PLACEHOLDER) {
         return (
-          <a key={index} className={styles.messageLink} href={chatbot.consent.link.href}>
+          <a key={index} className={styles.messageLink} href={SITE_ROUTES.privacyPolicy}>
             {privacyPolicyLinkLabel}
           </a>
         )
