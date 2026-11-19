@@ -22,6 +22,7 @@ import { htmlBody, mimeMessage, type HtmlLink } from '@/lib/email/mime'
 import { readEnv } from '@/lib/env'
 import { sendGmailMessage, type GmailFailure } from '@/lib/google/gmail'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_ROUTES } from '@/lib/routes'
 import { CONTACT_SENDER_EMAIL, SITE_URL } from '@/lib/site'
 import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { contact } from '@/locales/fr/contact'
@@ -35,10 +36,10 @@ import { CONTACT_SUBJECT_LABELS } from './subjects'
 const contactAgentLink = (): string => `${SITE_URL}${contact.intro.agentLink.href}`
 
 /** Absolute address of the privacy policy, the one both emails point at. */
-const contactPrivacyLink = (): string => `${SITE_URL}${contact.consent.privacyLink.href}`
+const contactPrivacyLink = (): string => `${SITE_URL}${SITE_ROUTES.privacyPolicy}`
 
 /** Absolute address of the contact page, the one the auto-reply footer points at. */
-const contactPageLink = (): string => `${SITE_URL}${contact.link.href}`
+const contactPageLink = (): string => `${SITE_URL}${SITE_ROUTES.contact}`
 
 /** Subject and both bodies of one email, ready to be written into a message. */
 export type ContactEmailContent = {

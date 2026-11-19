@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BOOKING_OPEN_QUERY_KEY, SECTION_IDS } from '@/lib/anchors'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS } from '@/lib/assistant/intent'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_ROUTES } from '@/lib/routes'
 import { ASSISTANT_QUESTION_MAX_LENGTH } from '@/schemas/assistantLimits'
 import { agent } from '@/locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '@/locales/fr/chatbot'
-import { contact } from '@/locales/fr/contact'
 import { Agent } from '../Agent'
 import { AGENT_QUESTION_INPUT_ID } from '../AgentComposer'
 import {
@@ -146,7 +146,7 @@ describe('Agent conversation', () => {
       `${chatbot.contactPageLinkLabel} :`,
     )
     expect(within(alert).getByRole('link', { name: chatbot.contactPageLinkLabel }).getAttribute('href')).toBe(
-      contact.link.href,
+      SITE_ROUTES.contact,
     )
 
     fireEvent.click(screen.getByRole('button', { name: chatbot.error.llmRetry }))
@@ -206,7 +206,7 @@ describe('Agent conversation', () => {
     fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.process }))
     const link = await screen.findByRole('link', { name: chatbot.contactPageLinkLabel })
 
-    expect(link.getAttribute('href')).toBe(contact.link.href)
+    expect(link.getAttribute('href')).toBe(SITE_ROUTES.contact)
     expect(link.closest('li')?.textContent, 'the link label replaces the words in place').toBe(
       chatbot.fallback.replace('{contactPageLink}', chatbot.contactPageLinkLabel),
     )
@@ -323,6 +323,18 @@ describe('Agent conversation with the booking flow', () => {
     expect(within(region).getByText(chatbot.booking.intro)).toBeTruthy()
     expect(callsTo(fetchMock, '/api/assistant')).toEqual([])
     expect(callsTo(fetchMock, '/api/booking')).toEqual([])
+  })
+
+  it('renders the consent privacy link from the route map, never the placeholder', async () => {
+    render(<Agent />)
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await settleFlow()
+
+    const region = await screen.findByRole('region', { name: chatbot.suggestions.book })
+    const link = within(region).getByRole('link', { name: chatbot.consent.link.inlineLabel })
+
+    expect(link.getAttribute('href')).toBe(SITE_ROUTES.privacyPolicy)
+    expect(within(region).queryByText('{privacyPolicyLink}', { exact: false })).toBeNull()
   })
 
   it('returns to the conversation when the consent is refused, with nothing sent', async () => {

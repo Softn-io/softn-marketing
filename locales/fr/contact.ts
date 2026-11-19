@@ -7,7 +7,6 @@ export const contact = {
     robots: 'index, follow',
   },
   link: {
-    href: '/contact',
     label: 'Page de contact',
   },
   header: {
@@ -84,7 +83,6 @@ export const contact = {
       "Les informations saisies sont utilisées par Softn.io pour répondre à votre message. Elles ne sont transmises qu'au moment de l'envoi du formulaire. Le détail figure dans la {privacyLink}.",
     privacyLink: {
       label: 'politique de confidentialité',
-      href: '/politique-de-confidentialite',
     },
     checkbox: {
       label: "J'accepte que Softn.io utilise les informations saisies pour répondre à ma demande.",

@@ -1,19 +1,23 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ContactScreen } from '@components/forms/ContactForm'
+import { Footer } from '@components/layout/Footer'
 import { MinimalHeader } from '@components/layout/MinimalHeader'
 import { contactRobots } from '@/lib/contact/meta'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_ROUTES } from '@/lib/routes'
 import { interpolateSegments } from '@/lib/text/interpolateSegments'
 import { ASSISTANT_NAME } from '@/locales/fr/chatbot'
 import { contact } from '@/locales/fr/contact'
 import styles from './Contact.module.css'
 
-/** Metadata of the contact page: its own title, description, canonical URL and robots directives. */
+/**
+ * Metadata of the contact page: its own title, description, canonical URL and robots directives.
+ */
 export const metadata: Metadata = {
   title: contact.meta.title,
   description: contact.meta.description,
-  alternates: { canonical: contact.link.href },
+  alternates: { canonical: SITE_ROUTES.contact },
   robots: contactRobots(contact.meta.robots),
 }
 
@@ -27,8 +31,8 @@ const CONTACT_FORM_ID = 'contact-form'
  * Handlers, never here, so a build without it still renders the page and a deployment without it
  * fails closed at submission time. The pieces of the heading and the intro are rendered here — the
  * intro keeps its link to the assistant — and handed to the client screen, which replaces them with
- * the confirmation once the message is accepted. The footer of the design bundle is not rendered:
- * the site footer does not exist yet, and this page will reuse it once it does.
+ * the confirmation once the message is accepted. The site footer closes the page, as the footer of
+ * the design bundle does.
  *
  * @returns The page, its chrome and its screen.
  */
@@ -61,6 +65,7 @@ const Contact = () => {
           </div>
         </div>
       </main>
+      <Footer />
     </>
   )
 }

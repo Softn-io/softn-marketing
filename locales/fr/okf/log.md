@@ -1,5 +1,17 @@
 # Journal de la base de connaissances
 
+## 2026-11-19:
+
+- **Chemins des pages**: Dans `locales/fr/contact.ts` et `locales/fr/chatbot.ts`, les champs `href` (`link` et `consent.privacyLink` pour `contact.ts` ; `consent.link` pour `chatbot.ts`) sont supprimés : les chemins sont désormais écrits une seule fois dans `lib/routes.ts`, les fichiers de copie ne portant plus que les libellés. Aucun fait cité par les concepts ne change : le formulaire de contact reste sur `/contact` et le lien vers la politique de confidentialité reste présent.
+- **Manifeste**: Les empreintes SHA-256 de `contact.ts` et `chatbot.ts` sont mises à jour dans `locales/fr/okf-sources.json`, avec un nouveau `reviewedAt` ; les concepts qui citent ces sources portent une entrée `verified`.
+
+## 2026-11-18:
+
+- **Pages légales intégrées**: Dans `locales/fr/legal.ts`, les pages sont écrites pour de bon : les marqueurs de relecture (identité, date de mise à jour, durées de conservation, prestataires, bases légales) disparaissent, remplacés par les données d'identité (éditeur, SIRET, TVA, adresse, directrice de la publication, hébergeur et son contact), les durées de conservation, les sous-traitants décrits un par un, les traitements nouveaux (formulaire de contact, liste d'attente, lien de gestion du rendez-vous, limitation du débit), la transcription et le résumé Gemini de l'échange, et la politique de cookies réécrite d'après le stockage réellement présent. La copie intégrée vient de la proposition `docs/content-proposals/legal-2026-11-18.md`, et les trois lignes de mise à jour portent le paramètre `{date}`, rempli une seule fois au rendu.
+- **Révision 3 (audit sécurité N1 et N2)**: Dans `locales/fr/legal.ts`, quatre textes sont corrigés : `privacy.processors.mistral` et `privacy.sections.transfers.body` ne parlent plus d'absence de transfert hors de l'Union européenne mais hors de l'Espace économique européen, à l'exception éventuelle de la Suisse, couverte par une décision d'adéquation ; `privacy.sections.controller.body` nomme la personne physique responsable du traitement (Mélanie CHARBONNÉ, entrepreneur individuel, exerçant sous le nom Softn.io) ; `privacy.rights.how` adresse les demandes « au responsable du traitement » au lieu de « à Softn.io ». Le concept `contact`, seul à citer cette rubrique, reste soutenu : il ne nomme pas le destinataire des demandes. L'empreinte de `legal.ts` est de nouveau mise à jour dans `locales/fr/okf-sources.json`.
+- **Concepts**: `assistant` et `contact`, les deux seuls à citer `legal.ts`, gardent leur texte : les affirmations qu'ils tirent de cette source restent soutenues mot pour mot par la nouvelle copie (l'assistant ne prend aucune décision concernant les personnes ; les informations saisies ne servent pas à entraîner un modèle ; les demandes de droits passent par le formulaire de contact avec l'objet « Demande relative à mes données personnelles », réponse sous un mois). Un fait nouveau de la rubrique « Assistant virtuel » n'est porté par aucun concept : les informations de réservation ne sont jamais transmises à Mistral AI — à ajouter seulement si la revue le décide, pour ne pas étendre la base au-delà de ce qu'elle affirme aujourd'hui.
+- **Manifeste**: L'empreinte SHA-256 de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`. Son `reviewedAt` reste celui de la revue précédente et aucune entrée `verified` n'est ajoutée : la revue des concepts qui citent cette source reste à faire sur cette nouvelle copie.
+
 ## 2026-11-17:
 
 - **Lien vers l'assistant**: Dans `locales/fr/contact.ts`, `intro.agentLink.href` passe de `/#agent` à `/#assistant`, l'ancre réelle de la section de l'assistant (`lib/anchors.ts`). Aucun fait cité par les concepts ne change : ni l'objet du formulaire, ni les objets proposés, ni la formulation de la réponse.
@@ -27,7 +39,8 @@
 - **Mesures intégrées**: Dans `locales/fr/thisSite.ts`, la phrase technique de l'étape 06 reçoit les valeurs mesurées par la recette et validées par Mel : « contraste d'au moins 5,9:1, navigation complète au clavier, affichage vérifié de 320 à 1920 px. » La clause sur les zones tactiles est retirée (la plus petite zone mesurée, 18 px, passe par l'exception d'espacement de WCAG 2.5.8 ; les liens de navigation de l'en-tête seront agrandis dans un correctif séparé). Aucun autre texte ne change, et plus aucun emplacement `{contrastMin}`, `{touchTargetMin}` ou `{widthRange}` ne subsiste dans la copie.
 - **Vérification**: Les trois concepts qui citent `thisSite.ts` (`assistant`, `qualite-relecture`, `softn`) sont vérifiés par Mel (`human:mel`, `2026-11-10T20:47:04+01:00`), et l'empreinte de `thisSite.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
 
- ## 2026-11-05:
+## 2026-11-05:
+
 - **Modification légale**: Dans `locales/fr/legal.ts`, `processors.google` décrit désormais Google Meet : l'échange n'est pas enregistré, Gemini (Google Workspace) peut en produire une transcription et un résumé conservés dans l'espace Google Workspace de Softn.io, et le traitement en direct de l'appel peut avoir lieu hors de l'Union européenne. Les concepts `assistant` et `contact` sont vérifiés par Mel (`human:mel`, `2026-11-05T17:58:20+01:00`) et l'empreinte de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`.
 
 ## 2026-11-05

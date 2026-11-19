@@ -45,6 +45,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { FOOTER_LINKS } from '../lib/footerLinks'
 import { SITE_URL } from '../lib/site'
 import { comingSoon } from '../locales/fr/comingSoon'
 import { nav } from '../locales/fr/hero'
@@ -245,8 +246,11 @@ test.describe('coming-soon: structure and copy', () => {
     const year = String(new Date().getFullYear())
     await expect(page.getByText(comingSoon.footer.copyright.replace('{year}', year))).toBeVisible()
 
-    // The footer's Contact and legal links stay hidden until their routes exist (approved, #91).
-    await expect(page.getByRole('link')).toHaveCount(1)
+    // The wordmark, then the footer's Contact and legal links, live since issue #22: no other link.
+    await expect(page.getByRole('link')).toHaveCount(1 + FOOTER_LINKS.length)
+    for (const link of FOOTER_LINKS) {
+      await expect(page.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href)
+    }
   })
 
   test('the launch content column is left-aligned as in the design', async ({ page }) => {
@@ -693,8 +697,9 @@ test.describe('coming-soon: keyboard-only journey', () => {
     await page.goto('/')
     await expect(page.getByRole('banner')).toBeVisible()
 
-    // Keyboard order: wordmark link, theme toggle, e-mail field, submit button. The honeypot
-    // input is removed from the tab order; the footer holds no control.
+    // Keyboard order: wordmark link, theme toggle, e-mail field, submit button, then the footer
+    // links (issue #22: contact page and legal pages). The honeypot input is removed from the tab
+    // order, and no footer link sits between the form's controls.
     await page.keyboard.press('Tab')
     await expect(page.locator(':focus')).toHaveText(WORDMARK)
     await page.keyboard.press('Tab')

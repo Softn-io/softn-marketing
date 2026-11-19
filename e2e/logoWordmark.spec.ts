@@ -150,8 +150,10 @@ for (const surface of SURFACES) {
     test('one accessible name, the visible text first, and the home href', async ({ page }) => {
       await page.goto(surface.path)
 
-      const logos = page.getByRole('link', { name: nav.logo.ariaLabel })
-      await expect(logos, 'exactly one logo link named by the locale').toHaveCount(1)
+      // Scoped to the header: since issue #22 the footer carries its own wordmark link home with
+      // the same name (covered by e2e/legalPages.spec.ts), so the page has two.
+      const logos = page.locator('header').getByRole('link', { name: nav.logo.ariaLabel })
+      await expect(logos, 'exactly one logo link named by the locale in the header').toHaveCount(1)
       await expect(logos).toHaveAttribute('href', '/')
       await expect(logos).toHaveText(WORDMARK_TEXT)
       // The visible text is inside the name (WCAG 2.5.3): the aria-label starts with it.

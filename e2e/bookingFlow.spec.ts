@@ -47,6 +47,7 @@ import { expect, test, type Locator, type Page, type Route } from '@playwright/t
 import { AxeBuilder } from '@axe-core/playwright'
 import { SECTION_IDS } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
+import { SITE_ROUTES } from '../lib/routes'
 import { ASSISTANT_NAME, chatbot } from '../locales/fr/chatbot'
 import { offers } from '../locales/fr/offers'
 import { withAssistantName } from '../components/sections/Agent/data/agentMessages'
@@ -2096,7 +2097,7 @@ test.describe("booking flow: Mel's review of the consent, the chips, the recap a
     // 4: one inline link to the policy inside the sentence, and no standalone link left.
     const inline = bookingRegion(page).getByRole('link', { name: chatbot.consent.link.inlineLabel })
     await expect(inline).toBeVisible()
-    await expect(inline).toHaveAttribute('href', chatbot.consent.link.href)
+    await expect(inline).toHaveAttribute('href', SITE_ROUTES.privacyPolicy)
     await expect(bookingRegion(page).getByRole('link', { name: chatbot.consent.link.label, exact: true })).toHaveCount(
       0,
     )
