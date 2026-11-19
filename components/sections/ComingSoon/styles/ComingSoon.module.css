@@ -169,9 +169,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
+  justify-content: space-between;
+  gap: var(--softn-space-2) var(--softn-space-6);
   padding-block: clamp(var(--softn-space-3), 3vh, var(--softn-space-6));
   padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
   color: var(--softn-color-tertiary);
+}
+
+.copyright {
+  margin: 0;
 }
 
 @keyframes orb-drift-vivid {

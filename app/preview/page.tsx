@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { connection } from 'next/server'
+import { Footer } from '@components/layout/Footer'
 import { Header } from '@components/layout/Header'
 import { Agent } from '@components/sections/Agent'
 import { FAQ } from '@components/sections/FAQ'
@@ -50,6 +51,7 @@ const Preview = async () => {
         <FAQ />
         <FinalCta />
       </main>
+      <Footer />
     </>
   )
 }

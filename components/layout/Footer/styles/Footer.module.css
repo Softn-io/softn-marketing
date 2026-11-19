@@ -1,0 +1,86 @@
+/*
+ * Site footer, from the footer of the design bundle (`Softn.io Site v3.dc.html`, reused by the
+ * contact page): a hairline above, the wordmark and the legal line on the left, the navigation on the
+ * right.
+ *
+ * Every colour, length, radius and duration comes from a --softn-* token; the column is the nearest
+ * container token to the design's 1080px content width. No --softn-* variable is defined here.
+ */
+
+.footer {
+  border-block-start: 1px solid var(--softn-border-subtle);
+  padding-block: clamp(var(--softn-space-8), 5vw, var(--softn-space-12));
+  padding-inline: clamp(var(--softn-space-5), 5vw, var(--softn-space-12));
+}
+
+.inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--softn-space-8);
+  max-inline-size: var(--softn-container-6xl);
+  margin-inline: auto;
+}
+
+/* The wordmark's column keeps the design's measure, so the legal line wraps like the mockup. */
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-3);
+  max-inline-size: 34ch;
+}
+
+/* The wordmark sizes itself (`components/ui/Logo/`); here it only gets its ring. */
+.wordmark {
+  text-decoration: none;
+}
+
+.wordmark:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.copyright {
+  margin: 0;
+  color: var(--softn-color-tertiary);
+}
+
+/*
+ * Placement of the navigation landmark in the footer's row: the links sit on the baseline of the
+ * legal line, as the design places them. The navigation owns no layout of its own (`FooterNav`).
+ */
+.nav {
+  align-self: flex-end;
+}
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--softn-space-2) var(--softn-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  color: var(--softn-color-secondary);
+  text-decoration: none;
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.link:hover {
+  color: var(--softn-color);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .link {
+    transition: none;
+  }
+}
