@@ -4,12 +4,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { BOOKING_OPEN_QUERY_KEY } from '@/lib/anchors'
 import { ASSISTANT_INTENT_EVENT, ASSISTANT_INTENTS, type AssistantIntentDetail } from '@/lib/assistant/intent'
+import { prefersReducedMotion } from '@/lib/motion'
 import { chatbot } from '@/locales/fr/chatbot'
 import { AGENT_QUESTION_INPUT_ID, AgentComposer } from './AgentComposer'
 import { AgentMessages } from './AgentMessages'
 import { AgentMessageText } from './AgentMessageText'
 import { AgentSuggestions } from './AgentSuggestions'
 import { AgentTypingIndicator } from './AgentTypingIndicator'
+import { boxOf, revealBox, withFootGap } from './data/revealInViewport'
 import {
   ASSISTANT_CONVERSATION_STATUS,
   useAssistantConversation,
@@ -106,11 +108,18 @@ export const AgentConversation = () => {
     queueMicrotask(openBooking)
   }, [openBooking])
 
-  // Closing the flow gives focus back to the composer: the conversation is where the visitor was.
+  // Closing the flow gives focus back to the composer: the conversation is where the visitor was. The
+  // focus never scrolls the page on its own — that jump would be instant whatever the motion
+  // preference and could cancel a smooth scroll in flight — so the composer is brought back into view
+  // explicitly, with the same shortest scroll the flow uses for its own reveals.
   useEffect(() => {
     if (bookingOpen || !restoreFocusRef.current) return
     restoreFocusRef.current = false
-    document.getElementById(AGENT_QUESTION_INPUT_ID)?.focus()
+
+    const input = document.getElementById(AGENT_QUESTION_INPUT_ID)
+    input?.focus({ preventScroll: true })
+    const box = boxOf(input)
+    if (box !== null) revealBox(withFootGap(box), prefersReducedMotion())
   }, [bookingOpen])
 
   return (

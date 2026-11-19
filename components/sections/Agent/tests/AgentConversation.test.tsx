@@ -9,6 +9,7 @@ import { agent } from '@/locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '@/locales/fr/chatbot'
 import { contact } from '@/locales/fr/contact'
 import { Agent } from '../Agent'
+import { AGENT_QUESTION_INPUT_ID } from '../AgentComposer'
 import {
   answerBooking,
   beforeContactLink,
@@ -52,6 +53,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -414,5 +416,41 @@ describe('Agent conversation with the booking flow', () => {
 
     const region = screen.getByRole('region', { name: chatbot.suggestions.book })
     expect(within(region).getAllByText('Automatiser mes devis').length).toBeGreaterThan(0)
+  })
+
+  it('brings the composer back into view when the flow closes, with no focus-driven scroll', async () => {
+    const scrollTo = vi.fn()
+    vi.stubGlobal('scrollTo', scrollTo)
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus')
+    // jsdom has no layout and no stylesheet: the composer sits under the fold, its bottom 192 px
+    // below the 768 px viewport, the foot gap token resolves to 32 px, and every other box is empty
+    // so the flow's own reveals scroll nothing.
+    vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+      const empty = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}) }
+      if (this.id !== AGENT_QUESTION_INPUT_ID) return empty as DOMRect
+      return { ...empty, top: 900, bottom: 960, height: 60, y: 900 } as DOMRect
+    })
+    vi.spyOn(window, 'getComputedStyle').mockImplementation(
+      () =>
+        ({
+          getPropertyValue: (name: string) => (name === '--softn-space-8' ? '2rem' : ''),
+          fontSize: '16px',
+        }) as CSSStyleDeclaration,
+    )
+    render(<Agent />)
+
+    fireEvent.click(screen.getByRole('button', { name: chatbot.suggestions.book }))
+    await screen.findByRole('region', { name: chatbot.suggestions.book })
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.booking.cancel }))
+
+    const input = await screen.findByLabelText(agent.inputLabel)
+    expect(document.activeElement).toBe(input)
+    expect(focus.mock.instances.at(-1)).toBe(input)
+    expect(focus.mock.calls.at(-1)?.[0]).toEqual({ preventScroll: true })
+    // The composer's bottom lands the 32 px foot gap (--softn-space-8) above the bottom of the
+    // viewport (960 - (768 - 32) = 224), and the page moves by nothing more: the section after the
+    // assistant stays under the fold.
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 224, behavior: 'instant' })
   })
 })

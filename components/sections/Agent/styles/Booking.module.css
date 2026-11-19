@@ -56,6 +56,9 @@
   flex-direction: column;
   gap: clamp(var(--softn-space-5), 3.4vw, var(--softn-space-8));
   margin: 0;
+  /* Foot gap of the step: the controls end this far above the area's bottom edge, so the shortest
+     reveal — which stops at that edge — never leaves a control on the bottom of the viewport. */
+  padding-block-end: var(--softn-space-8);
 }
 
 /* Progress line: the eyebrow stays readable, the rule takes the room that is left. */
