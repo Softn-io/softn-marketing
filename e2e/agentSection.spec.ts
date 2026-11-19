@@ -27,9 +27,9 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { SECTION_IDS } from '../lib/anchors'
+import { SITE_ROUTES } from '../lib/routes'
 import { agent } from '../locales/fr/agent'
 import { ASSISTANT_NAME, chatbot } from '../locales/fr/chatbot'
-import { contact } from '../locales/fr/contact'
 
 const AGENT_ID = SECTION_IDS.agent
 const METHOD_ID = SECTION_IDS.method
@@ -805,7 +805,7 @@ test.describe('agent conversation', () => {
     const link = alert.getByRole('link', { name: chatbot.contactPageLinkLabel })
     await expect(link).toBeVisible()
     await expect(link).toHaveAccessibleName(chatbot.contactPageLinkLabel)
-    await expect(link).toHaveAttribute('href', contact.link.href)
+    await expect(link).toHaveAttribute('href', SITE_ROUTES.contact)
     // The link replaces the {contactPageLink} placeholder in place: the label may appear exactly
     // once in the sentence, never repeated after the link.
     const errorText = await alert.innerText()
@@ -834,7 +834,7 @@ test.describe('agent conversation', () => {
     const link = agentSection(page).getByRole('link', { name: chatbot.contactPageLinkLabel })
     await expect(link).toBeVisible()
     await expect(link).toHaveAccessibleName(chatbot.contactPageLinkLabel)
-    await expect(link).toHaveAttribute('href', contact.link.href)
+    await expect(link).toHaveAttribute('href', SITE_ROUTES.contact)
     await expect(agentSection(page)).not.toContainText(`${chatbot.contactPageLinkLabel} :`)
     await expect(agentSection(page)).not.toContainText('{contactPageLink}')
     // The label replaces the placeholder in place inside the fallback message itself: exactly one

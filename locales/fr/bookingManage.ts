@@ -117,7 +117,6 @@ export const bookingManage = {
   contact: {
     sentence: "Pour toute autre demande, vous pouvez m'écrire via le {contactLink}.",
     linkLabel: 'formulaire de contact',
-    href: '/contact',
   },
 } as const
 

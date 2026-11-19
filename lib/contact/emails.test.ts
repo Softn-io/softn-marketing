@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { SITE_ROUTES } from '@/lib/routes'
 import { SITE_URL } from '@/lib/site'
 import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { contact } from '@/locales/fr/contact'
@@ -213,7 +214,7 @@ describe('autoReplyEmailContent', () => {
     const content = contentOf()
 
     expect(content.text).toContain(`Réserver un échange Spark (${SITE_URL}${contact.intro.agentLink.href})`)
-    expect(content.text).toContain('politique de confidentialité (https://softn.io/politique-de-confidentialite)')
+    expect(content.text).toContain(`politique de confidentialité (${SITE_URL}${SITE_ROUTES.privacyPolicy})`)
   })
 
   it('renders the same addresses as labelled anchors in the HTML part', () => {
@@ -223,7 +224,7 @@ describe('autoReplyEmailContent', () => {
       `<a href="${SITE_URL}${contact.intro.agentLink.href}" style="color:${EMAIL_LINK_COLOR}">Réserver un échange Spark</a>`,
     )
     expect(content.html).toContain(
-      `<a href="${SITE_URL}${contact.consent.privacyLink.href}" style="${footerLinkStyle}">politique de confidentialité</a>`,
+      `<a href="${SITE_URL}${SITE_ROUTES.privacyPolicy}" style="${footerLinkStyle}">politique de confidentialité</a>`,
     )
   })
 
@@ -261,12 +262,12 @@ describe('autoReplyEmailContent', () => {
   it('turns the two footer mentions of the copy into links, built from the site URL', () => {
     const content = contentOf()
 
-    expect(content.html).toContain(`<a href="${SITE_URL}${contact.link.href}" style="${footerLinkStyle}">Contact</a>`)
+    expect(content.html).toContain(`<a href="${SITE_URL}${SITE_ROUTES.contact}" style="${footerLinkStyle}">Contact</a>`)
     expect(content.html).toContain(
-      `<a href="${SITE_URL}${contact.consent.privacyLink.href}" style="${footerLinkStyle}">politique de confidentialité</a>`,
+      `<a href="${SITE_URL}${SITE_ROUTES.privacyPolicy}" style="${footerLinkStyle}">politique de confidentialité</a>`,
     )
-    expect(content.text).toContain(`Contact (${SITE_URL}${contact.link.href})`)
-    expect(content.text).toContain(`politique de confidentialité (${SITE_URL}${contact.consent.privacyLink.href})`)
+    expect(content.text).toContain(`Contact (${SITE_URL}${SITE_ROUTES.contact})`)
+    expect(content.text).toContain(`politique de confidentialité (${SITE_URL}${SITE_ROUTES.privacyPolicy})`)
   })
 
   it('dresses the footer of the HTML part in the small grey type of the email', () => {
@@ -310,7 +311,7 @@ describe('autoReplyEmailContent', () => {
   it('builds every link from the canonical site URL, whatever origin the request came from', () => {
     const content = contentOf()
 
-    for (const url of [SITE_URL + contact.intro.agentLink.href, SITE_URL + contact.consent.privacyLink.href]) {
+    for (const url of [SITE_URL + contact.intro.agentLink.href, SITE_URL + SITE_ROUTES.privacyPolicy]) {
       expect(url.startsWith('https://softn.io/')).toBe(true)
       expect(content.text).toContain(url)
       expect(content.html).toContain(`href="${url}"`)
@@ -355,7 +356,7 @@ describe('autoReplyEmailContent', () => {
     const content = contentOf()
 
     expect(content.text).toContain(
-      'Vous pouvez également consulter le détail de la politique de confidentialité (https://softn.io/politique-de-confidentialite).',
+      `Vous pouvez également consulter le détail de la politique de confidentialité (${SITE_URL}${SITE_ROUTES.privacyPolicy}).`,
     )
     expect(content.text.match(/politique de confidentialité/g)).toHaveLength(1)
   })

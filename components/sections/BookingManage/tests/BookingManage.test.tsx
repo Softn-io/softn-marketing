@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { formatSlotLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
+import { SITE_ROUTES } from '@/lib/routes'
 import { bookingManage } from '@/locales/fr/bookingManage'
 import { BookingManage } from '../BookingManage'
 
@@ -277,7 +278,7 @@ describe('BookingManage states', () => {
     // The state message carries the link inside its sentence, and the page carries its own line.
     const contactLinks = screen.getAllByRole('link', { name: bookingManage.contact.linkLabel })
     expect(contactLinks.length).toBeGreaterThan(0)
-    for (const link of contactLinks) expect(link.getAttribute('href')).toBe(bookingManage.contact.href)
+    for (const link of contactLinks) expect(link.getAttribute('href')).toBe(SITE_ROUTES.contact)
   })
 
   it('never renders a personal field in any state', () => {

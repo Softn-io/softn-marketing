@@ -9,6 +9,7 @@ import { groupSlotsByDay } from '@/lib/booking/days'
 import { formatBookingDayLongLabel, formatSlotLabel } from '@/lib/booking/labels'
 import { BOOKING_RULES } from '@/lib/booking/rules'
 import { interpolate } from '@/lib/interpolate'
+import { SITE_ROUTES } from '@/lib/routes'
 import { bookingManage } from '@/locales/fr/bookingManage'
 import { isBookingSlotsResponse } from '@/schemas/bookingLimits'
 import {
@@ -95,7 +96,7 @@ const ManageMessage = ({
       {interpolate(before ?? '', { ...MESSAGE_VALUES, ...values })}
       {after === undefined ? null : (
         <>
-          <a className={styles.messageLink} href={bookingManage.contact.href}>
+          <a className={styles.messageLink} href={SITE_ROUTES.contact}>
             {bookingManage.contact.linkLabel}
           </a>
           {interpolate(after, { ...MESSAGE_VALUES, ...values })}
