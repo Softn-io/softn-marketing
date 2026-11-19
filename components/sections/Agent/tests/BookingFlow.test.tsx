@@ -141,6 +141,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
   Reflect.deleteProperty(Element.prototype, 'scrollIntoView')
@@ -272,11 +273,14 @@ describe('Booking flow pacing', () => {
 
 describe('Booking flow scrolling', () => {
   /*
-   * jsdom has no layout, so the boxes and the two lengths the scroll needs are stubbed: the newest
-   * line sits at 700-760, the control of the step at 820-880, the header is absent, and the offset
-   * token resolves to 96 px. The page must then be scrolled to 700 - 96 = 604.
+   * jsdom has no layout, so the boxes and the lengths the scroll needs are stubbed: the newest line
+   * and the area of the step are placed where the test needs them, the header is absent, and the
+   * offset token resolves to 96 px. The jsdom viewport is 768 px tall.
    */
-  const stubLayout = (): {
+  const stubLayout = (
+    boxes: { readonly line: readonly [number, number]; readonly step: readonly [number, number] },
+    scrollY = 0,
+  ): {
     readonly scrollTo: ReturnType<typeof vi.spyOn>
     readonly focus: ReturnType<typeof vi.spyOn>
   } => {
@@ -294,10 +298,10 @@ describe('Booking flow scrolling', () => {
       }) as DOMRect
 
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-      const isControl = this.hasAttribute('data-booking-focus')
+      const isStep = this.hasAttribute('data-booking-step')
       const isLine = this.parentElement?.hasAttribute('data-booking-transcript') === true
-      if (isControl) return box(820, 880)
-      if (isLine) return box(700, 760)
+      if (isStep) return box(boxes.step[0], boxes.step[1])
+      if (isLine) return box(boxes.line[0], boxes.line[1])
       return box(0, 0)
     })
     vi.spyOn(window, 'getComputedStyle').mockImplementation(
@@ -307,16 +311,17 @@ describe('Booking flow scrolling', () => {
           fontSize: '16px',
         }) as CSSStyleDeclaration,
     )
+    vi.stubGlobal('scrollY', scrollY)
 
     const scrollTo = vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined)
     const focus = vi.spyOn(HTMLElement.prototype, 'focus')
     return { scrollTo, focus }
   }
 
-  it('scrolls the window so the newest message and the step control both clear the sticky header', async () => {
+  it('scrolls by the height the block is missing under the fold, and no further', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     stubMotionPreference(false)
-    const { scrollTo, focus } = stubLayout()
+    const { scrollTo, focus } = stubLayout({ line: [700, 760], step: [820, 880] })
     renderFlow()
 
     await settle(2)
@@ -326,23 +331,78 @@ describe('Booking flow scrolling', () => {
     expect(screen.getByLabelText(chatbot.booking.steps.need.field)).toBeTruthy()
     expect(scrollTo).toHaveBeenCalled()
     const options = scrollTo.mock.calls.at(-1)?.[0] as ScrollToOptions
-    // The block starts 96 px (the token) below the top: the newest line at 700 and the control at 880
-    // both end up inside the 768 px viewport.
-    expect(options.top).toBe(604)
+    // The step's area ends on the bottom edge of the 768 px viewport (880 - 768 = 112): the newest
+    // line above it, at 700, is already under the 96 px offset, so the page stops there instead of
+    // carrying the block to the top of the viewport. The 32 px foot gap under the controls is the
+    // step area's own bottom padding, so it travels with the box and the reveal stays this short.
+    expect(options.top).toBe(112)
     expect(options.behavior).toBe('smooth')
     // Focus never scrolls on its own: it would cancel the smooth scroll started above.
     expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   })
 
-  it('jumps without animation when motion is reduced', async () => {
-    const { scrollTo } = stubLayout()
+  it('leaves the scroll untouched when the newest message and the step are already visible', async () => {
+    stubMotionPreference(true)
+    const { scrollTo } = stubLayout({ line: [200, 260], step: [300, 360] }, 500)
+    renderFlow()
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    await screen.findByLabelText(chatbot.booking.steps.need.field)
+
+    // Both boxes sit inside the room under the header: the page stays where the visitor put it.
+    expect(scrollTo).not.toHaveBeenCalled()
+  })
+
+  it('brings the block back under the header when the visitor scrolled past it', async () => {
+    stubMotionPreference(true)
+    const { scrollTo } = stubLayout({ line: [-400, -340], step: [-280, -220] }, 1200)
     renderFlow()
 
     fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
     await screen.findByLabelText(chatbot.booking.steps.need.field)
 
     const options = scrollTo.mock.calls.at(-1)?.[0] as ScrollToOptions
-    expect(options.behavior).toBe('auto')
+    // The block's top lands 96 px below the top of the viewport: 1200 + (-400 - 96) = 704.
+    expect(options.top).toBe(704)
+  })
+
+  it('reveals the step alone when the newest line and the step together outgrow the room', async () => {
+    stubMotionPreference(true)
+    const { scrollTo } = stubLayout({ line: [300, 900], step: [960, 1500] })
+    renderFlow()
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    await screen.findByLabelText(chatbot.booking.steps.need.field)
+
+    const options = scrollTo.mock.calls.at(-1)?.[0] as ScrollToOptions
+    // The union (300-1500) does not fit in the 672 px room, so the step area is revealed on its own:
+    // it fits, and the control it holds ends on the bottom edge of the viewport, 1500 - 768 = 732.
+    expect(options.top).toBe(732)
+  })
+
+  it('reveals the step alone even when the step itself is taller than the room', async () => {
+    stubMotionPreference(true)
+    const { scrollTo } = stubLayout({ line: [300, 700], step: [720, 1500] })
+    renderFlow()
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    await screen.findByLabelText(chatbot.booking.steps.need.field)
+
+    const options = scrollTo.mock.calls.at(-1)?.[0] as ScrollToOptions
+    // The step (720-1500, 780 px) is taller than the 672 px room, so it cannot be shown whole and
+    // leads with its own top: the control at the top of the step opens at the reading band, 720 - 96.
+    expect(options.top).toBe(624)
+  })
+
+  it('jumps without animation when motion is reduced', async () => {
+    const { scrollTo } = stubLayout({ line: [700, 760], step: [820, 880] })
+    renderFlow()
+
+    fireEvent.click(await screen.findByRole('button', { name: chatbot.consent.accept }))
+    await screen.findByLabelText(chatbot.booking.steps.need.field)
+
+    const options = scrollTo.mock.calls.at(-1)?.[0] as ScrollToOptions
+    expect(options.behavior).toBe('instant')
   })
 })
 

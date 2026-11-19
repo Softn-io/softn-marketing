@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { BookingSlot } from '@/lib/booking/availability'
 import { groupSlotsByDay } from '@/lib/booking/days'
@@ -17,6 +17,7 @@ import { AgentMessageText } from './AgentMessageText'
 import { AgentTypingIndicator } from './AgentTypingIndicator'
 import { BookingRecap } from './BookingRecap'
 import { agentSpeakerLabel } from './data/agentMessages'
+import { boxOf, fitsInRoom, revealBox, type ViewportBox } from './data/revealInViewport'
 import { BOOKING_QUESTION_STEPS, BOOKING_STEPS, useBookingFlow, type BookingStep } from './hooks/useBookingFlow'
 import styles from './styles/Booking.module.css'
 
@@ -77,46 +78,18 @@ export type BookingFlowProps = {
 }
 
 /**
- * Token of the gap kept under the sticky header when the flow scrolls something into view.
- *
- * The offset is the header's own measured height plus this token's value, read from the stylesheet so
- * no hand-written pixel value is involved.
- */
-const SCROLL_GAP_TOKEN = '--softn-space-24'
-
-/** Reads a length token, in pixels, from the document root. */
-const readLengthToken = (name: string): number => {
-  const root = document.documentElement
-  const value = getComputedStyle(root).getPropertyValue(name).trim()
-  if (value === '') return 0
-
-  const amount = Number.parseFloat(value)
-  if (!Number.isFinite(amount)) return 0
-  if (value.endsWith('rem')) return amount * Number.parseFloat(getComputedStyle(root).fontSize)
-  if (value.endsWith('px')) return amount
-  return 0
-}
-
-/** The box of an element in the viewport, or `null` when there is none. */
-type ViewportBox = { readonly top: number; readonly bottom: number }
-
-const boxOf = (element: Element | null | undefined): ViewportBox | null => {
-  if (element === null || element === undefined) return null
-
-  const box = element.getBoundingClientRect()
-  if (box.height === 0 && box.width === 0) return null
-  return { top: box.top, bottom: box.bottom }
-}
-
-/**
- * Brings the newest message, then the control of the current step, fully into view.
+ * Brings the newest message, then the controls of the current step, into view.
  *
  * The window is scrolled directly, never an inner box: the section clips its own overflow, so a
  * `scrollIntoView` there can move a container the visitor cannot scroll back. The block to keep
- * visible is the union of the newest transcript line and the step's control — when it is taller than
- * the room left under the sticky header (a long recap), the control that has to be clicked wins and
- * the message above it scrolls out of the way. The page always moves to that block, even for a
- * visitor who scrolled up in the meantime, and the jump is instant when motion is reduced.
+ * visible is the union of the newest transcript line and the step's own area, which holds the field,
+ * the chips or the chooser the visitor answers with. When that union outgrows the room under the
+ * header — a long message above a tall chooser, on a short viewport — the step is revealed alone, so
+ * the control the flow just focused leads and stays inside the viewport even when the step itself
+ * overflows. The reveal itself moves the page by what the block is missing only (see
+ * {@link revealBox}), so a reveal never bounces the page, and the scroll stops at the block instead
+ * of carrying the section after the assistant into the viewport. The step area holds its own foot gap
+ * as a bottom padding, so the control never ends on the bottom edge of the viewport.
  *
  * @param container The flow's root element.
  * @param reducedMotion True when the visitor asked for less motion.
@@ -124,25 +97,17 @@ const boxOf = (element: Element | null | undefined): ViewportBox | null => {
 const revealInView = (container: HTMLElement, reducedMotion: boolean): void => {
   const transcript = container.querySelector<HTMLElement>('[data-booking-transcript]')
   const newest = boxOf(transcript?.lastElementChild)
-  const controlElement = container.querySelector<HTMLElement>('[data-booking-focus]')
-  const control = boxOf(controlElement)
+  const step = boxOf(container.querySelector<HTMLElement>('[data-booking-step]'))
 
-  const boxes = [newest, control].filter((box): box is ViewportBox => box !== null)
+  const boxes = [newest, step].filter((box): box is ViewportBox => box !== null)
   if (boxes.length === 0) return
 
-  const header = document.querySelector('header')
-  const headerHeight = header === null ? 0 : header.getBoundingClientRect().height
-  const offset = headerHeight + readLengthToken(SCROLL_GAP_TOKEN)
+  const block: ViewportBox = {
+    top: Math.min(...boxes.map((box) => box.top)),
+    bottom: Math.max(...boxes.map((box) => box.bottom)),
+  }
 
-  const blockTop = Math.min(...boxes.map((box) => box.top))
-  const blockBottom = Math.max(...boxes.map((box) => box.bottom))
-  const room = window.innerHeight - offset
-  const anchor = blockBottom - blockTop <= room ? blockTop : (control?.top ?? blockTop)
-
-  window.scrollTo({
-    top: Math.max(0, window.scrollY + anchor - offset),
-    behavior: reducedMotion ? 'auto' : 'smooth',
-  })
+  revealBox(step !== null && !fitsInRoom(block) ? step : block, reducedMotion)
 }
 
 /**
@@ -175,10 +140,11 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
   }, [flow.slots, flow.step, flow.stepReady])
 
   // Every new message, and every step whose control appears, brings the conversation with it: the
-  // newest line and that control end up fully visible under the sticky header. A new availability
-  // counts as the control appearing: the chooser is taller than the question above it, so the page
-  // has to follow again once it is there, or its times stay under the fold.
-  useEffect(() => {
+  // newest line and that control are shown under the sticky header, with the shortest scroll that
+  // does it. A new availability counts as the control appearing: the chooser is taller than the
+  // question above it, so the page follows again once it is there. The reveal runs before the paint:
+  // the step is never painted once at the old position and then scrolled.
+  useLayoutEffect(() => {
     const container = flowRef.current
     if (container === null) return
 
@@ -240,7 +206,7 @@ export const BookingFlow = ({ onCancel, onDecline, onRestart }: BookingFlowProps
         ) : null}
       </ol>
 
-      <div className={styles.step}>
+      <div className={styles.step} data-booking-step>
         {flow.stepReady ? (
           <>
             {showCounter ? (
