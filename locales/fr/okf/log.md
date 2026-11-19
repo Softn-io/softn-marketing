@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-19:
+
+- **Chemins des pages**: Dans `locales/fr/contact.ts` et `locales/fr/chatbot.ts`, les champs `href` (`link` et `consent.privacyLink` pour `contact.ts` ; `consent.link` pour `chatbot.ts`) sont supprimés : les chemins sont désormais écrits une seule fois dans `lib/routes.ts`, les fichiers de copie ne portant plus que les libellés. Aucun fait cité par les concepts ne change : le formulaire de contact reste sur `/contact` et le lien vers la politique de confidentialité reste présent.
+- **Manifeste**: Les empreintes SHA-256 de `contact.ts` et `chatbot.ts` sont mises à jour dans `locales/fr/okf-sources.json`, avec un nouveau `reviewedAt` ; les concepts qui citent ces sources portent une entrée `verified`.
+
 ## 2026-11-18:
 
 - **Pages légales intégrées**: Dans `locales/fr/legal.ts`, les pages sont écrites pour de bon : les marqueurs de relecture (identité, date de mise à jour, durées de conservation, prestataires, bases légales) disparaissent, remplacés par les données d'identité (éditeur, SIRET, TVA, adresse, directrice de la publication, hébergeur et son contact), les durées de conservation, les sous-traitants décrits un par un, les traitements nouveaux (formulaire de contact, liste d'attente, lien de gestion du rendez-vous, limitation du débit), la transcription et le résumé Gemini de l'échange, et la politique de cookies réécrite d'après le stockage réellement présent. La copie intégrée vient de la proposition `docs/content-proposals/legal-2026-11-18.md`, et les trois lignes de mise à jour portent le paramètre `{date}`, rempli une seule fois au rendu.
@@ -34,7 +39,8 @@
 - **Mesures intégrées**: Dans `locales/fr/thisSite.ts`, la phrase technique de l'étape 06 reçoit les valeurs mesurées par la recette et validées par Mel : « contraste d'au moins 5,9:1, navigation complète au clavier, affichage vérifié de 320 à 1920 px. » La clause sur les zones tactiles est retirée (la plus petite zone mesurée, 18 px, passe par l'exception d'espacement de WCAG 2.5.8 ; les liens de navigation de l'en-tête seront agrandis dans un correctif séparé). Aucun autre texte ne change, et plus aucun emplacement `{contrastMin}`, `{touchTargetMin}` ou `{widthRange}` ne subsiste dans la copie.
 - **Vérification**: Les trois concepts qui citent `thisSite.ts` (`assistant`, `qualite-relecture`, `softn`) sont vérifiés par Mel (`human:mel`, `2026-11-10T20:47:04+01:00`), et l'empreinte de `thisSite.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
 
- ## 2026-11-05:
+## 2026-11-05:
+
 - **Modification légale**: Dans `locales/fr/legal.ts`, `processors.google` décrit désormais Google Meet : l'échange n'est pas enregistré, Gemini (Google Workspace) peut en produire une transcription et un résumé conservés dans l'espace Google Workspace de Softn.io, et le traitement en direct de l'appel peut avoir lieu hors de l'Union européenne. Les concepts `assistant` et `contact` sont vérifiés par Mel (`human:mel`, `2026-11-05T17:58:20+01:00`) et l'empreinte de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`.
 
 ## 2026-11-05
