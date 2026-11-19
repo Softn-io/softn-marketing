@@ -666,9 +666,11 @@ test.describe('booking flow: pacing', () => {
       }
 
       /**
-       * After a reveal: the newest line and the current step's control sit fully inside the
-       * viewport, below the sticky header, the section never shifts sideways, and the page really
-       * scrolled whenever content was added below the fold.
+       * After a reveal: the newest line and the current step's control sit fully inside the viewport,
+       * below the sticky header — unless the union of the two outgrows the room under the header, in
+       * which case the flow reveals the step alone: the control leads, and the newest line may sit
+       * under the header. The section never shifts sideways, and the page really scrolled whenever
+       * content was added below the fold.
        */
       const assertFollow = async (control: Locator, allowRightOverflow = false): Promise<void> => {
         await control.waitFor({ state: 'visible', timeout: 30_000 })
@@ -679,14 +681,33 @@ test.describe('booking flow: pacing', () => {
           const header = document.querySelector('header')
           return header === null ? 0 : header.getBoundingClientRect().bottom
         })
+        // The room the reveal fits a block into, read like the application does: the header's height
+        // plus the gap token (`--softn-space-24`).
+        const offset = await page.evaluate(() => {
+          const root = getComputedStyle(document.documentElement)
+          return Number.parseFloat(root.getPropertyValue('--softn-space-24')) * Number.parseFloat(root.fontSize)
+        })
+        const stepBox = await bookingRegion(page).locator('[data-booking-step]').boundingBox()
         const newestBox = await flowLines(page).last().boundingBox()
         const controlBox = await control.boundingBox()
+        expect(stepBox).not.toBeNull()
         expect(newestBox).not.toBeNull()
         expect(controlBox).not.toBeNull()
+        const step = stepBox as { x: number; y: number; width: number; height: number }
         const newest = newestBox as { x: number; y: number; width: number; height: number }
         const box = controlBox as { x: number; y: number; width: number; height: number }
-        expect(newest.y + newest.height, 'newest message is inside the viewport').toBeLessThanOrEqual(vh)
-        expect(newest.y, 'newest message is below the sticky header').toBeGreaterThanOrEqual(headerBottom - 1)
+        const unionHeight = Math.max(newest.y + newest.height, step.y + step.height) - Math.min(newest.y, step.y)
+        if (unionHeight > vh - (headerBottom + offset)) {
+          // Step-alone branch: the union outgrows the room, so the step is revealed alone and the
+          // newest line sits above it, possibly under the header.
+          expect(step.y, 'the step revealed alone leads below the header').toBeGreaterThanOrEqual(headerBottom - 1)
+          expect(newest.y + newest.height, 'the newest line sits above the revealed step').toBeLessThanOrEqual(
+            step.y + 1,
+          )
+        } else {
+          expect(newest.y + newest.height, 'newest message is inside the viewport').toBeLessThanOrEqual(vh)
+          expect(newest.y, 'newest message is below the sticky header').toBeGreaterThanOrEqual(headerBottom - 1)
+        }
         expect(newest.x, 'newest message inside viewport horizontally').toBeGreaterThanOrEqual(-1)
         expect(newest.x + newest.width, 'newest message inside viewport horizontally').toBeLessThanOrEqual(vw + 1)
         expect(box.y + box.height, 'step control is inside the viewport').toBeLessThanOrEqual(vh)
@@ -723,6 +744,21 @@ test.describe('booking flow: pacing', () => {
           .toBeGreaterThan(preScrollY)
       }
 
+      /**
+       * Scrolls the page back to the top and waits until the position is actually read there.
+       *
+       * `waitScrollSettled` alone is not enough right after `scrollTo(0, 0)`: its two rAF readings
+       * can both land before a freshly requested smooth scroll has moved its first pixel, and the
+       * read then pins the previous resting position as the «before» value — a position the shorter
+       * next reveal can end below (the shortest scroll shows the block, it does not restore the
+       * previous depth). The top is therefore awaited explicitly before the position is read.
+       */
+      const scrollToTop = async (): Promise<void> => {
+        await page.evaluate(() => window.scrollTo(0, 0))
+        await expect.poll(() => page.evaluate(() => window.scrollY), { timeout: 8_000 }).toBe(0)
+        await waitScrollSettled()
+      }
+
       await assertFollow(bookingRegion(page).getByRole('button', { name: chatbot.consent.accept }), cfg.width === 375)
 
       const preAccept = await page.evaluate(() => window.scrollY)
@@ -740,11 +776,7 @@ test.describe('booking flow: pacing', () => {
 
       // The visitor scrolls back to the top; the next message must bring the page back down. The
       // click is dispatched, not clicked, so Playwright's own auto-scroll cannot fake the return.
-      // The scroll settles before the position is read: the document's smooth scrolling animates,
-      // and a mid-flight read would pin the walk to a position the shorter next step can no longer
-      // reach (the chooser step is taller than the field steps).
-      await page.evaluate(() => window.scrollTo(0, 0))
-      await waitScrollSettled()
+      await scrollToTop()
       const preChip = await page.evaluate(() => window.scrollY)
       await slotChip(page).first().dispatchEvent('click')
       await expect(page.getByLabel(chatbot.booking.steps.firstName.field)).toBeVisible()
@@ -781,9 +813,7 @@ test.describe('booking flow: pacing', () => {
 
       // Scroll to the top once more before confirming: the flow must bring the visitor back. The
       // click is dispatched, not clicked, so Playwright's own auto-scroll cannot fake the return.
-      // As above, the smooth scroll settles before the position is read.
-      await page.evaluate(() => window.scrollTo(0, 0))
-      await waitScrollSettled()
+      await scrollToTop()
       const preConfirm = await page.evaluate(() => window.scrollY)
       await bookingRegion(page).getByRole('button', { name: chatbot.booking.recap.confirm }).dispatchEvent('click')
       await expect(bookingRegion(page).getByRole('heading', { name: chatbot.booking.success.title })).toBeVisible()
