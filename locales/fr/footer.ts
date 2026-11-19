@@ -1,5 +1,5 @@
 /**
- * Footer copy. `{year}` is computed parameters, never hardcoded.
+ * Footer copy. `{year}` is a computed parameter, never hardcoded.
  *
  * The cookie-settings link is absent on purpose: it reopens the consent banner, which does not exist
  * yet, so the key lands with the banner rather than pointing visitors at nothing.
