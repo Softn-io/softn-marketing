@@ -64,23 +64,40 @@
   list-style: none;
 }
 
-.link {
+.link,
+.cookieSettings {
   color: var(--softn-color-secondary);
   text-decoration: none;
   transition: color var(--softn-duration-micro) var(--softn-easing-out);
 }
 
-.link:hover {
+.link:hover,
+.cookieSettings:hover {
   color: var(--softn-color);
 }
 
-.link:focus-visible {
+.link:focus-visible,
+.cookieSettings:focus-visible {
   outline: 2px solid var(--softn-border-active);
   outline-offset: 2px;
 }
 
+/*
+ * The cookie-settings control opens a dialog instead of navigating, so it is a button. It keeps the
+ * link's colour, hover and focus ring, and removes the browser's default button chrome.
+ */
+.cookieSettings {
+  border: 0;
+  background: none;
+  font-family: inherit;
+  padding: 0;
+  text-align: inherit;
+  cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .link {
+  .link,
+  .cookieSettings {
     transition: none;
   }
 }

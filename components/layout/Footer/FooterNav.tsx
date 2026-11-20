@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { FOOTER_LINKS } from '@/lib/footerLinks'
 import { footer } from '@/locales/fr/footer'
+import { CookieSettingsButton } from './CookieSettingsButton'
 import styles from './styles/Footer.module.css'
 
 /** Props of {@link FooterNav}. */
@@ -10,11 +11,13 @@ type FooterNavProps = {
 }
 
 /**
- * Footer navigation: the contact page and the three legal pages, inside a labelled landmark.
+ * Footer navigation: the contact page and the three legal pages, plus the cookie-settings control,
+ * inside a labelled landmark.
  *
  * Owns the list semantics, the labels, the routes and the focus ring — the parts a second footer
  * would otherwise copy — and no placement of its own: the site footer and the coming-soon footer
- * both render it, each passing the class that fits it in its own row.
+ * both render it, each passing the class that fits it in its own row. The cookie-settings control is
+ * a button, not a route: it opens the consent preferences dialog.
  *
  * @param props Optional class that places the navigation in the caller's row.
  * @returns The navigation landmark of a footer.
@@ -31,6 +34,9 @@ export const FooterNav = ({ className }: FooterNavProps) => {
             </Link>
           </li>
         ))}
+        <li>
+          <CookieSettingsButton />
+        </li>
       </ul>
     </nav>
   )

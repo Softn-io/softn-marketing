@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { CookieConsentLoader } from '@components/layout/CookieConsent'
 import { JsonLd } from '@components/layout/JsonLd'
 import { plusJakartaSans, zalandoSans } from './fonts'
 import { metadataContent } from '@/locales/fr/metadata'
@@ -40,6 +41,7 @@ const RootLayout = ({ children }: LayoutProps<'/'>) => {
       <body className="flex min-h-full flex-col">
         <JsonLd />
         {children}
+        <CookieConsentLoader />
       </body>
     </html>
   )
