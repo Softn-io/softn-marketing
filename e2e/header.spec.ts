@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, webkit, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { HERO_CTA_ID, type SectionId } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
@@ -13,6 +14,15 @@ import {
   type MobileEngineDevice,
   type MobileEngineType,
 } from './support/mobileEngines'
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and covers
+ * the drawer and sheet controls at mobile widths. Every test here seeds a valid stored choice
+ * first; the banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 // Expected copy comes from the locale source, never hardcoded (QA rule for this suite).
 const SKIP_LINK = nav.skipLink

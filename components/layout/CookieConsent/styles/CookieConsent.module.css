@@ -1,0 +1,286 @@
+/*
+ * Cookie consent banner and preferences dialog.
+ *
+ * Every colour, length, radius, duration and layer comes from a --softn-* token. The banner sits
+ * above the page but below the dialog; the dialog uses the modal layer. Reduced motion collapses
+ * the entrance animations to a plain fade.
+ */
+
+.banner {
+  position: fixed;
+  inset-block-end: var(--softn-space-4);
+  inset-inline-start: var(--softn-space-4);
+  z-index: var(--softn-z-dock);
+  inline-size: calc(100% - var(--softn-space-4) * 2);
+  max-inline-size: calc(100% - var(--softn-space-4) * 2);
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-lg);
+  background-color: var(--softn-background-surface);
+  box-shadow: var(--softn-shadow-md);
+  animation: consent-banner-enter var(--softn-duration-reveal) var(--softn-easing-out) both;
+}
+
+.bannerInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  padding: var(--softn-space-5);
+}
+
+/*
+ * The copy must not drive the card's fit-content width: its text would otherwise stretch the card
+ * to the viewport cap. Inline-size containment removes that contribution, so the actions row sets
+ * the width the card grows to.
+ */
+.bannerCopy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-2);
+  color: var(--softn-color);
+  contain: inline-size;
+}
+
+.bannerTitle {
+  margin: 0;
+}
+
+.bannerBody {
+  margin: 0;
+  color: var(--softn-color-secondary);
+  white-space: pre-line;
+}
+
+.bannerActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--softn-space-2);
+}
+
+/*
+ * Desktop: the card is exactly as wide as the three buttons on one line, plus its own padding. The
+ * title and body wrap inside that width. The actions stay on one line. The max-inline-size keeps the
+ * card inside the viewport minus the token margin. The single 48rem breakpoint lives here.
+ */
+@media (min-width: 48rem) {
+  .banner {
+    inline-size: fit-content;
+  }
+
+  .bannerActions {
+    flex-wrap: nowrap;
+  }
+}
+
+.link {
+  align-self: flex-start;
+  color: var(--softn-color-secondary);
+  text-decoration: underline;
+  text-underline-offset: var(--softn-space-1);
+  transition: color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.link:hover {
+  color: var(--softn-color);
+}
+
+.link:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+/* Dialog */
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--softn-z-modal);
+  background-color: var(--softn-background);
+  opacity: var(--softn-opacity-80);
+}
+
+.viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--softn-z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--softn-space-4);
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-5);
+  inline-size: 100%;
+  max-inline-size: var(--softn-container-lg);
+  max-block-size: calc(100dvh - var(--softn-space-8));
+  overflow-y: auto;
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-lg);
+  background-color: var(--softn-background-surface);
+  color: var(--softn-color);
+  box-shadow: var(--softn-shadow-lg);
+  padding: var(--softn-space-6);
+  animation: consent-dialog-enter var(--softn-duration-reveal) var(--softn-easing-out) both;
+}
+
+.dialogHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--softn-space-4);
+}
+
+.dialogTitle {
+  margin: 0;
+}
+
+.close {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--softn-size-md);
+  block-size: var(--softn-size-md);
+  border: 1px solid var(--softn-border-subtle);
+  border-radius: var(--softn-radius-pill);
+  background-color: transparent;
+  color: var(--softn-color-secondary);
+  cursor: pointer;
+  transition:
+    color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+.close:hover {
+  border-color: var(--softn-border-strong);
+  color: var(--softn-color);
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--softn-border-active);
+  outline-offset: 2px;
+}
+
+.closeIcon {
+  inline-size: var(--softn-icon-size-md);
+  block-size: var(--softn-icon-size-md);
+}
+
+.intro {
+  margin: 0;
+  color: var(--softn-color-secondary);
+}
+
+.categories {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.category {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--softn-space-2) var(--softn-space-4);
+  border-block-start: 1px solid var(--softn-border-subtle);
+  padding-block-start: var(--softn-space-4);
+}
+
+.categoryCopy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--softn-space-1);
+  max-inline-size: 56ch;
+}
+
+.categoryTitle {
+  margin: 0;
+}
+
+.categoryDescription {
+  margin: 0;
+  color: var(--softn-color-secondary);
+}
+
+.necessaryStatus {
+  flex: none;
+  border-radius: var(--softn-radius-pill);
+  background-color: var(--softn-background);
+  color: var(--softn-color-secondary);
+  padding-block: var(--softn-space-1);
+  padding-inline: var(--softn-space-3);
+}
+
+.audienceControl {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--softn-space-3);
+}
+
+.switchState {
+  color: var(--softn-color-secondary);
+}
+
+.retention {
+  margin: 0;
+  color: var(--softn-color-secondary);
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--softn-space-2);
+}
+
+@keyframes consent-banner-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--softn-space-4));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes consent-dialog-enter {
+  from {
+    opacity: 0;
+    transform: translateY(var(--softn-space-2));
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner,
+  .dialog {
+    animation: consent-fade var(--softn-duration-reduced-motion) linear both;
+  }
+
+  .link,
+  .close {
+    transition: none;
+  }
+}
+
+@keyframes consent-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}

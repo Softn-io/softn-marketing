@@ -13,6 +13,7 @@
   cursor: pointer;
   transition:
     background-color var(--softn-duration-micro) var(--softn-easing-out),
+    border-color var(--softn-duration-micro) var(--softn-easing-out),
     color var(--softn-duration-micro) var(--softn-easing-out);
 }
 
@@ -46,6 +47,74 @@
 .intent-primary:hover {
   background-color: var(--softn-button-primary-background-hover);
   color: var(--softn-button-primary-text-hover);
+}
+
+/*
+ * Outlined intent: the surface stays transparent. The package outline text token (violet500) is
+ * 4.43:1 in dark and 4.23:1 in light on --softn-background-surface, below AA, so the text uses the
+ * existing violet step that clears 4.5:1 in each theme. The border follows the design system's
+ * outline pair: violet900 in dark, violet700 in light, and violet500 on light hover. The hover
+ * surface reads the theme background at the package 90% opacity, so the text contrast holds over
+ * the composited hover background.
+ */
+.intent-outline {
+  border: 1px solid var(--softn-color-violet900);
+  background-color: var(--softn-button-outline-background-default);
+  color: var(--softn-color-violet400);
+}
+
+.intent-outline:hover {
+  border-color: var(--softn-color-violet900);
+  background-color: color-mix(
+    in oklch,
+    var(--softn-background-elevated) calc(var(--softn-opacity-90) * 100%),
+    transparent
+  );
+  color: var(--softn-color-violet400);
+}
+
+@media (prefers-color-scheme: light) {
+  :where(:root:not([data-theme='dark'])) .intent-outline {
+    border-color: var(--softn-color-violet700);
+    color: var(--softn-color-violet600);
+  }
+
+  :where(:root:not([data-theme='dark'])) .intent-outline:hover {
+    border-color: var(--softn-color-violet500);
+    background-color: color-mix(in oklch, var(--softn-background) calc(var(--softn-opacity-90) * 100%), transparent);
+    color: var(--softn-color-violet600);
+  }
+}
+
+:where([data-theme='light']) .intent-outline {
+  border-color: var(--softn-color-violet700);
+  color: var(--softn-color-violet600);
+}
+
+:where([data-theme='light']) .intent-outline:hover {
+  border-color: var(--softn-color-violet500);
+  background-color: color-mix(in oklch, var(--softn-background) calc(var(--softn-opacity-90) * 100%), transparent);
+  color: var(--softn-color-violet600);
+}
+
+/*
+ * Disabled look of the outline intent: the same disabled pair as the primary intent, a muted border
+ * and the hover state frozen. The outline intent keeps its border, so the control still reads as an
+ * outline button.
+ */
+.intent-outline:disabled,
+.intent-outline[aria-disabled='true'] {
+  border-color: var(--softn-button-disabled-text-default);
+  background-color: var(--softn-button-disabled-background-default);
+  color: var(--softn-button-disabled-text-default);
+  cursor: not-allowed;
+}
+
+.intent-outline:disabled:hover,
+.intent-outline[aria-disabled='true']:hover {
+  border-color: var(--softn-button-disabled-text-default);
+  background-color: var(--softn-button-disabled-background-default);
+  color: var(--softn-button-disabled-text-default);
 }
 
 /* Padding follows the size, as the design system's Button does: a small button keeps the same

@@ -22,6 +22,7 @@
  *   (WCAG 2.4.7).
  */
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { findFreeSlots, type BookingSlot } from '../lib/booking/availability'
 import { BOOKING_RULES } from '../lib/booking/rules'
@@ -210,6 +211,16 @@ const VIEWPORTS = [
 ] as const
 
 test.describe('assistant section: scroll reveal (issue #157)', () => {
+  /*
+   * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and its
+   * entrance runs while these reveal contracts are measured. Every test here seeds a valid stored
+   * choice first, so the suite exercises the page exactly as a returning visitor sees it, banner
+   * out of the way. The banner itself is covered by `cookieConsent.spec.ts`.
+   */
+  test.beforeEach(({ page }) => {
+    seedStoredConsent(page)
+  })
+
   for (const viewport of VIEWPORTS) {
     for (const reducedMotion of [false, true]) {
       test(`a chatbot answer moves nothing at ${viewport.width}x${viewport.height}${

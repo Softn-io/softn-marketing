@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ButtonHTMLAttributes, ReactNode } from 'react'
 import styles from './Button.module.css'
 
-type ButtonIntent = 'primary'
+type ButtonIntent = 'primary' | 'outline'
 type ButtonSize = 'sm' | 'lg'
 
 type ButtonBaseProps = {
@@ -28,8 +28,8 @@ export type ButtonProps = ButtonAsLinkProps | ButtonAsButtonProps
  * Type step per size, as the design system's Button does: the small button takes the body-sm step
  * and the large one body-md, for the font size (14px / 16px) and the letter spacing. Each step also
  * carries its own line-height (1.7 at 14px, 1.5 at 16px), which `leading-none` overrides in the
- * markup: the design system's Button renders the label at line-height 1 at every size, so the two
- * type steps are used for their size and tracking only.
+ * markup: the design system's Button renders the label at line-height 1 at every size, so the type
+ * steps are used for their size and tracking only.
  */
 const TYPE_STEP_BY_SIZE = {
   sm: 'text-body-sm',
@@ -49,7 +49,8 @@ const buildClasses = (intent: ButtonIntent, size: ButtonSize, className: string 
  * Call to action. Renders an `<a>` when `href` is provided, a `<button type="button">` otherwise.
  * Intents map to the Softn button color tokens and sizes to the size scale (height and padding) in
  * the component's own stylesheet, plus the matching type step (body-sm for `sm`, body-md for `lg`).
- * The label keeps the design system's Button typography: body face, weight 600, line-height 1.
+ * The label keeps the design system's Button typography: body face, weight 600, line-height 1. The
+ * `outline` intent draws a 1px border in its token color.
  */
 export const Button = (props: ButtonProps) => {
   if (props.href !== undefined) {

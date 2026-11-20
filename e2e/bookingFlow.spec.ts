@@ -45,6 +45,7 @@ import { mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test'
 import { AxeBuilder } from '@axe-core/playwright'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { SITE_ROUTES } from '../lib/routes'
@@ -371,6 +372,16 @@ const tabUntilFocused = async (page: Page, target: Locator, maxPresses = 16): Pr
   }
   throw new Error('Tab never reached the expected control')
 }
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and covers
+ * the flow's controls at mobile widths. Every test here seeds a valid stored choice first, so the
+ * suite exercises the booking flow as a returning visitor sees it; the banner itself is covered by
+ * `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('booking flow: opening', () => {
   test.use({ viewport: { width: 1280, height: 800 } })

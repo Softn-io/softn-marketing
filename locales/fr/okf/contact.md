@@ -14,6 +14,9 @@ verified:
   - { by: "human:mel", at: "2026-11-16T22:37:00+01:00" }
   - { by: "human:mel", at: "2026-11-17T00:48:00+01:00" }
   - { by: "human:mel", at: "2026-11-19T02:33:00+01:00" }
+  - { by: "human:mel", at: "2026-11-19T23:01:23+01:00" }
+  - { by: "human:mel", at: "2026-11-20T00:07:59+01:00" }
+  - { by: "human:mel", at: "2026-11-20T10:28:16+01:00" }
   
 sources:
   - { id: contact, resource: ../contact.ts, title: Page de contact }

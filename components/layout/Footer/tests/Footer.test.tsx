@@ -30,15 +30,17 @@ describe('Footer', () => {
 
     const nav = screen.getByRole('navigation', { name: footer.nav.ariaLabel })
     expect(nav.closest('footer')).toBeTruthy()
-    // One link per footer entry, plus the wordmark: nothing else, and no cookie-settings link
-    // (it comes back with the consent banner, issue #23).
+    // One link per footer entry, plus the wordmark: the cookie-settings control is a button.
     expect(nav.querySelectorAll('a')).toHaveLength(4)
     expect(screen.getAllByRole('link')).toHaveLength(5)
   })
 
-  it('renders no control other than the wordmark and the four footer links', () => {
+  it('renders the cookie-settings control as a button next to the footer links', () => {
     render(<Footer />)
 
-    expect(screen.queryByRole('button')).toBeNull()
+    const nav = screen.getByRole('navigation', { name: footer.nav.ariaLabel })
+    const button = screen.getByRole('button', { name: footer.cookieSettings })
+    expect(button.getAttribute('type')).toBe('button')
+    expect(nav.contains(button)).toBe(true)
   })
 })
