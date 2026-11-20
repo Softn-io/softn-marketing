@@ -1,7 +1,14 @@
 # Journal de la base de connaissances
 
+## 2026-11-20:
+
+- **Titre de la bannière**: Dans `locales/fr/legal.ts`, le titre de la bannière cookies devient « Votre vie privée, votre choix » ; le libellé de région `ariaLabel` reste « Choix des cookies » et les deux valeurs restent distinctes. Copie validée par Mel (section 6 de la proposition `docs/content-proposals/cookie-consent-2026-11-19.md`, option A). Les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, sont vérifiés par Mel (`human:mel`, `2026-11-20T00:07:59+01:00`) : aucun texte de concept n'est modifié, les affirmations qu'ils citent restant soutenues. L'empreinte de `legal.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
+- **Bannière cookies**: Dans `locales/fr/legal.ts`, le corps de la bannière devient deux lignes : « Ce site peut mesurer son audience afin de s'améliorer, uniquement avec votre accord. » puis « Il ne dépose aucun cookie. » ; la fin de phrase sur le chargement avant consentement est retirée. Copie écrite et validée par Mel. Les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, sont vérifiés par Mel (`human:mel`, `2026-11-20T10:28:16+01:00`) : aucun texte de concept n'est modifié. L'empreinte de `legal.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
+
 ## 2026-11-19:
 
+- **Bannière cookies**: Dans `locales/fr/legal.ts`, le texte du bandeau et les textes du panneau de préférences sont ajoutés, et trois phrases de la politique de cookies sont précisées (mesure d'audience conditionnelle, stockage local du choix, durée de six mois). Copie validée par Mel (proposition `docs/content-proposals/cookie-consent-2026-11-19.md`). Les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, sont vérifiés par Mel (`human:mel`, `2026-11-19T23:01:23+01:00`) : aucun texte de concept n'est modifié, les affirmations qu'ils citent restant soutenues. L'empreinte de `legal.ts` et son `reviewedAt` sont mises à jour dans `locales/fr/okf-sources.json`.
 - **Chemins des pages**: Dans `locales/fr/contact.ts` et `locales/fr/chatbot.ts`, les champs `href` (`link` et `consent.privacyLink` pour `contact.ts` ; `consent.link` pour `chatbot.ts`) sont supprimés : les chemins sont désormais écrits une seule fois dans `lib/routes.ts`, les fichiers de copie ne portant plus que les libellés. Aucun fait cité par les concepts ne change : le formulaire de contact reste sur `/contact` et le lien vers la politique de confidentialité reste présent.
 - **Manifeste**: Les empreintes SHA-256 de `contact.ts` et `chatbot.ts` sont mises à jour dans `locales/fr/okf-sources.json`, avec un nouveau `reviewedAt` ; les concepts qui citent ces sources portent une entrée `verified`.
 

@@ -1,11 +1,9 @@
 /**
  * Footer copy. `{year}` is a computed parameter, never hardcoded.
- *
- * The cookie-settings link is absent on purpose: it reopens the consent banner, which does not exist
- * yet, so the key lands with the banner rather than pointing visitors at nothing.
  */
 export const footer = {
   copyright: '© {year} softn.io. Tous droits réservés.',
+  cookieSettings: 'Gérer mes cookies',
   legal: {
     contact: 'Contact',
     mentions: 'Mentions légales',
