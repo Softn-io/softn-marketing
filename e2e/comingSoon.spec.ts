@@ -45,6 +45,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { FOOTER_LINKS } from '../lib/footerLinks'
 import { SITE_URL } from '../lib/site'
 import { comingSoon } from '../locales/fr/comingSoon'
@@ -185,7 +186,12 @@ const expectBoldSuccess = async (page: Page, address: string): Promise<void> => 
   await expect(bold).toHaveCount(1)
   await expect(bold).toHaveText(address)
   await expect(paragraph).toHaveText(sentence)
-  await expect(page.getByRole('status')).toHaveText(sentence)
+  /*
+   * Scoped to the waitlist's own live region inside `main`: the consent layer (issue #23) renders
+   * a second, persistent `role="status"` region as a direct child of `body`, so the unscoped role
+   * query would be a strict-mode violation. The waitlist announces through this region only.
+   */
+  await expect(page.locator('main p[role="status"]')).toHaveText(sentence)
 }
 
 test.describe('coming-soon: structure and copy', () => {
@@ -1082,6 +1088,12 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
 })
 
 test.describe('coming-soon: axe on the success state (WCAG 2.1 AA)', () => {
+  // The banner is not the subject here (the audit targets the success state), so a stored choice
+  // keeps it out of the audit entirely (issue #23, Mel's decision).
+  test.beforeEach(({ page }) => {
+    seedStoredConsent(page)
+  })
+
   /*
    * Success state only (narrowed pass, PR #92 follow-up): after a mocked successful signup the
    * form is gone and the bold address paragraph is on screen, so this audit covers exactly the

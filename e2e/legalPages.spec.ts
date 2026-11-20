@@ -27,6 +27,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { awaitConsentUiSettled } from './support/consent'
 import { FOOTER_LINKS } from '../lib/footerLinks'
 import { SITE_ROUTES } from '../lib/routes'
 import { SITE_URL } from '../lib/site'
@@ -200,6 +201,9 @@ test.describe('legal pages: axe (WCAG 2.1 AA)', () => {
       test(`${entry.route} is clean in the ${scheme} theme`, async ({ page }) => {
         await gotoWithTheme(page, scheme, entry.route)
         await awaitFonts(page)
+        // The banner is part of the audited page (issue #23): wait for its entrance to settle,
+        // so axe never composites a text painted mid-fade.
+        await awaitConsentUiSettled(page)
         const results = await new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).analyze()
 
         const violations = results.violations

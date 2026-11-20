@@ -29,11 +29,21 @@
 
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page, type Route } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { create, deriveHmacKeySecret } from 'altcha-lib/frameworks/nextjs'
 import { deriveKey } from 'altcha-lib/algorithms/pbkdf2'
 import { SITE_ROUTES } from '../lib/routes'
 import { contact } from '../locales/fr/contact'
 import { minimalHeader } from '../locales/fr/minimalHeader'
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and covers
+ * the form's lower controls. The banner is not the subject of this suite, so every test seeds a
+ * valid stored choice first; the banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 /** localStorage key the inline theme script reads; same contract as `lib/theme`. */
 const THEME_STORAGE_KEY = 'softn-theme'

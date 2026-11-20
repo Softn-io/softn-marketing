@@ -61,6 +61,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { awaitConsentUiSettled } from './support/consent'
 import { HERO_CTA_ID, SECTION_IDS } from '../lib/anchors'
 import { hero, nav } from '../locales/fr/hero'
 
@@ -113,7 +114,10 @@ const assertNoViolations = (results: AnalysisResults, scope: string): void => {
  * Runs the configured analysis and fails with a readable, mapped list of violations
  * (id, impact, help, node targets) instead of the raw result object.
  */
-const expectNoViolations = async (builder: AxeBuilder, scope: string): Promise<void> => {
+const expectNoViolations = async (page: Page, builder: AxeBuilder, scope: string): Promise<void> => {
+  // The consent banner (issue #23) is part of every audited page: wait for its entrance animation
+  // to settle, so axe never composites a text painted mid-fade (same guidance as the reveals).
+  await awaitConsentUiSettled(page)
   assertNoViolations(await builder.analyze(), scope)
 }
 
@@ -233,7 +237,7 @@ test.describe('accessibility: one-page preview (WCAG 2.1 AA)', () => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await expect(page.getByRole('main')).toBeVisible()
       await awaitFonts(page)
-      await expectNoViolations(new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]), `home (${scheme}, reduced motion)`)
+      await expectNoViolations(page, new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]), `home (${scheme}, reduced motion)`)
     })
   }
 })
@@ -248,6 +252,7 @@ test.describe('accessibility: header (WCAG 2.1 AA)', () => {
       await expect(burger(page)).toHaveAttribute('aria-expanded', 'false')
       await awaitFonts(page)
       await expectNoViolations(
+        page,
         new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).include('header'),
         `header landmark, drawer closed (${scheme})`,
       )
@@ -262,6 +267,7 @@ test.describe('accessibility: header (WCAG 2.1 AA)', () => {
       await expect.poll(() => drawer(page).evaluate((el) => getComputedStyle(el).opacity)).toBe('1')
       await awaitFonts(page)
       await expectNoViolations(
+        page,
         new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).include("[role='dialog']"),
         `header drawer open (${scheme})`,
       )
@@ -355,6 +361,7 @@ test.describe('accessibility: "Ce site" section (WCAG 2.1 AA)', () => {
         await expect(scoped.getByRole('tabpanel')).toBeVisible()
         await awaitFonts(page)
         await expectNoViolations(
+          page,
           new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]).include(`#${SECTION_IDS.thisSite}`),
           `"Ce site" section (${scheme}, ${name})`,
         )
