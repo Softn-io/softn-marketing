@@ -328,9 +328,7 @@ test.describe('cookie consent — preferences dialog', () => {
 })
 
 test.describe('cookie consent — lazy dialog (issue #23, revision 2)', () => {
-  test('no Base UI chunk is requested before a preferences request, and Personnaliser loads it', async ({
-    page,
-  }) => {
+  test('no Base UI chunk is requested before a preferences request, and Personnaliser loads it', async ({ page }) => {
     await page.goto('/')
     await expect(banner(page)).toBeVisible()
     await page.waitForLoadState('networkidle')
@@ -362,9 +360,7 @@ test.describe('cookie consent — booking manage page footer (L1)', () => {
     seedConsent(page, recordDated(false, 0))
   })
 
-  test('Gérer mes cookies opens the dialog from the manage page footer and keeps focus on return', async ({
-    page,
-  }) => {
+  test('Gérer mes cookies opens the dialog from the manage page footer and keeps focus on return', async ({ page }) => {
     // The invalid-token state renders the manage footer without any API call, so the control is
     // reachable in E2E without real calendar tokens (the valid-token states are `bookingManage`'s).
     await page.goto('/rendez-vous/not-a-signed-token')

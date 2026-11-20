@@ -237,7 +237,11 @@ test.describe('accessibility: one-page preview (WCAG 2.1 AA)', () => {
       await expect(page.locator('html')).toHaveAttribute('data-theme', scheme)
       await expect(page.getByRole('main')).toBeVisible()
       await awaitFonts(page)
-      await expectNoViolations(page, new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]), `home (${scheme}, reduced motion)`)
+      await expectNoViolations(
+        page,
+        new AxeBuilder({ page }).withTags([...WCAG_AA_TAGS]),
+        `home (${scheme}, reduced motion)`,
+      )
     })
   }
 })

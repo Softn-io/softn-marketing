@@ -19,10 +19,7 @@ export const CONSENT_STORAGE_KEY = 'softn-consent'
 export const seedStoredConsent = (page: Page, audience: boolean = false): void => {
   page.addInitScript(
     ({ key, audience: choice }) =>
-      localStorage.setItem(
-        key,
-        JSON.stringify({ version: 1, audience: choice, decidedAt: new Date().toISOString() }),
-      ),
+      localStorage.setItem(key, JSON.stringify({ version: 1, audience: choice, decidedAt: new Date().toISOString() })),
     { key: CONSENT_STORAGE_KEY, audience },
   )
 }
@@ -42,5 +39,7 @@ export const awaitConsentUiSettled = async (page: Page): Promise<void> => {
     .then(() => true)
     .catch(() => false)
   if (!appeared) return
-  await banner.evaluate((card) => Promise.all(card.getAnimations().map((animation) => animation.finished.catch(() => undefined))))
+  await banner.evaluate((card) =>
+    Promise.all(card.getAnimations().map((animation) => animation.finished.catch(() => undefined))),
+  )
 }
