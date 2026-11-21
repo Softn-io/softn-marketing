@@ -242,8 +242,11 @@ test.describe('coming-soon: structure and copy', () => {
     await expect(headings).toHaveCount(1)
     await expect(headings).toHaveText(comingSoon.title)
 
-    // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level.
-    await expect(page.getByRole('heading')).toHaveCount(1)
+    // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level. Scoped to
+    // the page's own content (`main`): the consent layer (issue #23) mounts its banner's own `<h2>`
+    // title as a direct child of `body` after hydration, and that heading is audited by
+    // `cookieConsent.spec.ts`, never counted here.
+    await expect(page.getByRole('main').getByRole('heading')).toHaveCount(1)
 
     await expect(page.getByText(comingSoon.body)).toBeVisible()
     await expect(page.getByText(comingSoon.bodyInvite)).toBeVisible()
@@ -252,10 +255,13 @@ test.describe('coming-soon: structure and copy', () => {
     const year = String(new Date().getFullYear())
     await expect(page.getByText(comingSoon.footer.copyright.replace('{year}', year))).toBeVisible()
 
-    // The wordmark, then the footer's Contact and legal links, live since issue #22: no other link.
-    await expect(page.getByRole('link')).toHaveCount(1 + FOOTER_LINKS.length)
+    // The wordmark, then the footer's Contact and legal links, live since issue #22: no other link
+    // in the page's own landmarks. Scoped like the headings: the consent banner's own "learn more"
+    // link (issue #23) hangs from the layer beside the page, audited by `cookieConsent.spec.ts`.
+    const pageContent = page.locator('header, main, footer')
+    await expect(pageContent.getByRole('link')).toHaveCount(1 + FOOTER_LINKS.length)
     for (const link of FOOTER_LINKS) {
-      await expect(page.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href)
+      await expect(pageContent.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href)
     }
   })
 

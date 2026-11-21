@@ -1,4 +1,5 @@
 import { devices, expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { offers } from '../locales/fr/offers'
 
@@ -54,6 +55,16 @@ const tabTo = async (page: Page, target: Locator): Promise<void> => {
   }
   throw new Error('keyboard Tab never reached the offer card button')
 }
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and its
+ * entrance overlaps the hover and tilt measurements here. Every test seeds a valid stored choice
+ * first, so the suite exercises the page exactly as a returning visitor sees it, banner out of the
+ * way. The banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('offers: structure and copy', () => {
   for (const scheme of ['dark', 'light'] as const) {
@@ -274,6 +285,8 @@ test.describe('offers: pointer tilt', () => {
   test('non-hover, coarse pointers never tilt the card', async ({ browser }) => {
     const context = await browser.newContext({ ...devices['Pixel 5'] })
     const page = await context.newPage()
+    // The fixture-page seed in `beforeEach` does not reach this hand-made context.
+    seedStoredConsent(page)
     await page.goto('/preview')
     await card(page, 0).scrollIntoViewIfNeeded()
     const media = await page.evaluate(() => ({

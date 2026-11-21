@@ -26,6 +26,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { SITE_ROUTES } from '../lib/routes'
 import { agent } from '../locales/fr/agent'
@@ -231,6 +232,17 @@ const PACKAGE_SIZES = [32, 36, 44, 52, 5]
 const PACKAGE_RADII = [8, 16, 24, 100]
 const PACKAGE_FONT_SIZES = [48, 36, 24, 20, 18, 16, 14, 12, 11]
 const PACKAGE_FONT_WEIGHTS = [400, 500, 600, 700, 800]
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and its
+ * entrance runs while these shell contracts are measured (scroll parallax, style reads, focus
+ * walks). Every test here seeds a valid stored choice first, so the suite exercises the page
+ * exactly as a returning visitor sees it, banner out of the way. The banner itself is covered by
+ * `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('agent shell: rendering and order', () => {
   test.use({ viewport: { width: 1280, height: 800 } })

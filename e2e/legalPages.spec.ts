@@ -27,7 +27,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { awaitConsentUiSettled } from './support/consent'
+import { awaitConsentUiSettled, seedStoredConsent } from './support/consent'
 import { FOOTER_LINKS } from '../lib/footerLinks'
 import { SITE_ROUTES } from '../lib/routes'
 import { SITE_URL } from '../lib/site'
@@ -78,6 +78,18 @@ const awaitFonts = async (page: Page): Promise<void> => {
     await document.fonts.ready
   })
 }
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and its
+ * own `<h2>` title mounts client-side on every route, so it would join the document-structure
+ * counts here as a late extra heading. Every test seeds a valid stored choice first, so the suite
+ * exercises the pages exactly as a returning visitor sees it, banner out of the way. The banner
+ * itself, including its axe audit, is covered by `cookieConsent.spec.ts` and
+ * `accessibility.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('legal pages: reachable from the footer', () => {
   for (const link of FOOTER_LINKS) {

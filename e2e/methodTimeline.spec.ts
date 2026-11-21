@@ -20,6 +20,7 @@
  * `ENABLE_PREVIEW_ROUTE=true` (see `playwright.config.ts`); the section renders on `/preview`.
  */
 import { expect, test, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { method } from '../locales/fr/method'
 
@@ -265,6 +266,17 @@ const expectHeadingHierarchy = async (page: Page): Promise<void> => {
     await expect(section(page).getByRole('heading', { level: 3, name: step.title })).toBeVisible()
   }
 }
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and its
+ * hydration and entrance race the geometry reads these sticky contracts are pinned against. Every
+ * test here seeds a valid stored choice first, so the suite exercises the page exactly as a
+ * returning visitor sees it, banner out of the way. The banner itself is covered by
+ * `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('method timeline, desktop', () => {
   test.use({ viewport: { width: 1280, height: 800 } })
