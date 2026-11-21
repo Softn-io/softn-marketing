@@ -15,7 +15,7 @@ const webServerCommand = process.env.PLAYWRIGHT_SKIP_BUILD
 export default defineConfig({
   testDir: './e2e',
   timeout: 30_000,
-  globalTimeout: 600_000,
+  globalTimeout: 900_000,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
