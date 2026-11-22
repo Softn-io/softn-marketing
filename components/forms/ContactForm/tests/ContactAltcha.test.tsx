@@ -98,8 +98,9 @@ describe('ContactAltcha', () => {
     }
     expect(widget.style.getPropertyValue('--altcha-color-base')).toBe('var(--softn-background-surface)')
     expect(widget.style.getPropertyValue('--altcha-border-radius')).toBe('var(--softn-radius-xl)')
-    // The switch: the off state on the input tokens, the on state on the brand violet of the checked
-    // consent box, and the ring the widget takes from its own `:focus-within` rule.
+    // The switch: the control size and the input tokens of its off state, the brand violet of the
+    // checked consent box for its on state, and the focus ring pair the widget's own focusable
+    // controls take. The switch's ring is drawn by the stylesheet, on keyboard focus only.
     expect(widget.style.getPropertyValue('--altcha-switch-height')).toBe('var(--softn-icon-size-md)')
     expect(widget.style.getPropertyValue('--altcha-switch-toggle-size')).toBe(
       'calc(var(--softn-icon-size-md) - var(--softn-space-1) * 2)',

@@ -101,7 +101,9 @@ const CONTACT_ALTCHA_STYLE = {
   '--altcha-switch-border-radius': 'var(--softn-radius-pill)',
   '--altcha-switch-toggle-color': 'var(--softn-input-border-strong)',
   '--altcha-switch-toggle-border-radius': 'var(--softn-radius-pill)',
-  // The focus ring of the switch, which the widget takes from its own `:focus-within` rule.
+  // The focus ring of the widget's own controls: the code-challenge input and buttons of its
+  // popovers, which take this pair from the widget's `:focus` rules. The switch does not use it —
+  // the stylesheet draws its ring on keyboard focus only.
   '--altcha-checkbox-outline': '2px solid var(--softn-input-border-focus)',
   '--altcha-checkbox-outline-offset': '2px',
   '--altcha-input-background-color': 'var(--softn-input-background)',

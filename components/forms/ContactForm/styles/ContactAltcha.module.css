@@ -5,15 +5,19 @@
  * radii and lengths reach it as the CSS custom properties set in `ContactAltcha.tsx`, all of them
  * `--softn-*` tokens. Three things have no custom property of their own — the border of the off
  * state, the disabled look and the error look — so they are set here, on the class names the
- * widget's stylesheet uses (altcha 3.6.0, pinned). That border is a solid core colour and not the
- * package's translucent input border: against the surfaces of this form the translucent pair
- * measures 1.55:1 in dark and 2.04:1 in light, under the 3:1 non-text target, where the solid violet
- * pair — the one of the shared switch and of the outline button intent — measures 4.43:1 and 7.10:1.
- * The border is drawn inside the track, as the widget's own stylesheet puts its controls in
- * `box-sizing: border-box`, and the widget measures the thumb travel from the padding box, so the
- * thumb follows the border instead of overshooting it. The focus ring is not one of them: the
- * widget's own `.altcha-switch:focus-within` rule already takes `--altcha-checkbox-outline`, which
- * `ContactAltcha.tsx` sets to the input focus token.
+ * widget's stylesheet uses (altcha 3.6.0, pinned).
+ *
+ * The focus ring is not one of those three. The widget rings the switch on `:focus-within`, which a
+ * click matches as well, so its ring would stay after a pointer press, through the verification and
+ * until the focus moves. This stylesheet turns that ring off and draws its own on keyboard focus
+ * only, on the same values as the shared switch.
+ *
+ * The border is a solid core colour and not the package's translucent input border: against the
+ * surfaces of this form the translucent pair measures 1.55:1 in dark and 2.04:1 in light, under the
+ * 3:1 non-text target, where the active border token measures 4.43:1 and 7.10:1. The border is drawn
+ * inside the track, as the widget's own stylesheet puts its controls in `box-sizing: border-box`,
+ * and the widget measures the thumb travel from the padding box, so the thumb follows the border
+ * instead of overshooting it.
  */
 
 .widget {
@@ -29,14 +33,27 @@
 
 /*
  * The off state, and the resting boundary of the switch: the widget draws no border of its own, so
- * this solid violet pair takes over — violet500 here, violet700 in light below. Hover keeps that
- * colour: the resting border already clears the non-text target, and a hover colour would move the
+ * the active border token takes over. Hover keeps that colour: a hover colour would move the
  * boundary the visitor just aimed at, so the control never shifts under the pointer. The transition
  * eases the colour the error and disabled states paint; no state changes the width.
  */
 .widget :global(.altcha-switch) {
-  border: 1px solid var(--softn-color-violet500);
+  border: 1px solid var(--softn-border-active);
   transition: border-color var(--softn-duration-micro) var(--softn-easing-out);
+}
+
+/*
+ * Keyboard focus only, on the values of the shared switch: the widget's own `:focus-within` ring is
+ * switched off, because a click matches it too, and the ring below is redrawn as long as the
+ * challenge is being solved, as the widget keeps the focus on the input.
+ */
+.widget :global(.altcha-switch:focus-within) {
+  outline: none;
+}
+
+.widget :global(.altcha-switch:has(input:focus-visible)) {
+  outline: 2px solid var(--softn-input-border-focus);
+  outline-offset: 2px;
 }
 
 /*
@@ -56,22 +73,6 @@
 .widget :global(.altcha-switch:has(input:disabled)) {
   border-color: var(--softn-input-border-default);
   background-color: var(--softn-background-elevated);
-}
-
-/*
- * Light theme, with the same condition as the shared switch and the outline button intent: the OS
- * preference when the page sets no theme, and the explicit `data-theme="light"` attribute. The
- * border moves to the darker violet step, which keeps 7.10:1 against the light surfaces. Both rules
- * are less specific than the error and disabled ones above, which keep their colour.
- */
-@media (prefers-color-scheme: light) {
-  :where(:root:not([data-theme='dark'])) .widget :global(.altcha-switch) {
-    border-color: var(--softn-color-violet700);
-  }
-}
-
-:where([data-theme='light']) .widget :global(.altcha-switch) {
-  border-color: var(--softn-color-violet700);
 }
 
 @media (prefers-reduced-motion: reduce) {
