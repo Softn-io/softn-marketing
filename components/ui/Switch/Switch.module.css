@@ -1,16 +1,17 @@
 /*
  * Shareable switch, built on the Base UI Switch primitive. Its look reproduces the Altcha
- * contact-form switch from the same tokens: track height icon-size-md, width space-10, padding
- * space-1, thumb size icon-size-md minus twice the padding, pill radius, input background and
- * input border colors, the input focus ring, and the hover and checked states.
+ * contact-form switch from the same tokens: the shared track geometry (height icon-size-md, width
+ * space-10, padding space-1, thumb size icon-size-md minus twice the padding, pill radius), the
+ * input background, the `--softn-border-active` border, the input focus ring on keyboard focus, and
+ * the checked state.
  *
- * The resting (unchecked) border uses a solid core colour instead of the package's translucent
- * input border: violet500 in dark and violet700 in light, the same pair and the same light-theme
- * condition as the outline button intent. The translucent pair measured 1.55:1 in dark and 2.04:1
- * in light against the dialog surface, below the 3:1 non-text target; the solid pair measures
- * 4.43:1 in dark and 7.10:1 in light. The border keeps the same colour on hover and when checked,
- * so the control's boundary identifies the switch in every state and the box never shifts. The
- * checked state is told by the track fill and the thumb position.
+ * The border keeps its colour on hover, so the boundary the user just aimed at stays where it is and
+ * the box never shifts; the pointer cursor and the focus ring carry the interaction cue. The checked
+ * state is told by the track fill and the thumb position.
+ *
+ * `--softn-border-active` is a solid core violet and not the package's translucent input border,
+ * which measured 1.55:1 in dark and 2.04:1 in light against the dialog surface, under the 3:1
+ * non-text target; the active border measures 4.43:1 and 7.10:1.
  */
 
 .switch {
@@ -23,7 +24,7 @@
   inline-size: var(--softn-space-10);
   block-size: var(--softn-icon-size-md);
   padding: var(--softn-space-1);
-  border: var(--switch-border-width) solid var(--softn-color-violet500);
+  border: var(--switch-border-width) solid var(--softn-border-active);
   border-radius: var(--softn-radius-pill);
   background-color: var(--softn-input-background);
   cursor: pointer;
@@ -71,21 +72,6 @@
     )
   );
   background-color: var(--softn-brand-foreground);
-}
-
-/*
- * Light theme, with the same condition as the outline button intent: the OS preference when the
- * page sets no theme, and the explicit `data-theme="light"` attribute. The border moves to the
- * darker violet step so it keeps 7.10:1 against the light dialog surface.
- */
-@media (prefers-color-scheme: light) {
-  :where(:root:not([data-theme='dark'])) .switch {
-    border-color: var(--softn-color-violet700);
-  }
-}
-
-:where([data-theme='light']) .switch {
-  border-color: var(--softn-color-violet700);
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -18,8 +18,9 @@ type SwitchProps = {
 /**
  * Shareable switch built on the Base UI Switch primitive. It renders a native switch role with the
  * library's own ARIA and keyboard handling, and reproduces the look of the Altcha contact-form
- * switch from the same tokens: pill track and thumb, input background and border colors, and the
- * input focus ring. The label is the only text the caller supplies, through `aria-label`.
+ * switch from the same tokens: the shared pill track and thumb geometry, the input background, the
+ * `--softn-border-active` border, and the input focus ring on keyboard focus. The label is the only
+ * text the caller supplies, through `aria-label`.
  *
  * @param props The controlled state, the change handler and the accessible name.
  * @returns The switch.
