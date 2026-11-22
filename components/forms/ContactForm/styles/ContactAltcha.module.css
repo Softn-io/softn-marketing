@@ -5,8 +5,14 @@
  * radii and lengths reach it as the CSS custom properties set in `ContactAltcha.tsx`, all of them
  * `--softn-*` tokens. Three things have no custom property of their own — the border of the off
  * state, the disabled look and the error look — so they are set here, on the class names the
- * widget's stylesheet uses (altcha 3.6.0, pinned). The focus ring is not one of them: the widget's
- * own `.altcha-switch:focus-within` rule already takes `--altcha-checkbox-outline`, which
+ * widget's stylesheet uses (altcha 3.6.0, pinned). That border is a solid core colour and not the
+ * package's translucent input border: against the surfaces of this form the translucent pair
+ * measures 1.55:1 in dark and 2.04:1 in light, under the 3:1 non-text target, where the solid violet
+ * pair — the one of the shared switch and of the outline button intent — measures 4.43:1 and 7.10:1.
+ * The border is drawn inside the track, as the widget's own stylesheet puts its controls in
+ * `box-sizing: border-box`, and the widget measures the thumb travel from the padding box, so the
+ * thumb follows the border instead of overshooting it. The focus ring is not one of them: the
+ * widget's own `.altcha-switch:focus-within` rule already takes `--altcha-checkbox-outline`, which
  * `ContactAltcha.tsx` sets to the input focus token.
  */
 
@@ -21,14 +27,16 @@
   }
 }
 
-/* The off state borrows the border of the other fields: the widget draws none of its own. */
+/*
+ * The off state, and the resting boundary of the switch: the widget draws no border of its own, so
+ * this solid violet pair takes over — violet500 here, violet700 in light below. Hover keeps that
+ * colour: the resting border already clears the non-text target, and a hover colour would move the
+ * boundary the visitor just aimed at, so the control never shifts under the pointer. The transition
+ * eases the colour the error and disabled states paint; no state changes the width.
+ */
 .widget :global(.altcha-switch) {
-  border: 1px solid var(--softn-input-border-subtle);
+  border: 1px solid var(--softn-color-violet500);
   transition: border-color var(--softn-duration-micro) var(--softn-easing-out);
-}
-
-.widget :global(.altcha-switch:hover) {
-  border-color: var(--softn-input-border-strong);
 }
 
 /*
@@ -42,11 +50,28 @@
 
 /*
  * The widget never disables its own switch today; if it ever does, the control looks like the other
- * disabled ones instead of like an active one.
+ * disabled ones instead of like an active one: the resting input border and the elevated surface of
+ * the disabled consent box next to it, at the same width, so the track keeps its size.
  */
 .widget :global(.altcha-switch:has(input:disabled)) {
-  border-color: var(--softn-input-border-subtle);
+  border-color: var(--softn-input-border-default);
   background-color: var(--softn-background-elevated);
+}
+
+/*
+ * Light theme, with the same condition as the shared switch and the outline button intent: the OS
+ * preference when the page sets no theme, and the explicit `data-theme="light"` attribute. The
+ * border moves to the darker violet step, which keeps 7.10:1 against the light surfaces. Both rules
+ * are less specific than the error and disabled ones above, which keep their colour.
+ */
+@media (prefers-color-scheme: light) {
+  :where(:root:not([data-theme='dark'])) .widget :global(.altcha-switch) {
+    border-color: var(--softn-color-violet700);
+  }
+}
+
+:where([data-theme='light']) .widget :global(.altcha-switch) {
+  border-color: var(--softn-color-violet700);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -59,11 +84,18 @@
 /*
  * Forced colours: the browser replaces the palette, and both the track and the thumb would land on
  * the same system colour. The thumb is pinned to the text colour so it stays visible, and the state
- * is told by its position alone, as a switch should be.
+ * is told by its position alone, as a switch should be. The error and disabled selectors are listed
+ * with the base one so their higher specificity does not keep a brand border here, and a disabled
+ * switch takes the muted system colour the other disabled controls use.
  */
 @media (forced-colors: active) {
-  .widget :global(.altcha-switch) {
+  .widget :global(.altcha-switch),
+  .widget :global([data-state='error'] .altcha-switch) {
     border-color: ButtonText;
+  }
+
+  .widget :global(.altcha-switch:has(input:disabled)) {
+    border-color: GrayText;
   }
 
   .widget :global(.altcha-switch-toggle) {
