@@ -122,8 +122,16 @@ const submitButton = (page: Page) => page.getByRole('button', { name: contact.fo
 const honeypot = (page: Page) => page.getByLabel(contact.form.honeypot.label)
 const widget = (page: Page) => page.locator('altcha-widget')
 const widgetSwitch = (page: Page) => widget(page).locator('input[type="checkbox"]')
+const widgetSwitchTrack = (page: Page) => widget(page).locator('.altcha-switch')
 const widgetState = (page: Page) => widget(page).locator('.altcha')
 const widgetPayload = (page: Page) => widget(page).locator('input[name="altcha"]')
+
+/** The outline the stylesheet draws on `.altcha-switch`: style, width and offset, computed. */
+const switchOutline = (track: ReturnType<typeof widgetSwitchTrack>) =>
+  track.evaluate((element) => {
+    const style = getComputedStyle(element)
+    return { style: style.outlineStyle, width: style.outlineWidth, offset: style.outlineOffset }
+  })
 
 /** Fills the form with one valid message (the visitor's own answers, from the validated copy). */
 const fillValidForm = async (page: Page): Promise<void> => {
@@ -487,6 +495,12 @@ test.describe('altcha switch border (issue #160)', () => {
    * The regression: the switch read an undefined token, so its resting border was dropped, and the
    * hover rule drew one — a 1px shift under the pointer. The guard: a 1px border at rest, and a
    * bounding box hover does not move, on the switch or on its thumb.
+   *
+   * Round 2 adds the focus behaviour: the widget's own `:focus-within` ring also matched a pointer
+   * press, so the stylesheet neutralises it and redraws on keyboard focus only. The guards: no
+   * outline on `.altcha-switch` through a click verification (the read may land during or after the
+   * solve — the challenge is cheap — and the style must be `none` either way), and a 2px ring at
+   * offset 2px from a Tab onto the input, kept through a keyboard-started verification.
    */
   for (const scheme of ['dark', 'light'] as const) {
     test(`keeps a 1px border at rest, and hover moves nothing (${scheme})`, async ({ page }) => {
@@ -513,6 +527,44 @@ test.describe('altcha switch border (issue #160)', () => {
       expect(await thumb.boundingBox(), 'the thumb does not move on hover').toEqual(atRest.thumb)
     })
   }
+
+  test('shows no ring on a pointer press, during or after the verification (dark)', async ({ page }) => {
+    await serveChallenge(page)
+    await gotoContact(page, 'dark')
+
+    const track = widgetSwitchTrack(page)
+    await track.scrollIntoViewIfNeeded()
+    // The click lands on the opacity-0 input that covers the track: the verification starts, and
+    // focus ends on that input again without `:focus-visible`.
+    await track.click()
+    expect((await switchOutline(track)).style, 'no ring from a pointer press').toBe('none')
+    await expect(widgetState(page)).toHaveAttribute('data-state', 'verified', { timeout: 15_000 })
+    expect((await switchOutline(track)).style, 'the ring stays off after the click verification').toBe('none')
+  })
+
+  test('rings .altcha-switch from the keyboard and keeps it through the verification (dark)', async ({ page }) => {
+    await serveChallenge(page)
+    await gotoContact(page, 'dark')
+
+    const track = widgetSwitchTrack(page)
+    await track.scrollIntoViewIfNeeded()
+    // Tab from the consent checkbox onto the widget's input: `:focus-visible` matches and the ring
+    // shows on the track, at the shared switch's values.
+    await page.getByLabel(CONSENT_LABEL).focus()
+    await page.keyboard.press('Tab')
+    await expect(widgetSwitch(page), 'the widget input holds focus').toBeFocused()
+    expect(await switchOutline(track), 'Tab draws the keyboard ring').toEqual({
+      style: 'solid',
+      width: '2px',
+      offset: '2px',
+    })
+
+    // The ring stays through a keyboard-started verification: focus remains on the input while it
+    // solves, and the widget focuses it again when it ends.
+    await page.keyboard.press('Space')
+    await expect(widgetState(page)).toHaveAttribute('data-state', 'verified', { timeout: 15_000 })
+    expect((await switchOutline(track)).style, 'the ring stays through the keyboard verification').toBe('solid')
+  })
 })
 
 test.describe('contact page design fidelity (QA check 4a-1, blocking)', () => {
