@@ -68,4 +68,27 @@ describe('Button', () => {
     expect(small).toContain('font-semibold')
     expect(small).not.toContain('text-body-md')
   })
+
+  it('applies the outline intent', () => {
+    render(
+      <Button href="#x" intent="outline" size="sm">
+        Go
+      </Button>,
+    )
+    const classes = screen.getByRole('link').className
+    expect(classes).toContain('intent-outline')
+    expect(classes).not.toContain('intent-primary')
+  })
+
+  it('keeps the outline intent disabled and hover-safe', () => {
+    render(
+      <Button intent="outline" disabled>
+        Go
+      </Button>,
+    )
+    const button = screen.getByRole('button', { name: 'Go' })
+    expect(button.getAttribute('disabled')).toBe('')
+    expect(button.className).toContain('intent-outline')
+    expect(button.className).not.toContain('intent-primary')
+  })
 })

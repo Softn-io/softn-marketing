@@ -15,14 +15,15 @@ describe('FooterNav', () => {
     expect(screen.getByRole('navigation', { name: footer.nav.ariaLabel })).toBeTruthy()
   })
 
-  it('renders one list item per entry, in the copy order, inside a single list', () => {
+  it('renders one list item per entry, plus the cookie-settings control, inside a single list', () => {
     render(<FooterNav />)
 
     const nav = screen.getByRole('navigation', { name: footer.nav.ariaLabel })
     const list = nav.querySelector('ul')
     expect(list).toBeTruthy()
-    expect(list?.querySelectorAll('li')).toHaveLength(FOOTER_LINKS.length)
+    expect(list?.querySelectorAll('li')).toHaveLength(FOOTER_LINKS.length + 1)
     expect(screen.getAllByRole('link')).toHaveLength(FOOTER_LINKS.length)
+    expect(screen.getByRole('button', { name: footer.cookieSettings })).toBeTruthy()
   })
 
   it('renders every entry with its locale label and its href from SITE_ROUTES', () => {

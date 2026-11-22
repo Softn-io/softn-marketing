@@ -45,6 +45,7 @@
  */
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { FOOTER_LINKS } from '../lib/footerLinks'
 import { SITE_URL } from '../lib/site'
 import { comingSoon } from '../locales/fr/comingSoon'
@@ -185,7 +186,12 @@ const expectBoldSuccess = async (page: Page, address: string): Promise<void> => 
   await expect(bold).toHaveCount(1)
   await expect(bold).toHaveText(address)
   await expect(paragraph).toHaveText(sentence)
-  await expect(page.getByRole('status')).toHaveText(sentence)
+  /*
+   * Scoped to the waitlist's own live region inside `main`: the consent layer (issue #23) renders
+   * a second, persistent `role="status"` region as a direct child of `body`, so the unscoped role
+   * query would be a strict-mode violation. The waitlist announces through this region only.
+   */
+  await expect(page.locator('main p[role="status"]')).toHaveText(sentence)
 }
 
 test.describe('coming-soon: structure and copy', () => {
@@ -236,8 +242,11 @@ test.describe('coming-soon: structure and copy', () => {
     await expect(headings).toHaveCount(1)
     await expect(headings).toHaveText(comingSoon.title)
 
-    // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level.
-    await expect(page.getByRole('heading')).toHaveCount(1)
+    // Heading hierarchy: the page's only heading is the h1 — nothing can skip a level. Scoped to
+    // the page's own content (`main`): the consent layer (issue #23) mounts its banner's own `<h2>`
+    // title as a direct child of `body` after hydration, and that heading is audited by
+    // `cookieConsent.spec.ts`, never counted here.
+    await expect(page.getByRole('main').getByRole('heading')).toHaveCount(1)
 
     await expect(page.getByText(comingSoon.body)).toBeVisible()
     await expect(page.getByText(comingSoon.bodyInvite)).toBeVisible()
@@ -246,10 +255,13 @@ test.describe('coming-soon: structure and copy', () => {
     const year = String(new Date().getFullYear())
     await expect(page.getByText(comingSoon.footer.copyright.replace('{year}', year))).toBeVisible()
 
-    // The wordmark, then the footer's Contact and legal links, live since issue #22: no other link.
-    await expect(page.getByRole('link')).toHaveCount(1 + FOOTER_LINKS.length)
+    // The wordmark, then the footer's Contact and legal links, live since issue #22: no other link
+    // in the page's own landmarks. Scoped like the headings: the consent banner's own "learn more"
+    // link (issue #23) hangs from the layer beside the page, audited by `cookieConsent.spec.ts`.
+    const pageContent = page.locator('header, main, footer')
+    await expect(pageContent.getByRole('link')).toHaveCount(1 + FOOTER_LINKS.length)
     for (const link of FOOTER_LINKS) {
-      await expect(page.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href)
+      await expect(pageContent.getByRole('link', { name: link.label })).toHaveAttribute('href', link.href)
     }
   })
 
@@ -1082,6 +1094,12 @@ test.describe('coming-soon: axe (WCAG 2.1 AA)', () => {
 })
 
 test.describe('coming-soon: axe on the success state (WCAG 2.1 AA)', () => {
+  // The banner is not the subject here (the audit targets the success state), so a stored choice
+  // keeps it out of the audit entirely (issue #23, Mel's decision).
+  test.beforeEach(({ page }) => {
+    seedStoredConsent(page)
+  })
+
   /*
    * Success state only (narrowed pass, PR #92 follow-up): after a mocked successful signup the
    * form is gone and the bold address paragraph is on screen, so this audit covers exactly the

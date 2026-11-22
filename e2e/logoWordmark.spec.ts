@@ -21,7 +21,17 @@
  *   package token, so the moved values are a token audit too (role contract 4a-1).
  */
 import { expect, test, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { nav } from '../locales/fr/hero'
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision); the
+ * drawer suites it covers are not about the banner. Every test here seeds a valid stored choice
+ * first; the banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 /** The wordmark's own text: the site name and its suffix. */
 const WORDMARK_TEXT = `${nav.logo.name}${nav.logo.suffix}`

@@ -11,12 +11,12 @@ const copyright = interpolate(footer.copyright, { year: String(new Date().getFul
 
 /**
  * Site footer: the wordmark back to the home page, the copyright and the navigation to the contact
- * page and the three legal pages.
+ * page, the three legal pages and the cookie-settings control.
  *
  * Server component. Every string comes from `locales/fr/`, the routes from `lib/routes.ts`, so no
  * path and no wording is written twice; the navigation itself is `FooterNav`, shared with the
- * coming-soon footer. The copy's cookie-settings link is absent until the consent banner it opens
- * exists.
+ * coming-soon footer. The cookie-settings control is a small client island that opens the consent
+ * preferences dialog.
  *
  * @returns The footer landmark of the pages that carry the site chrome.
  */

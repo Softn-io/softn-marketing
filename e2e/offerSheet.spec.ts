@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { SECTION_IDS } from '../lib/anchors'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
@@ -139,6 +140,16 @@ const waitSheetSettled = (dialog: Locator): Promise<void> =>
     .poll(() => dialog.evaluate((el) => el.getAnimations().length))
     .toBe(0)
     .then(() => undefined)
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and it
+ * overlays the cards these sheets are opened from. Every test here seeds a valid stored choice
+ * first, so the suite exercises the page exactly as a returning visitor sees it, banner out of the
+ * way. The banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 test.describe('offer sheet: opening and content', () => {
   for (const [index, offer] of CARDS.entries()) {

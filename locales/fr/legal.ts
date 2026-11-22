@@ -179,17 +179,18 @@ export const legal = {
       },
     },
     necessary: {
-      body: "Le site ne dépose aucun cookie nécessaire à son fonctionnement. Lorsque le visiteur choisit explicitement un thème d'affichage (clair ou sombre), ce choix est mémorisé dans le navigateur (stockage local, clé « softn-theme »), sans cookie, et n'est jamais transmis au serveur. Cette mémorisation répond à un choix du visiteur et ne requiert pas de consentement. Le choix de cookies du visiteur est lui aussi mémorisé dans son navigateur, pour ne pas le solliciter à chaque page.",
+      body: "Le site ne dépose aucun cookie nécessaire à son fonctionnement. Lorsque le visiteur choisit explicitement un thème d'affichage (clair ou sombre), ce choix est mémorisé dans le navigateur (stockage local, clé « softn-theme »), sans cookie, et n'est jamais transmis au serveur. Cette mémorisation répond à un choix du visiteur et ne requiert pas de consentement. Le choix de cookies du visiteur est lui aussi mémorisé dans son navigateur (stockage local, sans cookie), pour ne pas le solliciter à chaque page.",
     },
     audience: {
-      body: "Avec le consentement du visiteur, le site utilise Umami pour compter les visites et comprendre quelles parties du site sont consultées. Rien n'est chargé avant ce consentement. Umami n'utilise pas de cookie.",
+      body: "Avec le consentement du visiteur, le site peut utiliser Umami pour compter les visites et comprendre quelles parties du site sont consultées. Rien n'est chargé avant ce consentement. Umami n'utilise pas de cookie.",
     },
     thirdParty: {
       body: "La réservation d'un échange et le formulaire de contact fonctionnent sans service tiers chargé dans le navigateur : les informations transitent par le serveur du site, et la vérification anti-robot du formulaire de contact s'effectue dans le navigateur, sans cookie. Les prestataires concernés sont listés dans la politique de confidentialité.",
     },
     choice: {
       body: "Les cookies et dispositifs de mesure non nécessaires ne sont activés qu'avec l'accord du visiteur, recueilli par un bandeau affiché lors de la première visite. Refuser est aussi simple qu'accepter. Le choix peut être modifié ou retiré à tout moment depuis le lien « Gérer mes cookies », en bas de chaque page.",
-      duration: 'Le choix est conservé pendant 6 mois.',
+      duration:
+        'Le choix est conservé pendant 6 mois dans le navigateur utilisé, puis le bandeau est de nouveau affiché. Il ne concerne que cet appareil et ce navigateur.',
     },
     browser: {
       body: 'Les cookies peuvent aussi être supprimés ou bloqués depuis les paramètres du navigateur. Certaines fonctionnalités du site peuvent alors être limitées.',
@@ -202,13 +203,35 @@ export type Legal = typeof legal
 /** Cookie consent banner copy. Accept and decline buttons carry the same visual weight. */
 export const cookieBanner = {
   ariaLabel: 'Choix des cookies',
-  title: 'Choix des cookies',
-  body: "Ce site mesure son audience uniquement avec votre accord, afin de s'améliorer. Aucun cookie non nécessaire n'est déposé avant votre consentement.",
+  title: 'Votre vie privée, votre choix',
+  body: "Ce site peut mesurer son audience afin de s'améliorer, uniquement avec votre accord.\nIl ne dépose aucun cookie.",
   accept: 'Tout accepter',
   decline: 'Tout refuser',
   customize: 'Personnaliser',
   learnMore: 'Politique de cookies',
   saved: 'Votre choix est enregistré.',
+  preferences: {
+    title: 'Gérer mes cookies',
+    closeAriaLabel: 'Fermer la fenêtre de gestion des cookies',
+    intro:
+      'Choisissez ce que ce site peut mémoriser et mesurer. Il ne dépose aucun cookie : votre choix est conservé dans votre navigateur et vous pouvez le modifier à tout moment.',
+    necessary: {
+      title: 'Stockage strictement nécessaire',
+      status: 'Toujours actif',
+      description:
+        "Mémorise dans votre navigateur le thème d'affichage que vous choisissez et votre choix sur cette page. Aucun cookie, rien n'est transmis à un tiers.",
+    },
+    audience: {
+      title: "Mesure d'audience",
+      description:
+        "Compte les visites et les pages consultées, avec l'outil Umami, pour améliorer le site. Rien n'est chargé sans votre accord. Aucun cookie n'est utilisé.",
+      toggleAriaLabel: "Autoriser la mesure d'audience",
+      stateOn: 'Activée',
+      stateOff: 'Désactivée',
+    },
+    retention: 'Votre choix est conservé 6 mois dans ce navigateur.',
+    save: 'Enregistrer mes choix',
+  },
 } as const
 
 export type CookieBanner = typeof cookieBanner

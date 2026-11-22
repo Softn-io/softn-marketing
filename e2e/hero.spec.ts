@@ -16,11 +16,21 @@
  * Expected copy is imported from `locales/fr/`, never hardcoded (QA rule).
  */
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { seedStoredConsent } from './support/consent'
 import { HERO_CTA_ID, SECTION_IDS } from '../lib/anchors'
 import { ASSISTANT_INTENTS, ASSISTANT_INTENT_EVENT } from '../lib/assistant/intent'
 import { interpolate } from '../lib/interpolate'
 import { ASSISTANT_NAME } from '../locales/fr/chatbot'
 import { hero } from '../locales/fr/hero'
+
+/*
+ * The consent banner sits on top of the page until answered (issue #23, Mel's decision) and paints
+ * inside the hero's painted-background contrast sample at common viewports. Every test here seeds a
+ * valid stored choice first; the banner itself is covered by `cookieConsent.spec.ts`.
+ */
+test.beforeEach(({ page }) => {
+  seedStoredConsent(page)
+})
 
 const SECONDARY = hero.cta.secondary
 const INDICATOR = interpolate(hero.agentPrompt, { assistantName: ASSISTANT_NAME })

@@ -12,8 +12,8 @@ export type FooterLink = {
  * legal pages.
  *
  * Shared by the site footer and the coming-soon footer, so both read the same labels and the same
- * routes. No cookie-settings entry here: it comes back with the consent banner, which is what it
- * opens.
+ * routes. The cookie-settings control is a button rendered next to these links, not a route: it
+ * opens the consent preferences dialog.
  */
 export const FOOTER_LINKS: readonly FooterLink[] = [
   { label: footer.legal.contact, href: SITE_ROUTES.contact },
