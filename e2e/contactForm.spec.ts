@@ -482,6 +482,39 @@ test.describe('contact page accessibility (WCAG 2.1 AA)', () => {
   })
 })
 
+test.describe('altcha switch border (issue #160)', () => {
+  /*
+   * The regression: the switch read an undefined token, so its resting border was dropped, and the
+   * hover rule drew one — a 1px shift under the pointer. The guard: a 1px border at rest, and a
+   * bounding box hover does not move, on the switch or on its thumb.
+   */
+  for (const scheme of ['dark', 'light'] as const) {
+    test(`keeps a 1px border at rest, and hover moves nothing (${scheme})`, async ({ page }) => {
+      await gotoContact(page, scheme)
+
+      const track = widget(page).locator('.altcha-switch')
+      const thumb = widget(page).locator('.altcha-switch-toggle')
+      await expect(track).toBeVisible()
+      // Bring the switch on screen first, so the hover below cannot scroll the page under test.
+      await track.scrollIntoViewIfNeeded()
+
+      const atRest = {
+        width: await track.evaluate((element) => getComputedStyle(element).borderTopWidth),
+        box: await track.boundingBox(),
+        thumb: await thumb.boundingBox(),
+      }
+      expect(atRest.width, 'the resting border is 1px').toBe('1px')
+
+      await track.hover()
+      // The widget eases its toggle over 150ms; past that, hover must have moved nothing.
+      await page.waitForTimeout(250)
+
+      expect(await track.boundingBox(), 'the switch box does not move on hover').toEqual(atRest.box)
+      expect(await thumb.boundingBox(), 'the thumb does not move on hover').toEqual(atRest.thumb)
+    })
+  }
+})
+
 test.describe('contact page design fidelity (QA check 4a-1, blocking)', () => {
   /**
    * Every computed design value on the page's key elements must exist as a value of
