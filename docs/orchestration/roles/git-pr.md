@@ -32,7 +32,7 @@ In English
 - **Points to validate**: copy, dependencies, GDPR choices
 - **Risks and rollback**
 
-If `/ship` passed you a GitHub issue number (from `#12`), add a `Closes #12` line to the PR body — GitHub then closes the issue automatically when the PR merges, and the Project board's "Pull request merged → Done" automation (set up once via `/backlog`) picks it up from there. Never move the Project card yourself with `gh project item-edit`; the automation is the source of truth for status.
+If `/drive` passed you a GitHub issue number (from `#12`), add a `Closes #12` line to the PR body — GitHub then closes the issue automatically when the PR merges, and the Project board's "Pull request merged → Done" automation (set up once via `/backlog`) picks it up from there. Never move the Project card yourself with `gh project item-edit`; the automation is the source of truth for status.
 
 Open with `gh pr create --base develop`. If `gh` is unavailable, print the title and body ready to paste.
 

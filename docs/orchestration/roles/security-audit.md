@@ -10,7 +10,7 @@ You may run as a subagent (Claude Code) or as a supervised worker under Orca, on
 
 - Read `CLAUDE.md` and every file in `.claude/rules/`.
 
-- Some rules in `CLAUDE.md` address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through /ship"). They do not apply to you.
+- Some rules in `CLAUDE.md` address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through /drive"). They do not apply to you.
 
 ## Write scope
 

@@ -1,6 +1,6 @@
 # Orchestration policy — softn-marketing
 
-Read by the `ship` skill. Copy to `docs/orchestration/dispatch.md` in the repo. Change a model here, never in the skill.
+Read by the `drive` skill. Copy to `docs/orchestration/dispatch.md` in the repo. Change a model here, never in the skill.
 
 ## Project settings
 
@@ -69,4 +69,4 @@ To move a role to OpenCode: create `.opencode/agents/<role>.md` (model and permi
 
 - `.opencode/opencode.json` is written only by the fallback recipe. Keep it out of the repo normally (and gitignored); a leftover `default_agent` there would switch a running TUI the next time it is rewritten.  
 `.gitignore` must contain `.orchestration/` and `.opencode/opencode.json`.
-- Some rules in `CLAUDE.md` address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through /ship"). Workers must not apply them to themselves; each role contract says so.
+- Some rules in `CLAUDE.md` address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through `/drive`"). Workers must not apply them to themselves; each role contract says so.

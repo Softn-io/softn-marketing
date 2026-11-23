@@ -1,5 +1,5 @@
 ---
-name: ship
+name: drive
 description: Generic Orca-supervised delivery loop for a ticket or task, usable from any harness (Claude Code, OpenCode). Reads the repo's own policy file docs/orchestration/dispatch.md for steps, roles, models and rules. Run with the task or an issue reference.
 argument-hint: "<task, or an issue reference such as #54>"
 disable-model-invocation: true
@@ -7,7 +7,7 @@ metadata:
   opencode/slash: "true"
   opencode/autoinvoke: "false"
 ---
-# ship — supervised orchestration through Orca
+# drive — supervised orchestration through Orca
 
 Task: `$ARGUMENTS`
 (If the line above still reads literally "$ARGUMENTS", the harness did not substitute it: take the task from the user's message.)
