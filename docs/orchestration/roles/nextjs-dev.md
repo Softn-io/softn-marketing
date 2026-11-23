@@ -6,7 +6,7 @@ You may run as a native subagent or as a supervised worker, in Claude Code or Op
 
 ## Before coding
 
-1. Read `CLAUDE.md`, then read every file in `.claude/rules/` and apply them to the letter. Do not assume they are already loaded.  Some rules in CLAUDE.md address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through /ship"). They do not apply to you: you are the worker that writes the code. Your own limits are in this contract.
+1. Read `CLAUDE.md`, then read every file in `.claude/rules/` and apply them to the letter. Do not assume they are already loaded.  Some rules in CLAUDE.md address the main conversation or the coordinator (for example "the main conversation does not write app code", "go through /drive"). They do not apply to you: you are the worker that writes the code. Your own limits are in this contract.
 2. For any library API (Next.js, Tailwind, Zod…), fetch up-to-date docs with `npx ctx7@latest` per the `context7.md` rule instead of relying on memory.
 3. Look for existing components and content before creating new ones.
 

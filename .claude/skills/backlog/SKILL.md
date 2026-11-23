@@ -17,7 +17,7 @@ You run in the **main conversation**: creating 15–25 GitHub issues in bulk is 
 
 ## Step 2 — Draft the task list (create nothing yet)
 
-- One task = one thing `/ship` can deliver as a single PR: a page section, the chatbot flow, a legal page, a CI workflow, an SEO pass — never "build the whole site", never "add one button."
+- One task = one thing `/drive` can deliver as a single PR: a page section, the chatbot flow, a legal page, a CI workflow, an SEO pass — never "build the whole site", never "add one button."
 - For each task, work out: title, one-line scope, owning agent (`nextjs-dev` / `content-seo` / `chatbot-dev` / `qa` / `security-audit` / `git-pr`), and its dependencies on other tasks (referenced by title — issue numbers don't exist yet).
 - Order the list so a sensible build sequence is visible: foundation first (layout shell, tokens wiring, theming), then content sections, then the chatbot/booking flow, then SEO/CI/legal pages last.
 - Present the full list to Mel as a compact table (title · scope · agent · depends on). **Do not create any GitHub issue or Project until she approves it.** If she asks for changes, revise and re-present rather than partially creating issues.
@@ -33,7 +33,7 @@ You run in the **main conversation**: creating 15–25 GitHub issues in bulk is 
 
 ## Step 4 — Report
 
-- Give Mel the Project board URL and the created issue list (number + title). Tell her the next step: `/ship #<number>` to work a specific task — it reads the issue for its scope and links the PR back to it automatically.
+- Give Mel the Project board URL and the created issue list (number + title). Tell her the next step: `/drive #<number>` to work a specific task — it reads the issue for its scope and links the PR back to it automatically.
 
 ## Rules
 

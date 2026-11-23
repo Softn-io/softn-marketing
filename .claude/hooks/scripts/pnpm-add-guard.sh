@@ -3,7 +3,7 @@
 #
 # Blocks any command that adds or updates a dependency, and any use of
 # npm / yarn / bun to install (this project uses pnpm only).
-# Every dependency request escalates to the orchestrator (/ship), which
+# Every dependency request escalates to the orchestrator (/drive), which
 # submits it to Mel.
 #
 # Blocked:
@@ -120,7 +120,7 @@ case "$verdict" in
     cat >&2 <<'MSG'
 BLOCKED: adding or updating a dependency requires Mel's validation.
 
-Escalate to the orchestrator (/ship) with a "Dependency request":
+Escalate to the orchestrator (/drive) with a "Dependency request":
   - Package name + exact version
   - Justification (why this dependency, alternatives considered, including "no dependency")
   - Client bundle size impact (Lighthouse)
@@ -137,7 +137,7 @@ MSG
   package-manager)
     cat >&2 <<'MSG'
 BLOCKED: this project uses pnpm only. Do not use npm, yarn or bun to install or update packages.
-Any new dependency goes through a "Dependency request" to the orchestrator (/ship).
+Any new dependency goes through a "Dependency request" to the orchestrator (/drive).
 MSG
     exit 2
     ;;
