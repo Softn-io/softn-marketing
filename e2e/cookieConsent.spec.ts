@@ -3,6 +3,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { footer } from '../locales/fr/footer'
 import { cookieBanner } from '../locales/fr/legal'
+import { stubUmami } from './support/umamiStub'
 
 /**
  * Cookie consent (issue #23): the banner, the preferences dialog and the footer control.
@@ -178,6 +179,13 @@ const recordLayoutShifts = (page: Page): void => {
 }
 
 const readClsEntries = (page: Page) => page.evaluate(() => Reflect.get(window, '__clsEntries') as number[])
+
+// Every test runs on a page that can grant the audience consent (banner accept, stored record,
+// issue #24): the Umami endpoints are stubbed first, so no run ever loads the real tracker or
+// sends a pageview to the production dashboard.
+test.beforeEach(async ({ page }) => {
+  await stubUmami(page)
+})
 
 test.describe('cookie consent — banner presence and storage', () => {
   test('shows the banner on first visit and reaches every control by keyboard', async ({ page }) => {

@@ -1,7 +1,7 @@
 'use client'
 
-import { lazy, Suspense, useState, useSyncExternalStore } from 'react'
-import { useConsentGate } from '@/lib/analytics'
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react'
+import { registerUmamiLoader, useConsentGate } from '@/lib/analytics'
 import { consentStore } from '@/lib/consent'
 import {
   getPreferencesPanelEverRequestedSnapshot,
@@ -40,6 +40,12 @@ export const CookieConsent = () => {
   const [draft, setDraft] = useState<boolean | null>(null)
 
   useConsentGate(record)
+
+  // Registered once: the gate runs the Umami loader when the audience consent is already granted,
+  // or on the next grant. A refusal stops future loads only, per the gate contract.
+  useEffect(() => {
+    registerUmamiLoader()
+  }, [])
 
   const audience = draft ?? record?.audience ?? false
 

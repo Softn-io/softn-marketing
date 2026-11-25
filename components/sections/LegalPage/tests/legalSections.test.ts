@@ -6,16 +6,16 @@ import { cookiesContent, mentionsContent, privacyContent } from '../data/legalSe
 const KNOWN_PLACEHOLDERS = ['contactPageLink', 'dataRequestSubject'] as const
 
 const CONTENTS = [
-  { name: 'mentions', content: mentionsContent, locale: legal.mentions },
-  { name: 'privacy', content: privacyContent, locale: legal.privacy },
-  { name: 'cookies', content: cookiesContent, locale: legal.cookies },
+  { name: 'mentions', content: mentionsContent, locale: legal.mentions, updatedAt: '30/11/2026' },
+  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '23/11/2026' },
+  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '23/11/2026' },
 ] as const
 
 describe('legalSections', () => {
   it.each(CONTENTS)(
-    '$name: the {date} parameter is filled with 30/11/2026, the ISO date written the French way',
-    ({ content }) => {
-      expect(content.updated).toBe('Dernière mise à jour : 30/11/2026')
+    '$name: the {date} parameter is filled with $updatedAt, the ISO date written the French way',
+    ({ content, updatedAt }) => {
+      expect(content.updated).toBe(`Dernière mise à jour : ${updatedAt}`)
     },
   )
 

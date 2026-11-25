@@ -92,7 +92,7 @@ export const legal = {
       technical:
         "À chaque visite : adresse IP et données techniques nécessaires au fonctionnement et à la sécurité du site (journaux d'hébergement). Pour limiter les abus, une version pseudonymisée de l'adresse IP et un compteur de requêtes sont conservés quelques minutes.",
       audience:
-        "Avec le consentement du visiteur : statistiques de navigation, pour comprendre comment le site est utilisé. Cette mesure n'est active qu'après l'accord du visiteur.",
+        "Avec le consentement du visiteur : statistiques de navigation (pages consultées, type d'appareil et de navigateur) et, pour une partie des visites, données d'interaction : clics, défilement, mouvements de la souris et contenu de la page, enregistrés sous forme de cartes de chaleur et de replays. Les textes et les champs de saisie sont masqués ; l'assistant, la réservation et le formulaire de contact ne sont pas enregistrés. Ces mesures ne sont actives qu'après l'accord du visiteur.",
     },
     purposes: {
       booking:
@@ -104,7 +104,8 @@ export const legal = {
         "Prévenir la personne de l'ouverture du site. Base légale : consentement, exprimé par l'envoi du formulaire.",
       technical:
         'Assurer le fonctionnement et la sécurité du site, y compris la limitation des abus (limitation du débit, vérification anti-robot). Base légale : intérêt légitime.',
-      audience: "Mesurer l'audience du site. Base légale : consentement, recueilli par le bandeau de cookies.",
+      audience:
+        "Mesurer l'audience du site et comprendre comment il est utilisé (pages vues, zones cliquées, parcours) afin de l'améliorer. Base légale : consentement, recueilli par le bandeau de cookies, qui couvre à la fois les statistiques, les cartes de chaleur et les replays.",
     },
     processors: {
       intro:
@@ -121,9 +122,9 @@ export const legal = {
       vercel:
         "Vercel : hébergement du site et journaux techniques. Les fonctions du site s'exécutent à Paris (France) ; Vercel Inc. est établie aux États-Unis ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
       umami:
-        "Umami : mesure d'audience, chargée uniquement après le consentement du visiteur. Application hébergée sur Vercel (fonctions à Paris) ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
+        "Umami : mesure d'audience, cartes de chaleur et replays de sessions, chargés uniquement après le consentement du visiteur. Application hébergée sur Vercel (fonctions à Paris) ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
       supabase:
-        "Supabase : stockage des statistiques de la mesure d'audience Umami, après consentement du visiteur. Données hébergées en Irlande (Union européenne) ; transfert encadré par les clauses contractuelles types de la Commission européenne.",
+        "Supabase : stockage des statistiques, des cartes de chaleur et des replays de la mesure d'audience Umami, après consentement du visiteur. Données hébergées en Irlande (Union européenne) ; transfert encadré par les clauses contractuelles types de la Commission européenne.",
     },
     retention: {
       lead: 'Demande de rendez-vous sans suite ou annulée : 365 jours.',
@@ -135,6 +136,8 @@ export const legal = {
       logs: "Journaux d'hébergement : durée de conservation prévue par Vercel pour l'offre utilisée, sans export.",
       rateLimit:
         "Données de limitation du débit : 60 secondes pour l'assistant et 10 minutes pour le formulaire de contact. Identifiants de la vérification anti-robot : 10 minutes.",
+      audienceReplays: 'Replays de sessions : 30 jours, puis suppression. Un replay dure 5 minutes au plus.',
+      audienceStats: 'Statistiques et cartes de chaleur agrégées : 24 mois, puis suppression.',
       consent: 'Preuve de consentement : 365 jours sans suite donnée.',
     },
     rights: {
@@ -144,7 +147,7 @@ export const legal = {
         'Toute personne peut également saisir la CNIL (cnil.fr) si elle estime que ses droits ne sont pas respectés.',
     },
     security: {
-      body: "Les données de rendez-vous et de contact sont envoyées depuis le serveur du site, jamais depuis le navigateur vers un service tiers. Les accès aux outils sont protégés. Aucune donnée personnelle n'est placée dans les journaux ni dans les mesures d'audience.",
+      body: "Les données de rendez-vous et de contact sont envoyées depuis le serveur du site, jamais depuis le navigateur vers un service tiers. Les accès aux outils sont protégés. Aucune donnée personnelle n'est placée dans les journaux. Les enregistrements d'audience masquent tous les textes et tous les champs de saisie, et excluent l'assistant, la réservation et le formulaire de contact.",
     },
     ai: {
       body: "L'assistant virtuel du site se présente comme tel dès son premier message. Il fonctionne dans un périmètre défini et ne prend aucune décision concernant les personnes. Pour générer ses réponses, il envoie les questions du visiteur, ainsi que l'historique de la conversation en cours, à Mistral AI, qui agit en qualité de sous-traitant. Aucun compte n'est créé et Softn.io ne conserve pas ces échanges. Il est demandé de ne pas saisir de données personnelles dans les questions. Les informations de réservation (nom, adresse e-mail, besoin) ne sont jamais transmises à Mistral AI. Les informations saisies ne servent pas à entraîner un modèle d'intelligence artificielle.",
@@ -182,13 +185,24 @@ export const legal = {
       body: "Le site ne dépose aucun cookie nécessaire à son fonctionnement. Lorsque le visiteur choisit explicitement un thème d'affichage (clair ou sombre), ce choix est mémorisé dans le navigateur (stockage local, clé « softn-theme »), sans cookie, et n'est jamais transmis au serveur. Cette mémorisation répond à un choix du visiteur et ne requiert pas de consentement. Le choix de cookies du visiteur est lui aussi mémorisé dans son navigateur (stockage local, sans cookie), pour ne pas le solliciter à chaque page.",
     },
     audience: {
-      body: "Avec le consentement du visiteur, le site peut utiliser Umami pour compter les visites et comprendre quelles parties du site sont consultées. Rien n'est chargé avant ce consentement. Umami n'utilise pas de cookie.",
+      body: "Avec le consentement du visiteur, le site utilise Umami pour mesurer son audience. Rien n'est chargé avant ce consentement. Deux scripts sont alors chargés depuis softn.io, sans cookie.",
+      tracker:
+        'Le premier compte les visites et les pages consultées, pour comprendre quelles parties du site sont lues.',
+      heatmaps:
+        'Le second produit des cartes de chaleur : les clics et la profondeur de défilement sont regroupés par page, pour repérer ce qui est cliqué ou ignoré.',
+      replays:
+        "Il permet aussi d'enregistrer une partie des visites sous forme de replay : une reconstitution du parcours sur la page (mouvements de la souris, clics, défilement, contenu de la page), pour repérer ce qui gêne la navigation. Un replay s'arrête automatiquement au bout de 5 minutes au plus.",
+      masking:
+        "L'enregistrement est configuré avec un masquage strict : tous les champs de saisie et tous les textes de la page sont masqués. L'assistant virtuel, la réservation et le formulaire de contact sont entièrement exclus de l'enregistrement.",
+      retention: 'Les replays sont conservés 30 jours par Umami, puis supprimés.',
     },
     thirdParty: {
       body: "La réservation d'un échange et le formulaire de contact fonctionnent sans service tiers chargé dans le navigateur : les informations transitent par le serveur du site, et la vérification anti-robot du formulaire de contact s'effectue dans le navigateur, sans cookie. Les prestataires concernés sont listés dans la politique de confidentialité.",
     },
     choice: {
       body: "Les cookies et dispositifs de mesure non nécessaires ne sont activés qu'avec l'accord du visiteur, recueilli par un bandeau affiché lors de la première visite. Refuser est aussi simple qu'accepter. Le choix peut être modifié ou retiré à tout moment depuis le lien « Gérer mes cookies », en bas de chaque page.",
+      withdrawal:
+        "Si vous désactivez la mesure d'audience, elle s'arrête au plus tard au chargement de la page suivante.",
       duration:
         'Le choix est conservé pendant 6 mois dans le navigateur utilisé, puis le bandeau est de nouveau affiché. Il ne concerne que cet appareil et ce navigateur.',
     },
@@ -224,7 +238,7 @@ export const cookieBanner = {
     audience: {
       title: "Mesure d'audience",
       description:
-        "Compte les visites et les pages consultées, avec l'outil Umami, pour améliorer le site. Rien n'est chargé sans votre accord. Aucun cookie n'est utilisé.",
+        "Avec l'outil Umami : compte les visites et les pages consultées, cartographie les clics et le défilement. Une partie des visites est enregistrée sous forme de replay (les textes et les champs de saisie sont masqués). Rien n'est chargé sans votre accord. Aucun cookie n'est utilisé.",
       toggleAriaLabel: "Autoriser la mesure d'audience",
       stateOn: 'Activée',
       stateOff: 'Désactivée',

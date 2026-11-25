@@ -95,7 +95,7 @@ export const WaitlistForm = ({ action }: WaitlistFormProps) => {
   }
 
   return (
-    <div className={styles.waitlist}>
+    <div className={styles.waitlist} data-umami-block="waitlist">
       <p className="sr-only" role="status" aria-live="polite">
         {announcement}
       </p>
