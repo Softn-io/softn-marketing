@@ -9,10 +9,10 @@ import { legal } from '@/locales/fr/legal'
 const LEGAL_UPDATED_AT = '2026-11-30'
 
 /**
- * Publication date of the privacy and cookie policies: their audience-measurement copy changed on
- * that date, while the legal notice did not.
+ * Publication date of the privacy and cookie policies, shared by both pages; the legal notice
+ * keeps its own date ({@link LEGAL_UPDATED_AT}).
  */
-const POLICY_UPDATED_AT = '2026-11-23'
+const POLICY_UPDATED_AT = '2026-11-25'
 
 /** One ISO date written the French way, in UTC. */
 const formatUpdatedAt = (isoDate: string): string =>

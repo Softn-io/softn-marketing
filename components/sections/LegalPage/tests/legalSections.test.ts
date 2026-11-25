@@ -7,8 +7,8 @@ const KNOWN_PLACEHOLDERS = ['contactPageLink', 'dataRequestSubject'] as const
 
 const CONTENTS = [
   { name: 'mentions', content: mentionsContent, locale: legal.mentions, updatedAt: '30/11/2026' },
-  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '23/11/2026' },
-  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '23/11/2026' },
+  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '25/11/2026' },
+  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '25/11/2026' },
 ] as const
 
 describe('legalSections', () => {
@@ -30,6 +30,15 @@ describe('legalSections', () => {
         expect(paragraph.length).toBeGreaterThan(0)
       }
     }
+  })
+
+  it('privacy: the purposes section carries the call paragraph that announces the written notice', () => {
+    const purposes = privacyContent.sections.find((section) => section.title === legal.privacy.sections.purposes.title)
+    expect(purposes?.paragraphs).toContain(legal.privacy.purposes.call)
+    // Issue #154: the person is informed in writing in the booking e-mails, then at the start of
+    // the call, and may object by replying to one of these e-mails or orally.
+    expect(legal.privacy.purposes.call).toContain('informée par écrit dans les e-mails de réservation')
+    expect(legal.privacy.purposes.call).toContain('désactivée, en répondant')
   })
 
   it.each(CONTENTS)('$name: every placeholder the copy uses is one the renderer answers', ({ content }) => {
