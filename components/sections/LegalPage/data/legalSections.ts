@@ -2,14 +2,27 @@ import { interpolate } from '@/lib/interpolate'
 import { legal } from '@/locales/fr/legal'
 
 /**
- * Publication date of the three legal pages, ISO so the copy holds no hand-written date: the
- * `{date}` parameter of `locales/fr/legal.ts` is filled with it, once, for every page. `UTC` keeps
- * the prerendered line identical whatever the machine that builds the site.
+ * Publication date of the legal notice, ISO so the copy holds no hand-written date: the `{date}`
+ * parameter of `locales/fr/legal.ts` is filled with it. `UTC` keeps the prerendered line identical
+ * whatever the machine that builds the site.
  */
 const LEGAL_UPDATED_AT = '2026-11-30'
 
-/** The copy's `{date}` value: that date, written the French way. */
-const updatedAt = new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC' }).format(new Date(LEGAL_UPDATED_AT))
+/**
+ * Publication date of the privacy and cookie policies: their audience-measurement copy changed on
+ * that date, while the legal notice did not.
+ */
+const POLICY_UPDATED_AT = '2026-11-23'
+
+/** One ISO date written the French way, in UTC. */
+const formatUpdatedAt = (isoDate: string): string =>
+  new Intl.DateTimeFormat('fr-FR', { timeZone: 'UTC' }).format(new Date(isoDate))
+
+/** The copy's `{date}` value of the legal notice. */
+const legalUpdatedAt = formatUpdatedAt(LEGAL_UPDATED_AT)
+
+/** The copy's `{date}` value of the privacy and cookie policies. */
+const policyUpdatedAt = formatUpdatedAt(POLICY_UPDATED_AT)
 
 /** One section of a legal page: a level-2 heading, an optional intro, then its paragraphs. */
 export type LegalSection = {
@@ -35,7 +48,7 @@ export type LegalPageContent = {
 /** Legal notice: identity of the publisher and the host, and the intellectual-property credit. */
 export const mentionsContent: LegalPageContent = {
   title: legal.mentions.title,
-  updated: interpolate(legal.mentions.updated, { date: updatedAt }),
+  updated: interpolate(legal.mentions.updated, { date: legalUpdatedAt }),
   sections: [
     {
       title: legal.mentions.sections.publisher.title,
@@ -69,7 +82,7 @@ export const mentionsContent: LegalPageContent = {
 /** Privacy policy: the data collected, why, by whom, for how long, and how to exercise one's rights. */
 export const privacyContent: LegalPageContent = {
   title: legal.privacy.title,
-  updated: interpolate(legal.privacy.updated, { date: updatedAt }),
+  updated: interpolate(legal.privacy.updated, { date: policyUpdatedAt }),
   intro: legal.privacy.intro,
   sections: [
     {
@@ -127,6 +140,8 @@ export const privacyContent: LegalPageContent = {
         legal.privacy.retention.waitlist,
         legal.privacy.retention.logs,
         legal.privacy.retention.rateLimit,
+        legal.privacy.retention.audienceReplays,
+        legal.privacy.retention.audienceStats,
         legal.privacy.retention.consent,
       ],
     },
@@ -156,7 +171,7 @@ export const privacyContent: LegalPageContent = {
 /** Cookie policy: what the site stores today, the audience measurement, and how the choice works. */
 export const cookiesContent: LegalPageContent = {
   title: legal.cookies.title,
-  updated: interpolate(legal.cookies.updated, { date: updatedAt }),
+  updated: interpolate(legal.cookies.updated, { date: policyUpdatedAt }),
   intro: legal.cookies.intro,
   sections: [
     {
@@ -165,7 +180,14 @@ export const cookiesContent: LegalPageContent = {
     },
     {
       title: legal.cookies.sections.audience.title,
-      paragraphs: [legal.cookies.audience.body],
+      paragraphs: [
+        legal.cookies.audience.body,
+        legal.cookies.audience.tracker,
+        legal.cookies.audience.heatmaps,
+        legal.cookies.audience.replays,
+        legal.cookies.audience.masking,
+        legal.cookies.audience.retention,
+      ],
     },
     {
       title: legal.cookies.sections.thirdParty.title,
@@ -173,7 +195,7 @@ export const cookiesContent: LegalPageContent = {
     },
     {
       title: legal.cookies.sections.choice.title,
-      paragraphs: [legal.cookies.choice.body, legal.cookies.choice.duration],
+      paragraphs: [legal.cookies.choice.body, legal.cookies.choice.withdrawal, legal.cookies.choice.duration],
     },
     {
       title: legal.cookies.sections.browser.title,
