@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 import { stripUpgradeInsecureRequests } from './support/mobileEngines'
+import { stubUmami } from './support/umamiStub'
 import { footer } from '../locales/fr/footer'
 import { cookieBanner } from '../locales/fr/legal'
 
@@ -42,6 +43,10 @@ test.beforeEach(async ({ page }) => {
     const response = await route.fetch()
     await route.fulfill({ response, headers: stripUpgradeInsecureRequests(response.headers()) })
   })
+  // Registered after the catch-all, so it wins: the accepted banner loads Umami (issue #24), and
+  // these stubs keep the run — and the real instance — untouched. Never `route.fetch` an /m/*
+  // request: `next start` rewrites it to the Umami origin, and the fetch would leave the machine.
+  await stubUmami(page)
 })
 
 test('banner accept flow works on WebKit', async ({ page }) => {

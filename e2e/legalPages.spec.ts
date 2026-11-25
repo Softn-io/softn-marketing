@@ -49,9 +49,6 @@ const WCAG_AA_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] as const
 const SCHEMES = ['dark', 'light'] as const
 type Scheme = (typeof SCHEMES)[number]
 
-/** The publication date every legal page shows: the `{date}` parameter of `locales/fr/legal.ts`. */
-const UPDATED_AT = '30/11/2026'
-
 /** The three routes, with the metadata and the rendered content that describes them. */
 const PAGES = [
   { route: SITE_ROUTES.legalNotice, meta: metadataContent.legal.mentions, content: mentionsContent },
@@ -133,8 +130,11 @@ test.describe('legal pages: metadata and document structure', () => {
         expect(heading, `heading ${String(index)} carries the copy's own title`).toHaveText(wanted)
       })
 
-      // The last-updated line, filled once for the three pages from one ISO date.
-      await expect(page.getByText(`Dernière mise à jour : ${UPDATED_AT}`)).toBeVisible()
+      // The last-updated line: each page shows the date its data module renders (`legalSections.ts`
+      // fills the `{date}` parameter from its own ISO constants, one for the notice, one for the
+      // two policies). The spec reads `content.updated`, so a date change fails here only through
+      // the data module, never through a duplicated literal.
+      await expect(page.getByText(entry.content.updated)).toBeVisible()
     })
   }
 
