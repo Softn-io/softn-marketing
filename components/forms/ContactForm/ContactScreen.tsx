@@ -53,7 +53,7 @@ export const ContactScreen = ({ eyebrow, title, intro }: ContactScreenProps) => 
   const successSegments = sentTo === null ? [] : interpolateSegments(contact.success.body, { firstName: sentTo })
 
   return (
-    <div className={styles.screen}>
+    <div className={styles.screen} data-umami-block="contact">
       <p className="sr-only" role="status" aria-live="polite">
         {sentTo === null ? '' : contact.a11y.status.sent}
       </p>

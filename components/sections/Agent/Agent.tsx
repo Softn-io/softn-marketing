@@ -26,7 +26,9 @@ export const Agent = () => (
       <h2 id={HEADING_ID} className={`${styles.title} font-display text-display-md text-foreground sm:text-display-lg`}>
         {withAssistantName(agent.title)}
       </h2>
-      <AgentConversation />
+      <div data-umami-block="chatbot">
+        <AgentConversation />
+      </div>
     </div>
   </section>
 )

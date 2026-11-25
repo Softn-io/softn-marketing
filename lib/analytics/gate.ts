@@ -2,13 +2,14 @@
  * Consent gate: the only path a third-party loader takes to the page.
  *
  * Loaders register here and run only after the stored consent grants the audience category. The
- * registry is empty in this delivery: Umami is not plugged in yet, but the gate is real and tested.
- * No environment variable, CSP origin or script is added here.
+ * Umami loader is the registry's only entry today; the gate itself stays generic, and no environment
+ * variable, CSP origin or script is added here.
  *
  * Revocation contract: a refusal stops future loads. A third party that already ran stays loaded
  * for the rest of the page's life and is not re-run if consent is granted again; only a page load
- * removes it. Live unloading would need a teardown exposed by the loader. Loader failures are logged
- * with the loader name only, never with personal data.
+ * removes it. A loader may also honour the record at send time — the Umami loader does, through its
+ * `before-send` hook and its session guard — so a refusal can stop its activity immediately without
+ * a teardown. Loader failures are logged with the loader name only, never with personal data.
  */
 
 import { useEffect } from 'react'

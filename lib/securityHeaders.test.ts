@@ -4,6 +4,7 @@ import {
   buildSecurityHeaders,
   buildStaticContentSecurityPolicy,
   cspHashSourceOf,
+  HOME_FRAME_ANCESTORS,
 } from './securityHeaders'
 
 const directiveOf = (policy: string, name: string): string | undefined => {
@@ -30,6 +31,15 @@ describe('buildStaticContentSecurityPolicy', () => {
     expect(directiveOf(policy, 'form-action')).toBe("form-action 'self'")
     expect(directiveOf(policy, 'frame-ancestors')).toBe("frame-ancestors 'none'")
     expect(directiveOf(policy, 'upgrade-insecure-requests')).toBeDefined()
+  })
+
+  it('takes the frame-ancestors value the home page passes, and keeps none by default', () => {
+    const widened = buildStaticContentSecurityPolicy({ isDev: false, frameAncestors: HOME_FRAME_ANCESTORS })
+
+    expect(directiveOf(widened, 'frame-ancestors')).toBe(`frame-ancestors ${HOME_FRAME_ANCESTORS}`)
+    expect(directiveOf(buildStaticContentSecurityPolicy({ isDev: false }), 'frame-ancestors')).toBe(
+      "frame-ancestors 'none'",
+    )
   })
 
   it('allows no third-party origin', () => {
@@ -95,14 +105,39 @@ describe('buildNonceContentSecurityPolicy', () => {
 
 describe('buildSecurityHeaders', () => {
   const rules = buildSecurityHeaders({ isDev: false })
-  const [globalRule, manageRule, previewRule] = rules
+  const [globalRule, homeRule, manageRule, previewRule] = rules
   const valueOf = (key: string) => globalRule?.headers.find((header) => header.key === key)?.value
+  const cspOf = (rule: (typeof rules)[number] | undefined): string =>
+    rule?.headers.find((header) => header.key === 'Content-Security-Policy')?.value ?? ''
 
   it('applies the static CSP and the other security headers to every path', () => {
-    expect(rules).toHaveLength(3)
-    expect(buildSecurityHeaders({ isDev: true })).toHaveLength(3)
+    expect(rules).toHaveLength(4)
+    expect(buildSecurityHeaders({ isDev: true })).toHaveLength(4)
     expect(globalRule?.source).toBe('/:path*')
     expect(valueOf('Content-Security-Policy')).toBe(buildStaticContentSecurityPolicy({ isDev: false }))
+  })
+
+  it('widens frame-ancestors on the home page alone, without adding a third-party script or data origin', () => {
+    expect(homeRule?.source).toBe('/')
+    expect(homeRule?.headers.map(({ key }) => key)).toEqual(['Content-Security-Policy'])
+
+    const homePolicy = cspOf(homeRule)
+    expect(directiveOf(homePolicy, 'frame-ancestors')).toBe(`frame-ancestors ${HOME_FRAME_ANCESTORS}`)
+    expect(directiveOf(homePolicy, 'script-src')).not.toContain('umami.softn.io')
+    // No `connect-src` is declared: `default-src 'self'` is what governs the scripts' requests.
+    expect(directiveOf(homePolicy, 'connect-src')).toBeUndefined()
+    expect(directiveOf(homePolicy, 'default-src')).toBe("default-src 'self'")
+    expect(cspOf(globalRule)).not.toContain('umami.softn.io')
+  })
+
+  it('keeps frame-ancestors at none on every other path, including the nonce routes', () => {
+    expect(directiveOf(cspOf(globalRule), 'frame-ancestors')).toBe("frame-ancestors 'none'")
+    expect(
+      directiveOf(
+        buildNonceContentSecurityPolicy({ nonce: 'abc123', isDev: false, themeScriptHash: "'sha256-themehash'" }),
+        'frame-ancestors',
+      ),
+    ).toBe("frame-ancestors 'none'")
   })
 
   it('marks the preview route as noindex, and only the preview route', () => {
