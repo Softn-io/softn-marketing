@@ -12,7 +12,7 @@ const LEGAL_UPDATED_AT = '2026-11-30'
  * Publication date of the privacy and cookie policies, shared by both pages; the legal notice
  * keeps its own date ({@link LEGAL_UPDATED_AT}).
  */
-const POLICY_UPDATED_AT = '2026-11-25'
+const POLICY_UPDATED_AT = '2026-11-26'
 
 /** One ISO date written the French way, in UTC. */
 const formatUpdatedAt = (isoDate: string): string =>
