@@ -60,7 +60,7 @@ export const legal = {
       },
       transfers: {
         title: "Transferts hors de l'Union européenne",
-        body: "Les données sont principalement hébergées dans l'Union européenne. Certains prestataires sont établis hors de l'Union européenne (États-Unis) : Upstash, Vercel, Umami (hébergé sur Vercel), Google et Supabase. Le transfert est alors encadré par le Data Privacy Framework (UE–États-Unis) pour les entreprises certifiées ou par des clauses contractuelles types. Baserow est un prestataire européen, sans transfert hors de l'Union européenne. Mistral AI est un prestataire européen, sans transfert hors de l'Espace économique européen, à l'exception éventuelle de la Suisse, qui bénéficie d'une décision d'adéquation de la Commission européenne.",
+        body: "Les données sont principalement hébergées dans l'Union européenne. Certains prestataires sont établis hors de l'Union européenne (États-Unis) : Upstash, Vercel, Google et Supabase. Le transfert est alors encadré par le Data Privacy Framework (UE–États-Unis) pour les entreprises certifiées ou par des clauses contractuelles types. L'outil de mesure d'audience Umami est auto-hébergé sur Vercel, et ses données sont stockées chez Supabase. Baserow est un prestataire européen, sans transfert hors de l'Union européenne. Mistral AI est un prestataire européen, sans transfert hors de l'Espace économique européen, à l'exception éventuelle de la Suisse, qui bénéficie d'une décision d'adéquation de la Commission européenne.",
       },
       retention: {
         title: 'Durées de conservation',
@@ -92,7 +92,7 @@ export const legal = {
       technical:
         "À chaque visite : adresse IP et données techniques nécessaires au fonctionnement et à la sécurité du site (journaux d'hébergement). Pour limiter les abus, une version pseudonymisée de l'adresse IP et un compteur de requêtes sont conservés quelques minutes.",
       audience:
-        "Avec le consentement du visiteur : statistiques de navigation (pages consultées, type d'appareil et de navigateur) et, pour une partie des visites, données d'interaction : clics, défilement, mouvements de la souris et contenu de la page, enregistrés sous forme de cartes de chaleur et de replays. Les textes et les champs de saisie sont masqués ; l'assistant, la réservation et le formulaire de contact ne sont pas enregistrés. Ces mesures ne sont actives qu'après l'accord du visiteur.",
+        "Avec le consentement du visiteur : statistiques de navigation (pages consultées, type d'appareil et de navigateur, localisation approximative) et, pour une partie des visites, données d'interaction : clics, défilement, mouvements de la souris et contenu de la page, enregistrés sous forme de cartes de chaleur et de replays. Pour compter les sessions et estimer la localisation, l'adresse IP est traitée sous forme hachée ; elle n'est pas conservée. Les textes et les champs de saisie sont masqués ; l'assistant, la réservation et le formulaire de contact ne sont pas enregistrés. Ces mesures ne sont actives qu'après l'accord du visiteur.",
     },
     purposes: {
       booking:
@@ -187,7 +187,7 @@ export const legal = {
     audience: {
       body: "Avec le consentement du visiteur, le site utilise Umami pour mesurer son audience. Rien n'est chargé avant ce consentement. Deux scripts sont alors chargés depuis softn.io, sans cookie.",
       tracker:
-        'Le premier compte les visites et les pages consultées, pour comprendre quelles parties du site sont lues.',
+        "Le premier compte les visites et les pages consultées, pour comprendre quelles parties du site sont lues. Pour compter les sessions et estimer une localisation approximative, il traite l'adresse IP sous forme hachée, sans la conserver.",
       heatmaps:
         'Le second produit des cartes de chaleur : les clics et la profondeur de défilement sont regroupés par page, pour repérer ce qui est cliqué ou ignoré.',
       replays:
