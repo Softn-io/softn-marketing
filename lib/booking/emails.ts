@@ -1,7 +1,8 @@
 /*
  * Booking emails sent by Softn.io: the confirmation after a booking, the update after a reschedule,
  * the cancellation after a cancel, and the reminder sent by the scheduled job a day or so before the
- * call.
+ * call. The same three moments also send Softn an internal notification, addressed to the Workspace
+ * owner and built from the `owner` section of `locales/fr/bookingEmails.ts`.
  *
  * Google notifies nobody anymore (`sendUpdates=none`), so each of these moments sends its own
  * message through the Gmail API, from the Workspace alias of `lib/site.ts`. The first three carry
@@ -9,13 +10,17 @@
  * guest's calendar.
  *
  * Two rules hold everywhere below. All wording comes from `locales/fr/bookingEmails.ts` and
- * `locales/fr/bookingManage.ts`, filled through named parameters: no sentence is built here. And a
- * failure never reaches the visitor: a booking, a reschedule, a cancel or a reminder stands
+ * `locales/fr/bookingManage.ts`, filled through named parameters: no sentence is built here.
+ * And a failure never reaches the visitor: a booking, a reschedule, a cancel or a reminder stands
  * whatever the mail does, the caller only logs the non-personal code returned here, and the event is
- * marked so Mel can find the guest whose message never left.
+ * marked so Mel can find the guest whose message never left. An internal notification is never
+ * marked: those marks say a guest message never left, and a failed notification to Mel leaves the
+ * event's own content to read instead.
  */
 
 import { BOOKING_OPEN_QUERY_KEY, SECTION_IDS } from '@/lib/anchors'
+import { baserowLeadRowUrl } from '@/lib/baserow'
+import { readEnv } from '@/lib/env'
 import type { GoogleAuthStep } from '@/lib/google/auth'
 import { markBookingEmailFailed, storeBookingEmailSentAt, type BookingEmailKind } from '@/lib/google/calendar'
 import { sendGmailMessage } from '@/lib/google/gmail'
@@ -23,9 +28,11 @@ import { interpolate } from '@/lib/interpolate'
 import { BOOKING_SENDER_EMAIL, BOOKING_SENDER_NAME, SITE_URL } from '@/lib/site'
 import { bookingEmails } from '@/locales/fr/bookingEmails'
 import { bookingManage } from '@/locales/fr/bookingManage'
+import type { BookingCancelReason } from '@/schemas/bookingManageLimits'
 import type { BookingSlot } from './availability'
-import { bookingEventTitle } from './event'
+import { bookingEventTitle, type BookingLead } from './event'
 import { bookingInvitation, emailSequenceOf } from './ics'
+import { BOOKING_CANCEL_REASON_LABELS } from './lead'
 import { formatBookingDateLabel, formatBookingTimeLabel } from './labels'
 import { EMAIL_LINK_COLOR } from '@/lib/email/emailColors'
 import { htmlBody, type HtmlLink, mimeMessage } from '@/lib/email/mime'
@@ -678,5 +685,455 @@ export const sendBookingReminderEmail = async (input: SendBookingReminderEmailIn
     calendarFile: undefined,
     sentAt: input.sentAt ?? new Date(),
     subjectToken,
+  })
+}
+
+/** Recipient of an internal notification: the Workspace owner, or `undefined` when unset. */
+const ownerRecipient = (): string | undefined => {
+  try {
+    return readEnv().GOOGLE_CALENDAR_OWNER
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * One optional line of the owner copy, filled whole, or `undefined` when its value is absent.
+ *
+ * A blank or whitespace-only value counts as absent, exactly like `answerLine` in the event
+ * description: the validated copy never shows a label without a value, so the line drops instead,
+ * and the value travels trimmed like the answers the event and the Baserow row already carry.
+ */
+const ownerLine = (template: string, name: string, value: string | undefined): string | undefined =>
+  value === undefined || value.trim() === '' ? undefined : interpolate(template, { [name]: value.trim() })
+
+/**
+ * Drops from an owner body the lines whose value is absent.
+ *
+ * Every optional line of that copy stands alone on its line, as `{nameLine}`, and its value is the
+ * whole line, label included. An absent one leaves no trace: its line and its line break go, and a
+ * blank line directly above goes with it, so the body never widens the hole the line left. The lines
+ * that stay are filled by {@link interpolate} with the values of the caller.
+ *
+ * @param body Body of the copy, as the locale writes it.
+ * @param absent Names of the optional lines with no value.
+ * @returns The body without those lines.
+ */
+const withoutAbsentOwnerLines = (body: string, absent: ReadonlySet<string>): string => {
+  const kept: string[] = []
+  for (const line of body.split('\n')) {
+    const placeholder = /^\{(\w+)\}$/.exec(line)?.[1]
+    if (placeholder !== undefined && absent.has(placeholder)) {
+      if (kept[kept.length - 1] === '') kept.pop()
+      continue
+    }
+
+    kept.push(line)
+  }
+
+  return kept.join('\n')
+}
+
+/**
+ * The anchors of one owner HTML part: every address of the body, painted like the guest emails.
+ *
+ * The plain-text part keeps the raw addresses; the HTML part anchors them, under the address itself
+ * as its label, and gives each the service-email link colour so no mail client paints it with its
+ * own.
+ */
+const ownerLinks = (urls: readonly (string | undefined)[]): readonly HtmlLink[] =>
+  urls
+    .filter((url): url is string => url !== undefined && url.trim() !== '')
+    .map((url) => ({ url, label: url, style: `color:${EMAIL_LINK_COLOR}` }))
+
+/**
+ * HTML alternative of one internal notification, built from its filled body.
+ *
+ * The two blocks the guest emails dress apart are empty here: the copy carries no preview line — the
+ * subject already names the event, the guest and the slot — and no signature, so an empty string
+ * matches no block of the body.
+ */
+const ownerHtml = (text: string, links: readonly HtmlLink[]): string =>
+  htmlBody({ text, links, preheader: '', signature: '' })
+
+/** Arguments of {@link ownerNewBookingEmailContent}. */
+export type OwnerNewBookingEmailContentInput = {
+  /** Answers the visitor gave; each optional one becomes its own line when present. */
+  readonly lead: BookingLead
+  /** Slot that was booked. */
+  readonly slot: BookingSlot
+  /** Rules holding the call length and the time zone. */
+  readonly rules: BookingRules
+  /** Meet link of the created event. */
+  readonly meetLink: string
+  /** Address of the leads row in Baserow, absent when it cannot be built. */
+  readonly baserowLink: string | undefined
+}
+
+/**
+ * Internal notification of a new booking: subject and both bodies, or `null` when the slot cannot be
+ * rendered.
+ *
+ * The guest, the need and the Meet link always stand; the phone, the structure, the role and the
+ * Baserow link each drop their whole line when they have no value.
+ *
+ * @param input Answers, slot, rules, Meet link and row link.
+ * @returns The content to send, or `null` when the slot is unreadable.
+ */
+export const ownerNewBookingEmailContent = (input: OwnerNewBookingEmailContentInput): BookingEmailContent | null => {
+  const date = formatBookingDateLabel(input.slot.start, input.rules)
+  const time = formatBookingTimeLabel(input.slot.start, input.rules)
+  if (date === '' || time === '') return null
+
+  const phoneLine = ownerLine(bookingEmails.owner.phoneLine, 'phone', input.lead.phone)
+  const structureLine = ownerLine(bookingEmails.owner.structureLine, 'structure', input.lead.structure)
+  const roleLine = ownerLine(bookingEmails.owner.roleLine, 'role', input.lead.role)
+  const baserowLine = ownerLine(bookingEmails.owner.baserowLine, 'baserowLink', input.baserowLink)
+  const absent = new Set<string>()
+  if (phoneLine === undefined) absent.add('phoneLine')
+  if (structureLine === undefined) absent.add('structureLine')
+  if (roleLine === undefined) absent.add('roleLine')
+  if (baserowLine === undefined) absent.add('baserowLine')
+
+  const values = {
+    guestName: guestName(input.lead),
+    guestEmail: input.lead.email,
+    need: input.lead.need,
+    date,
+    time,
+    duration: durationValue(input.rules),
+    meetLink: input.meetLink,
+    phoneLine: phoneLine ?? '',
+    structureLine: structureLine ?? '',
+    roleLine: roleLine ?? '',
+    baserowLine: baserowLine ?? '',
+  }
+  const text = interpolate(withoutAbsentOwnerLines(bookingEmails.owner.newBooking.body, absent), values)
+
+  return {
+    subject: interpolate(bookingEmails.owner.newBooking.subject, values),
+    text,
+    html: ownerHtml(text, ownerLinks([input.meetLink, input.baserowLink])),
+  }
+}
+
+/** Arguments of {@link ownerRescheduleEmailContent}. */
+export type OwnerRescheduleEmailContentInput = {
+  /** Guest's full name, first name then last name. */
+  readonly guestName: string
+  /** Guest's address. */
+  readonly guestEmail: string
+  /** Start the event left. */
+  readonly previousStart: string
+  /** New slot the event holds. */
+  readonly slot: BookingSlot
+  /** Rules holding the call length and the time zone. */
+  readonly rules: BookingRules
+  /** Meet link of the event, unchanged by the patch. */
+  readonly meetLink: string
+  /** Address of the leads row in Baserow, absent when it cannot be built. */
+  readonly baserowLink: string | undefined
+}
+
+/**
+ * Internal notification of a reschedule: subject and both bodies, or `null` when a slot or the
+ * previous start cannot be rendered.
+ *
+ * The new slot comes first under `{date}` and `{time}`; the old one is spelled out above it, so
+ * the two are never confused. The Baserow link drops its whole line when it has no value.
+ *
+ * @param input Guest, previous start, new slot, rules, Meet link and row link.
+ * @returns The content to send, or `null` when a slot is unreadable.
+ */
+export const ownerRescheduleEmailContent = (input: OwnerRescheduleEmailContentInput): BookingEmailContent | null => {
+  const date = formatBookingDateLabel(input.slot.start, input.rules)
+  const time = formatBookingTimeLabel(input.slot.start, input.rules)
+  const previousDate = formatBookingDateLabel(input.previousStart, input.rules)
+  const previousTime = formatBookingTimeLabel(input.previousStart, input.rules)
+  if (date === '' || time === '' || previousDate === '' || previousTime === '') return null
+
+  const baserowLine = ownerLine(bookingEmails.owner.baserowLine, 'baserowLink', input.baserowLink)
+  const absent = new Set<string>()
+  if (baserowLine === undefined) absent.add('baserowLine')
+
+  const values = {
+    guestName: input.guestName,
+    guestEmail: input.guestEmail,
+    previousDate,
+    previousTime,
+    date,
+    time,
+    duration: durationValue(input.rules),
+    meetLink: input.meetLink,
+    baserowLine: baserowLine ?? '',
+  }
+  const text = interpolate(withoutAbsentOwnerLines(bookingEmails.owner.reschedule.body, absent), values)
+
+  return {
+    subject: interpolate(bookingEmails.owner.reschedule.subject, values),
+    text,
+    html: ownerHtml(text, ownerLinks([input.meetLink, input.baserowLink])),
+  }
+}
+
+/** Arguments of {@link ownerCancellationEmailContent}. */
+export type OwnerCancellationEmailContentInput = {
+  /** Guest's full name, first name then last name. */
+  readonly guestName: string
+  /** Guest's address. */
+  readonly guestEmail: string
+  /** Cancelled slot. */
+  readonly slot: BookingSlot
+  /** Rules holding the time zone. */
+  readonly rules: BookingRules
+  /** Code of the reason the visitor picked, absent when none was given. */
+  readonly reason: BookingCancelReason | undefined
+  /** Address of the leads row in Baserow, absent when it cannot be built. */
+  readonly baserowLink: string | undefined
+}
+
+/**
+ * Internal notification of a cancellation: subject and both bodies, or `null` when the slot cannot
+ * be rendered.
+ *
+ * The reason line carries the label of the chip the visitor picked, never free text, and drops its
+ * whole line when no reason was given; the Baserow link does the same.
+ *
+ * @param input Guest, cancelled slot, rules, reason and row link.
+ * @returns The content to send, or `null` when the slot is unreadable.
+ */
+export const ownerCancellationEmailContent = (
+  input: OwnerCancellationEmailContentInput,
+): BookingEmailContent | null => {
+  const date = formatBookingDateLabel(input.slot.start, input.rules)
+  const time = formatBookingTimeLabel(input.slot.start, input.rules)
+  if (date === '' || time === '') return null
+
+  const reasonLabel = input.reason === undefined ? undefined : BOOKING_CANCEL_REASON_LABELS[input.reason]
+  const reasonLine = ownerLine(bookingEmails.owner.reasonLine, 'reasonLabel', reasonLabel)
+  const baserowLine = ownerLine(bookingEmails.owner.baserowLine, 'baserowLink', input.baserowLink)
+  const absent = new Set<string>()
+  if (reasonLine === undefined) absent.add('reasonLine')
+  if (baserowLine === undefined) absent.add('baserowLine')
+
+  const values = {
+    guestName: input.guestName,
+    guestEmail: input.guestEmail,
+    date,
+    time,
+    reasonLine: reasonLine ?? '',
+    baserowLine: baserowLine ?? '',
+  }
+  const text = interpolate(withoutAbsentOwnerLines(bookingEmails.owner.cancellation.body, absent), values)
+
+  return {
+    subject: interpolate(bookingEmails.owner.cancellation.subject, values),
+    text,
+    html: ownerHtml(text, ownerLinks([input.baserowLink])),
+  }
+}
+
+/** One internal notification, as the shared send path below takes it. */
+type ComposedOwnerEmail = {
+  readonly to: string
+  /**
+   * Builds the content at send time, inside the send path's own `try`: a copy that cannot be filled
+   * answers `null` or throws, and neither ever reaches the caller.
+   */
+  readonly build: () => BookingEmailContent | null
+  readonly sentAt: Date
+  readonly subjectToken: string | undefined
+}
+
+/**
+ * Sends one internal notification from the booking alias to the Workspace owner.
+ *
+ * The message carries the two bodies and no calendar file, and it never marks the event: the marks
+ * of the calendar say a guest's message never left, which is not what a failed notification to Mel
+ * means — the event's own description already holds the answers.
+ *
+ * Everything that can fail sits inside one `try`: the content build (a copy edit that leaves a
+ * placeholder unanswered throws in `interpolate`), the MIME message and the send call. A build
+ * answering `null` means the slot cannot be rendered, and anything thrown, whatever the stage, comes
+ * back as `compose failed`; both are non-personal codes the caller logs, so no composing failure can
+ * reject after the booking or the management action was already written. A Gmail failure keeps its
+ * own code, the same the guest emails log.
+ */
+const sendOwnerNotification = async ({
+  to,
+  build,
+  sentAt,
+  subjectToken,
+}: ComposedOwnerEmail): Promise<BookingEmailOutcome> => {
+  try {
+    const content = build()
+    if (content === null) return { ok: false, detail: 'compose slot-unreadable' }
+
+    const message = mimeMessage({
+      from: { name: BOOKING_SENDER_NAME, address: BOOKING_SENDER_EMAIL },
+      replyTo: BOOKING_SENDER_EMAIL,
+      to,
+      sentAt,
+      subject: content.subject,
+      text: content.text,
+      html: content.html,
+    })
+
+    const sent = await sendGmailMessage({ message, subjectToken })
+    return sent.ok ? { ok: true } : { ok: false, detail: failureDetail('gmail', sent) }
+  } catch {
+    return { ok: false, detail: 'compose failed' }
+  }
+}
+
+/** Arguments of {@link sendBookingOwnerNewBookingEmail}. */
+export type SendBookingOwnerNewBookingEmailInput = {
+  /** Answers the visitor gave. */
+  readonly lead: BookingLead
+  /** Slot that was booked. */
+  readonly slot: BookingSlot
+  /** Rules holding the call length, the notice and the time zone. */
+  readonly rules: BookingRules
+  /** Meet link of the created event; absent, no notification is sent. */
+  readonly meetLink: string | undefined
+  /** Id of the leads row, absent when Baserow stored none; without it, no link line. */
+  readonly baserowRowId: number | string | undefined
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  readonly subjectToken: string | undefined
+  /** Instant the message is written at. Defaults to now; a test passes its own clock. */
+  readonly sentAt?: Date
+}
+
+/**
+ * Sends the internal notification of a new booking, addressed to the Workspace owner.
+ *
+ * @param input Answers, slot, Meet link, row id, rules and token.
+ * @returns `{ ok: true }` when the message left, or the code the caller logs.
+ */
+export const sendBookingOwnerNewBookingEmail = async (
+  input: SendBookingOwnerNewBookingEmailInput,
+): Promise<BookingEmailOutcome> => {
+  const recipient = ownerRecipient()
+  if (recipient === undefined) return { ok: false, detail: 'compose recipient-missing' }
+
+  const meetLink = input.meetLink
+  if (meetLink === undefined || meetLink.trim() === '') return { ok: false, detail: 'compose meet-link-missing' }
+
+  return sendOwnerNotification({
+    to: recipient,
+    build: () =>
+      ownerNewBookingEmailContent({
+        lead: input.lead,
+        slot: input.slot,
+        rules: input.rules,
+        meetLink,
+        baserowLink: baserowLeadRowUrl(input.baserowRowId),
+      }),
+    sentAt: input.sentAt ?? new Date(),
+    subjectToken: input.subjectToken,
+  })
+}
+
+/** Arguments of {@link sendBookingOwnerRescheduleEmail}. */
+export type SendBookingOwnerRescheduleEmailInput = {
+  /** The event, as the route holds it after the patch it notifies about. */
+  readonly event: BookingEmailEvent
+  /** New slot the event holds. */
+  readonly slot: BookingSlot
+  /** Start the event left. */
+  readonly previousStart: string
+  /** Rules holding the call length, the notice and the time zone. */
+  readonly rules: BookingRules
+  /** Meet link of the event; absent, no notification is sent. */
+  readonly meetLink: string | undefined
+  /** Id of the leads row, as the event carries it; without it, no link line. */
+  readonly baserowRowId: number | string | undefined
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  readonly subjectToken: string | undefined
+  /** Instant the message is written at. Defaults to now; a test passes its own clock. */
+  readonly sentAt?: Date
+}
+
+/**
+ * Sends the internal notification of a reschedule, addressed to the Workspace owner.
+ *
+ * @param input Event, new slot, previous start, links, row id and rules.
+ * @returns `{ ok: true }` when the message left, or the code the caller logs.
+ */
+export const sendBookingOwnerRescheduleEmail = async (
+  input: SendBookingOwnerRescheduleEmailInput,
+): Promise<BookingEmailOutcome> => {
+  const recipient = ownerRecipient()
+  if (recipient === undefined) return { ok: false, detail: 'compose recipient-missing' }
+
+  const guest = guestOf(input.event)
+  if (guest === null) return { ok: false, detail: 'compose guest-missing' }
+
+  const meetLink = input.meetLink
+  if (meetLink === undefined || meetLink.trim() === '') return { ok: false, detail: 'compose meet-link-missing' }
+
+  return sendOwnerNotification({
+    to: recipient,
+    build: () =>
+      ownerRescheduleEmailContent({
+        guestName: guestName(guest),
+        guestEmail: guest.email,
+        previousStart: input.previousStart,
+        slot: input.slot,
+        rules: input.rules,
+        meetLink,
+        baserowLink: baserowLeadRowUrl(input.baserowRowId),
+      }),
+    sentAt: input.sentAt ?? new Date(),
+    subjectToken: input.subjectToken,
+  })
+}
+
+/** Arguments of {@link sendBookingOwnerCancellationEmail}. */
+export type SendBookingOwnerCancellationEmailInput = {
+  /** The event, as the route holds it before the deletion it notifies about. */
+  readonly event: BookingEmailEvent
+  /** Cancelled slot. */
+  readonly slot: BookingSlot
+  /** Rules holding the time zone. */
+  readonly rules: BookingRules
+  /** Code of the reason the visitor picked, absent when none was given. */
+  readonly reason: BookingCancelReason | undefined
+  /** Id of the leads row, as the event carries it; without it, no link line. */
+  readonly baserowRowId: number | string | undefined
+  /** Subject token of the current request, from {@link readSubjectToken}. */
+  readonly subjectToken: string | undefined
+  /** Instant the message is written at. Defaults to now; a test passes its own clock. */
+  readonly sentAt?: Date
+}
+
+/**
+ * Sends the internal notification of a cancellation, addressed to the Workspace owner.
+ *
+ * @param input Event, cancelled slot, reason, row id and rules.
+ * @returns `{ ok: true }` when the message left, or the code the caller logs.
+ */
+export const sendBookingOwnerCancellationEmail = async (
+  input: SendBookingOwnerCancellationEmailInput,
+): Promise<BookingEmailOutcome> => {
+  const recipient = ownerRecipient()
+  if (recipient === undefined) return { ok: false, detail: 'compose recipient-missing' }
+
+  const guest = guestOf(input.event)
+  if (guest === null) return { ok: false, detail: 'compose guest-missing' }
+
+  return sendOwnerNotification({
+    to: recipient,
+    build: () =>
+      ownerCancellationEmailContent({
+        guestName: guestName(guest),
+        guestEmail: guest.email,
+        slot: input.slot,
+        rules: input.rules,
+        reason: input.reason,
+        baserowLink: baserowLeadRowUrl(input.baserowRowId),
+      }),
+    sentAt: input.sentAt ?? new Date(),
+    subjectToken: input.subjectToken,
   })
 }

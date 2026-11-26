@@ -26,6 +26,20 @@ const baserowApiUrl = z.preprocess(
 )
 
 /**
+ * Address of a Baserow view of the leads table, used to link the internal booking notifications to
+ * the row of the lead (`<view URL>/row/<row id>`). Only https is accepted, and the value is
+ * normalised (canonical URL, no trailing slash) so the helper can append its path. Optional: unset,
+ * the notifications simply carry no link line. Server-side only, never `NEXT_PUBLIC_`.
+ */
+const baserowLeadsViewUrl = z.preprocess(
+  blankToUndefined,
+  z
+    .url({ protocol: /^https$/, normalize: true, error: 'BASEROW_LEADS_VIEW_URL must be an https URL' })
+    .transform((value) => value.replace(/\/+$/, ''))
+    .optional(),
+)
+
+/**
  * Upstash Redis REST base URL, the durable store of the assistant rate limit. Only https is
  * accepted because the token travels to that host, and the value is normalised (canonical URL, no
  * trailing slash) so the helper can append its path. Unset by default: development and test then
@@ -143,7 +157,10 @@ const altchaHmacKey = z.preprocess(blankToUndefined, z.string().min(32).optional
  * `GOOGLE_CALENDAR_ID`, `GCP_PROJECT_NUMBER`, `GCP_WORKLOAD_IDENTITY_POOL_ID`
  * and `GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID` let the server reach the
  * calendar through Workload Identity Federation, and `BASEROW_LEADS_TABLE_ID`
- * says where the lead is stored. The owner is the user the service account
+ * says where the lead is stored. `BASEROW_LEADS_VIEW_URL` is the optional
+ * address of a view of that leads table, which the internal booking
+ * notifications link to (`<view URL>/row/<row id>`): unset, they carry no such
+ * link. The owner is the user the service account
  * impersonates; the calendar id says where the events are written, so a
  * dedicated secondary calendar can hold the bookings. `GOOGLE_PERSONAL_CALENDAR_ID`
  * is Mel's personal calendar, shared with the Workspace owner as "See only
@@ -171,6 +188,7 @@ const EnvSchema = z.object({
   BASEROW_TOKEN: optionalString,
   BASEROW_WAITLIST_TABLE_ID: optionalString,
   BASEROW_LEADS_TABLE_ID: optionalString,
+  BASEROW_LEADS_VIEW_URL: baserowLeadsViewUrl,
   MISTRAL_API_KEY: optionalString,
   UPSTASH_REDIS_REST_URL: upstashRedisRestUrl,
   UPSTASH_REDIS_REST_TOKEN: optionalString,

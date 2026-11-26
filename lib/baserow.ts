@@ -268,3 +268,32 @@ export const updateBaserowRow = async ({ tableId, rowId, fields }: UpdateBaserow
     fields,
   })
 }
+
+/**
+ * Address of one leads row in the Baserow view Mel reads, or `undefined` when it cannot be built.
+ *
+ * The view URL comes from the server environment (`BASEROW_LEADS_VIEW_URL`, never sent to the
+ * browser): Baserow addresses the row of a view by appending `/row/<row id>` to the view's own
+ * address. Only a plain numeric id is accepted, so a value read back from a calendar property can
+ * never bend the link; a deployment without the variable, or a caller without a usable id, answers
+ * `undefined` and the notification omits its line entirely.
+ *
+ * @param rowId Id of the row, as Baserow gave it, or absent when no row was stored.
+ * @returns The absolute row address, or `undefined` when there is nothing to link to.
+ */
+export const baserowLeadRowUrl = (rowId: number | string | undefined): string | undefined => {
+  if (rowId === undefined) return undefined
+
+  const id = String(rowId)
+  if (!/^\d+$/.test(id)) return undefined
+
+  let viewUrl: string | undefined
+  try {
+    viewUrl = readEnv().BASEROW_LEADS_VIEW_URL
+  } catch {
+    viewUrl = undefined
+  }
+  if (viewUrl === undefined) return undefined
+
+  return `${viewUrl}/row/${id}`
+}

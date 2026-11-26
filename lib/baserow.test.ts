@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createBaserowRow, updateBaserowRow } from './baserow'
+import { baserowLeadRowUrl, createBaserowRow, updateBaserowRow } from './baserow'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -359,5 +359,39 @@ describe('createBaserowRow with verifyFields', () => {
       error: 'schema-mismatch',
       rowId: 42,
     })
+  })
+})
+
+describe('baserowLeadRowUrl', () => {
+  it('appends the row path to the view URL of the server environment', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'https://baserow.io/database/1/table/2/3')
+
+    // Baserow addresses a row of a view by appending `/row/<row id>` to the view's own address.
+    expect(baserowLeadRowUrl(42)).toBe('https://baserow.io/database/1/table/2/3/row/42')
+    expect(baserowLeadRowUrl('7')).toBe('https://baserow.io/database/1/table/2/3/row/7')
+  })
+
+  it('answers no link without a view URL or without a row id', () => {
+    expect(baserowLeadRowUrl(42)).toBeUndefined()
+
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'https://baserow.io/database/1/table/2/3')
+    expect(baserowLeadRowUrl(undefined)).toBeUndefined()
+  })
+
+  it('answers no link for an id that is not a plain number of digits', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'https://baserow.io/database/1/table/2/3')
+
+    // Only `/^\d+$/` ids pass: a value read back from a calendar property can never bend the link.
+    for (const rowId of ['7/../9', '42?x=1', ' 42', '42 ', '-1', '4.2', 'abc', '']) {
+      expect(baserowLeadRowUrl(rowId)).toBeUndefined()
+    }
+    expect(baserowLeadRowUrl(4.2)).toBeUndefined()
+    expect(baserowLeadRowUrl(Number.NaN)).toBeUndefined()
+  })
+
+  it('answers no link when the environment is invalid, without throwing', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'http://baserow.io/database/1/table/2/3')
+
+    expect(baserowLeadRowUrl(42)).toBeUndefined()
   })
 })

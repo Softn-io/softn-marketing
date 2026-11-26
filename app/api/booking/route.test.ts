@@ -20,14 +20,38 @@ const rateLimitMock = vi.hoisted(() => ({
   ASSISTANT_RATE_LIMIT_POLICY: { keyPrefix: 'assistant:rl:', windowMs: 60_000, maxRequests: 10 },
 }))
 
-const emailMock = vi.hoisted(() => ({ sendBookingConfirmationEmail: vi.fn() }))
+const emailMock = vi.hoisted(() => ({
+  sendBookingConfirmationEmail: vi.fn(),
+  sendBookingOwnerNewBookingEmail: vi.fn(),
+}))
+
+/**
+ * `after` of `next/server`, which needs a request scope the unit test does not have: the callback is
+ * recorded here and {@link runAfterCallbacks} runs it, exactly as Next.js does once the answer has
+ * left.
+ */
+const afterMock = vi.hoisted(() => {
+  const callbacks: Array<() => void | Promise<void>> = []
+  return {
+    callbacks,
+    schedule: (callback: () => void | Promise<void>): void => {
+      callbacks.push(callback)
+    },
+  }
+})
 
 vi.mock('@/lib/google/calendar', () => calendarMock)
 vi.mock('@/lib/baserow', () => baserowMock)
 vi.mock('@/lib/rateLimit', () => rateLimitMock)
 vi.mock('@/lib/booking/emails', () => emailMock)
+vi.mock('next/server', () => ({ after: afterMock.schedule }))
 
 let errorSpy: MockInstance
+
+/** Runs the callbacks `after` registered, as Next.js does once the response has left. */
+const runAfterCallbacks = async (): Promise<void> => {
+  for (const callback of afterMock.callbacks.splice(0)) await callback()
+}
 
 /** First slot the rules offer from the current instant: always inside notice and horizon. */
 const freeSlot = (): { start: string; end: string } => {
@@ -93,6 +117,9 @@ beforeEach(() => {
   rateLimitMock.trustedClientIp.mockReturnValue('test-client')
   emailMock.sendBookingConfirmationEmail.mockReset()
   emailMock.sendBookingConfirmationEmail.mockResolvedValue({ ok: true })
+  emailMock.sendBookingOwnerNewBookingEmail.mockReset()
+  emailMock.sendBookingOwnerNewBookingEmail.mockResolvedValue({ ok: true })
+  afterMock.callbacks.length = 0
 })
 
 afterEach(() => {
@@ -311,6 +338,49 @@ describe('POST /api/booking order', () => {
     expect(emailInput.slot).toEqual(slot)
     expect(emailInput.meetLink).toBe('https://meet.google.com/abc-defg-hij')
     expect(emailInput.manageLink.startsWith('http://localhost/rendez-vous/')).toBe(true)
+
+    // The internal notification to Mel is scheduled after the answer, from the same answers, the
+    // Meet link and the id of the row Baserow just stored.
+    expect(emailMock.sendBookingOwnerNewBookingEmail).not.toHaveBeenCalled()
+    await runAfterCallbacks()
+    expect(emailMock.sendBookingOwnerNewBookingEmail).toHaveBeenCalledTimes(1)
+    expect(emailMock.sendBookingOwnerNewBookingEmail).toHaveBeenCalledWith({
+      lead: {
+        need: 'Automatiser mes devis',
+        firstName: 'Marie',
+        lastName: 'Dupont',
+        email: 'marie@example.fr',
+        consentAt: expect.any(String),
+      },
+      slot,
+      rules: BOOKING_RULES,
+      meetLink: 'https://meet.google.com/abc-defg-hij',
+      baserowRowId: 7,
+      subjectToken: undefined,
+    })
+  })
+
+  it('keeps the booking when only the owner notification cannot leave, logging one non-personal code', async () => {
+    emailMock.sendBookingOwnerNewBookingEmail.mockResolvedValue({
+      ok: false,
+      detail: 'gmail request-failed status=502',
+    })
+
+    const response = await POST(request(bookingBody()))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ booked: true })
+    // The answer left before the notification ran; its failure is logged once, afterwards.
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    await runAfterCallbacks()
+
+    expect(errorSpy).toHaveBeenCalledWith('[booking] owner email not sent: gmail request-failed status=502')
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of ['Marie', 'Dupont', 'marie@example.fr', 'Automatiser']) {
+      expect(logged).not.toContain(personal)
+    }
   })
 
   it('keeps the booking when the confirmation cannot leave, and logs non-personal codes', async () => {
@@ -426,6 +496,8 @@ describe('POST /api/booking order', () => {
     expect(await response.json()).toEqual({ error: 'slot-taken' })
     expect(calendarMock.insertBookingEvent).not.toHaveBeenCalled()
     expect(baserowMock.createBaserowRow).not.toHaveBeenCalled()
+    // No booking was written, so no owner notification is scheduled either.
+    expect(afterMock.callbacks).toHaveLength(0)
   })
 
   it('stores nothing when the calendar refuses the event', async () => {
@@ -437,6 +509,8 @@ describe('POST /api/booking order', () => {
     expect(await response.json()).toEqual({ error: 'unavailable' })
     expect(baserowMock.createBaserowRow).not.toHaveBeenCalled()
     expect(errorSpy).toHaveBeenCalledWith('[booking] calendar unavailable: events insert request-failed')
+    // The same holds on the calendar failure: nothing was booked, nothing is announced.
+    expect(afterMock.callbacks).toHaveLength(0)
   })
 
   it('answers a lost race on the event id as a taken slot', async () => {
@@ -482,6 +556,13 @@ describe('POST /api/booking order', () => {
       eventId: 'softnabc',
       subjectToken: undefined,
     })
+
+    // With no stored row there is no id to link: the notification carries none.
+    await runAfterCallbacks()
+    const notification = emailMock.sendBookingOwnerNewBookingEmail.mock.calls[0]?.[0] as {
+      baserowRowId: unknown
+    }
+    expect(notification.baserowRowId).toBeUndefined()
   })
 
   it('keeps the booking when the leads table is not configured', async () => {
@@ -598,6 +679,13 @@ describe('POST /api/booking schema-mismatch', () => {
       rowId: 42,
       subjectToken: undefined,
     })
+
+    // The row exists, so its id reaches the notification too.
+    await runAfterCallbacks()
+    const notification = emailMock.sendBookingOwnerNewBookingEmail.mock.calls[0]?.[0] as {
+      baserowRowId: unknown
+    }
+    expect(notification.baserowRowId).toBe(42)
 
     // The booking stands and its confirmation is sent as usual.
     expect(emailMock.sendBookingConfirmationEmail).toHaveBeenCalledTimes(1)

@@ -9,14 +9,16 @@
  * a stage and a code and nothing else: never a name, an address, a slot or an upstream body.
  *
  * Google notifies no guest anymore (`sendUpdates=none`): each action then sends Softn's own email,
- * with the calendar file that follows the change. A failed email leaves a code and a mark on the
- * event and never changes the visitor's answer.
+ * with the calendar file that follows the change, and an internal notification of the same action to
+ * the Workspace owner, scheduled after the answer (`after`). A failed email leaves a code and a mark
+ * on the event and never changes the visitor's answer; a failed notification only leaves a code.
  *
  * The timing rules are read from the event's real start as the calendar holds it, never from the
  * token's expiry: an older link must not get around the reschedule notice after Mel moved the event
  * by hand.
  */
 
+import { after } from 'next/server'
 import { ASSISTANT_RATE_LIMIT_POLICY, checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/rateLimit'
 import { updateBaserowRow, type BaserowFailure, type BaserowFields } from '@/lib/baserow'
 import {
@@ -34,6 +36,8 @@ import {
 } from '@/lib/booking/event'
 import {
   sendBookingCancellationEmail,
+  sendBookingOwnerCancellationEmail,
+  sendBookingOwnerRescheduleEmail,
   sendBookingUpdateEmail,
   type BookingEmailEvent,
   type BookingEmailOutcome,
@@ -171,6 +175,16 @@ const logEmailOutcome = (outcome: BookingEmailOutcome): void => {
 
   logFailure(`email not sent: ${outcome.detail}`)
   if (outcome.markDetail !== undefined) logFailure(`email mark not stored: ${outcome.markDetail}`)
+}
+
+/**
+ * Logs the outcome of one internal notification, without ever touching the visitor's answer.
+ *
+ * The notification carries no event mark — the marks of the calendar say a guest's message never
+ * left — so a failure leaves the single non-personal code it returned.
+ */
+const logOwnerEmailOutcome = (outcome: BookingEmailOutcome): void => {
+  if (!outcome.ok) logFailure(`owner email not sent: ${outcome.detail}`)
 }
 
 /** Arguments of {@link freeSlotsForReschedule}. */
@@ -343,6 +357,23 @@ const reschedule = async ({ event, slotStart, origin, now, subjectToken }: Resch
     }),
   )
 
+  // Mel also reads a notification of the move, from the same event and slot; its row link comes from
+  // the id the event carries. It is scheduled after the answer: the visitor never waits for it, and a
+  // failure only leaves one non-personal code.
+  after(async () => {
+    logOwnerEmailOutcome(
+      await sendBookingOwnerRescheduleEmail({
+        event: emailEventOf(event),
+        slot,
+        previousStart: own.start,
+        rules: BOOKING_RULES,
+        meetLink: event.hangoutLink,
+        baserowRowId: event.leadRowId,
+        subjectToken,
+      }),
+    )
+  })
+
   return json({ rescheduled: true }, 200)
 }
 
@@ -390,6 +421,22 @@ const cancel = async ({ event, own, reason, subjectToken }: CancelInput): Promis
       subjectToken,
     }),
   )
+
+  // Mel also reads a notification of the cancellation, with the label of the reason when the visitor
+  // gave one; the row link comes from the id the event carries. Scheduled after the answer, for the
+  // same reason as the move.
+  after(async () => {
+    logOwnerEmailOutcome(
+      await sendBookingOwnerCancellationEmail({
+        event: emailEventOf(event),
+        slot: { start: own.start, end: own.end },
+        reason,
+        rules: BOOKING_RULES,
+        baserowRowId: event.leadRowId,
+        subjectToken,
+      }),
+    )
+  })
 
   return json({ cancelled: true }, 200)
 }
