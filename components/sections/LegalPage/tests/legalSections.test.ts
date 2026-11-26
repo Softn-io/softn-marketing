@@ -41,6 +41,31 @@ describe('legalSections', () => {
     expect(legal.privacy.purposes.call).toContain('désactivée, en répondant')
   })
 
+  it('privacy: the transfers section no longer lists Umami as a US provider', () => {
+    const transfers = privacyContent.sections.find(
+      (section) => section.title === legal.privacy.sections.transfers.title,
+    )
+    expect(transfers?.paragraphs).toEqual([legal.privacy.sections.transfers.body])
+    // The US list keeps only the established providers; Umami is self-hosted software on Vercel
+    // and its data live in Supabase, so both stay covered by the Vercel and Supabase DPAs.
+    expect(legal.privacy.sections.transfers.body).toContain('(États-Unis) : Upstash, Vercel, Google et Supabase.')
+    expect(legal.privacy.sections.transfers.body).not.toContain('Umami (hébergé sur Vercel)')
+    expect(legal.privacy.sections.transfers.body).toContain(
+      "L'outil de mesure d'audience Umami est auto-hébergé sur Vercel, et ses données sont stockées chez Supabase.",
+    )
+  })
+
+  it('privacy and cookies: the audience copy discloses the hashed-IP processing', () => {
+    // The collected-data paragraph and the cookie tracker paragraph both state the same behaviour:
+    // the IP is processed hashed to count sessions and estimate an approximate location, never kept.
+    expect(legal.privacy.collected.audience).toContain(
+      "l'adresse IP est traitée sous forme hachée ; elle n'est pas conservée",
+    )
+    expect(legal.privacy.collected.audience).toContain('localisation approximative')
+    expect(legal.cookies.audience.tracker).toContain("il traite l'adresse IP sous forme hachée, sans la conserver")
+    expect(legal.cookies.audience.tracker).toContain('localisation approximative')
+  })
+
   it('privacy: the service e-mails section discloses the internal notification of the booking moments', () => {
     const emails = privacyContent.sections.find((section) => section.title === legal.privacy.sections.emails.title)
     expect(emails?.paragraphs).toContain(legal.privacy.emails.body)
