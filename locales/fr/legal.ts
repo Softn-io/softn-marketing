@@ -97,7 +97,7 @@ export const legal = {
     purposes: {
       booking:
         "Organiser l'échange découverte, envoyer les e-mails de service liés au rendez-vous (confirmation, mise à jour, annulation et rappel), préparer le plan d'action, et permettre à la personne de déplacer ou d'annuler son rendez-vous, le créneau et le statut de la demande étant alors mis à jour. Base légale : consentement de la personne, recueilli avant toute saisie dans l'assistant.",
-      call: "Préparer le plan d'action remis à la suite de l'échange découverte : la transcription et le résumé ne servent qu'à cela. Base légale : intérêt légitime (préparer le plan d'action demandé par la personne). La personne est informée au début de l'échange et peut demander que la transcription soit désactivée : elle exerce alors son droit d'opposition.",
+      call: "Préparer le plan d'action remis à la suite de l'échange découverte : la transcription et le résumé ne servent qu'à cela. Base légale : intérêt légitime (préparer le plan d'action demandé par la personne). La personne en est informée par écrit dans les e-mails de réservation (confirmation, mise à jour et rappel), puis au début de l'échange. Elle peut demander que la transcription soit désactivée, en répondant à l'un de ces e-mails ou à l'oral : elle exerce alors son droit d'opposition.",
       contact:
         'Répondre aux messages envoyés par le formulaire de contact. Base légale : consentement de la personne, recueilli par la case à cocher du formulaire.',
       waitlist:

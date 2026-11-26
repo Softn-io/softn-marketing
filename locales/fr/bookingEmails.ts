@@ -48,6 +48,8 @@ Vous trouverez en pièce jointe l'invitation à ajouter à votre agenda. Si elle
 
 Un empêchement ? Vous pouvez déplacer ou annuler ce rendez-vous en ligne, jusqu'à {rescheduleNoticeHours} h avant l'appel : {manageLink}
 
+Pour préparer votre plan d'action, Gemini (Google Workspace) peut transcrire et résumer notre échange : il n'est enregistré ni en vidéo ni en son, et la transcription ne sert qu'à cela. Si vous préférez la désactiver, répondez simplement à cet e-mail ou dites-le-moi au début de l'appel.
+
 Si vous avez une question avant notre échange, répondez simplement à cet e-mail.
 
 À bientôt,
@@ -76,6 +78,8 @@ Il remplace le créneau initialement prévu le {previousDate} à {previousTime}.
 L'invitation mise à jour est en pièce jointe : en l'ouvrant, elle remplace l'ancien rendez-vous dans votre agenda.
 
 Un nouvel empêchement ? Vous pouvez encore déplacer ou annuler ce rendez-vous en ligne, jusqu'à {rescheduleNoticeHours} h avant l'appel : {manageLink}
+
+Pour préparer votre plan d'action, Gemini (Google Workspace) peut transcrire et résumer notre échange : il n'est enregistré ni en vidéo ni en son, et la transcription ne sert qu'à cela. Si vous préférez la désactiver, répondez simplement à cet e-mail ou dites-le-moi au début de l'appel.
 
 À bientôt,
 
@@ -129,6 +133,8 @@ Durée : {duration}, en visio
 Lien de connexion : {meetLink}
 
 Un empêchement ? Vous pouvez encore déplacer ce rendez-vous en ligne jusqu'à {rescheduleNoticeHours} h avant l'appel, ou l'annuler : {manageLink}
+
+Pour préparer votre plan d'action, Gemini (Google Workspace) peut transcrire et résumer notre échange : il n'est enregistré ni en vidéo ni en son, et la transcription ne sert qu'à cela. Si vous préférez la désactiver, répondez simplement à cet e-mail ou dites-le-moi au début de l'appel.
 
 À très vite,
 

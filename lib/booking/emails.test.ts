@@ -611,6 +611,37 @@ describe('rendered copy of the four booking emails', () => {
     })
   }
 
+  /**
+   * The Gemini transcript notice, read from the validated confirmation copy: the assertions below
+   * test the paragraph the locale carries, never a hand-copied string.
+   */
+  const transcriptNotice = (): string => {
+    const line = bookingEmails.confirmation.body.split('\n').find((line) => line.includes('Gemini'))
+    if (line === undefined) throw new Error('the confirmation copy carries no Gemini transcript notice')
+    return line
+  }
+
+  for (const kind of ['confirmation', 'update', 'reminder'] as const) {
+    it(`the ${kind} tells the guest about the Gemini transcription, in the text and the HTML parts`, () => {
+      const content = contentOf(kind)
+      const notice = transcriptNotice()
+
+      // The same validated paragraph the confirmation copy carries, in the locale and in both parts.
+      expect(bookingEmails[kind].body).toContain(notice)
+      expect(content.text).toContain(notice)
+      expect(content.html).toContain(`<p>${escaped(notice)}</p>`)
+    })
+  }
+
+  it('the cancellation, with no call left, stays silent about the Gemini transcription', () => {
+    const content = contentOf('cancellation')
+    const notice = transcriptNotice()
+
+    expect(bookingEmails.cancellation.body).not.toContain('Gemini')
+    expect(content.text).not.toContain(notice)
+    expect(content.html).not.toContain(escaped(notice))
+  })
+
   it('renders the rebooking link of the cancellation behind its validated label', () => {
     const content = cancellationEmailContent({ firstName: 'Camille', slot: SLOT, rules: BOOKING_RULES })
     if (content === null) throw new Error('the cancellation content must build')
