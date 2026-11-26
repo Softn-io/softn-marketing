@@ -8,9 +8,15 @@ import {
   confirmationEmailContent,
   cancellationEmailContent,
   invitationDescription,
+  ownerCancellationEmailContent,
+  ownerNewBookingEmailContent,
+  ownerRescheduleEmailContent,
   reminderEmailContent,
   sendBookingCancellationEmail,
   sendBookingConfirmationEmail,
+  sendBookingOwnerCancellationEmail,
+  sendBookingOwnerNewBookingEmail,
+  sendBookingOwnerRescheduleEmail,
   sendBookingReminderEmail,
   sendBookingUpdateEmail,
   updateEmailContent,
@@ -24,8 +30,24 @@ const calendarMock = vi.hoisted(() => ({
   storeBookingEmailSentAt: vi.fn(),
 }))
 
+/**
+ * The real `interpolate`, plus a switch a test flips to simulate a copy edit that leaves a
+ * placeholder unanswered. Only that one test turns it on; every other call delegates to the real
+ * implementation, so the copy assertions below still read the shipped strings.
+ */
+const interpolateMock = vi.hoisted(() => ({ fail: false }))
+
 vi.mock('@/lib/google/gmail', () => gmailMock)
 vi.mock('@/lib/google/calendar', () => calendarMock)
+vi.mock('@/lib/interpolate', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/interpolate')>()
+  return {
+    interpolate: (template: string, values: Readonly<Record<string, string>>): string => {
+      if (interpolateMock.fail) throw new Error('missing interpolation value')
+      return actual.interpolate(template, values)
+    },
+  }
+})
 
 const EVENT_ID = 'softnabc0123456789abcdefghijkl'
 const SUBJECT_TOKEN = 'subject-token-value'
@@ -36,6 +58,23 @@ const MANAGE_LINK = 'https://softn.io/rendez-vous/token-value'
 const SLOT = { start: '2026-11-12T13:30:00.000Z', end: '2026-11-12T14:00:00.000Z' }
 
 const SENT_AT = new Date('2026-11-05T08:15:00.000Z')
+
+const OWNER = 'melanie@softn.io'
+const BASEROW_VIEW_URL = 'https://baserow.io/database/1/table/2/3'
+const BASEROW_ROW_ID = 42
+const BASEROW_ROW_LINK = `${BASEROW_VIEW_URL}/row/${BASEROW_ROW_ID}`
+
+/** A complete lead, every optional answer given, as the booking route collects it. */
+const OWNER_LEAD = {
+  need: 'Trier mes demandes entrantes',
+  firstName: 'Camille',
+  lastName: 'Martin',
+  email: 'camille@example.fr',
+  phone: '06 12 34 56 78',
+  structure: 'Entreprise individuelle',
+  role: 'Gérante',
+  consentAt: '2026-11-05T08:15:00.000Z',
+} as const
 
 const event = {
   eventId: EVENT_ID,
@@ -94,10 +133,13 @@ beforeEach(() => {
   gmailMock.sendGmailMessage.mockResolvedValue({ ok: true, data: { messageId: 'message-id' } })
   calendarMock.markBookingEmailFailed.mockResolvedValue({ ok: true, data: true })
   calendarMock.storeBookingEmailSentAt.mockResolvedValue({ ok: true, data: true })
+  interpolateMock.fail = false
+  vi.stubEnv('GOOGLE_CALENDAR_OWNER', OWNER)
 })
 
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllEnvs()
 })
 
 describe('sendBookingConfirmationEmail', () => {
@@ -669,5 +711,385 @@ describe('rendered copy of the four booking emails', () => {
     expect(description).toContain(`Lien de connexion : ${MEET_LINK}`)
     expect(description).toContain(interpolate(bookingManage.calendarEvent.line, { link: MANAGE_LINK }))
     expect(description).not.toMatch(/\{\w+\}/)
+  })
+})
+
+describe('ownerNewBookingEmailContent', () => {
+  const contentOf = (input: Partial<Parameters<typeof ownerNewBookingEmailContent>[0]> = {}) =>
+    ownerNewBookingEmailContent({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowLink: BASEROW_ROW_LINK,
+      ...input,
+    })
+
+  it('renders the validated body with the answers, the slot and the leads row link', () => {
+    const content = contentOf()
+
+    expect(content).not.toBeNull()
+    if (content === null) return
+    expect(content.subject).toBe('Nouvel échange Spark : Camille Martin, jeudi 12 novembre 2026 à 14:30')
+    expect(content.text).toContain('Nouvel échange Spark réservé.')
+    expect(content.text).toContain('Invité : Camille Martin')
+    expect(content.text).toContain('E-mail : camille@example.fr')
+    expect(content.text).toContain('Téléphone : 06 12 34 56 78')
+    expect(content.text).toContain('Structure : Entreprise individuelle')
+    expect(content.text).toContain('Fonction : Gérante')
+    expect(content.text).toContain('Date : jeudi 12 novembre 2026')
+    expect(content.text).toContain('Heure : 14:30 (heure de Paris)')
+    expect(content.text).toContain('Durée : 30 minutes, en visio')
+    expect(content.text).toContain(`Lien Meet : ${MEET_LINK}`)
+    expect(content.text).toContain('Besoin exprimé :\nTrier mes demandes entrantes')
+    expect(content.text).toContain(`Fiche Baserow : ${BASEROW_ROW_LINK}`)
+    expect(content.text.endsWith('Notification automatique du site softn.io.')).toBe(true)
+    // The internal email carries no greeting, no signature and no footer.
+    expect(content.text).not.toContain('Mélanie')
+    expect(content.text).not.toMatch(/\{\w+\}/)
+  })
+
+  it('drops the whole line of every optional answer the visitor skipped, without leaving a hole', () => {
+    const content = contentOf({
+      lead: {
+        need: OWNER_LEAD.need,
+        firstName: OWNER_LEAD.firstName,
+        lastName: OWNER_LEAD.lastName,
+        email: OWNER_LEAD.email,
+        consentAt: OWNER_LEAD.consentAt,
+      },
+    })
+
+    expect(content?.text).not.toContain('Téléphone :')
+    expect(content?.text).not.toContain('Structure :')
+    expect(content?.text).not.toContain('Fonction :')
+    expect(content?.text).toContain('E-mail : camille@example.fr\n\nDate : jeudi 12 novembre 2026')
+    expect(content?.text).not.toContain('\n\n\n')
+  })
+
+  it('drops a line whose answer is blank, so no label ever stands without a value', () => {
+    const content = contentOf({ lead: { ...OWNER_LEAD, phone: '   ' } })
+
+    expect(content?.text).not.toContain('Téléphone :')
+    expect(content?.text).toContain('Structure : Entreprise individuelle')
+    expect(content?.text).not.toContain('\n\n\n')
+  })
+
+  it('omits the row line and the blank line above it when there is no link', () => {
+    const content = contentOf({ baserowLink: undefined })
+
+    expect(content?.text).not.toContain('Fiche Baserow :')
+    expect(content?.text).toContain('Trier mes demandes entrantes\n\nNotification automatique du site softn.io.')
+    expect(content?.text).not.toContain('\n\n\n')
+  })
+
+  it('anchors the Meet and row addresses in the HTML part, with no signature block', () => {
+    const content = contentOf()
+
+    expect(content?.html).toContain(`<a href="${MEET_LINK}" style="color:${EMAIL_LINK_COLOR}">${MEET_LINK}</a>`)
+    expect(content?.html).toContain(
+      `<a href="${BASEROW_ROW_LINK}" style="color:${EMAIL_LINK_COLOR}">${BASEROW_ROW_LINK}</a>`,
+    )
+    expect(content?.html).not.toContain('Mélanie')
+    expect(content?.html).not.toMatch(/\{\w+\}/)
+  })
+
+  it('answers no content when the slot cannot be rendered', () => {
+    expect(contentOf({ slot: { start: 'nope', end: 'nope' } })).toBeNull()
+  })
+})
+
+describe('ownerRescheduleEmailContent', () => {
+  const contentOf = (input: Partial<Parameters<typeof ownerRescheduleEmailContent>[0]> = {}) =>
+    ownerRescheduleEmailContent({
+      guestName: 'Camille Martin',
+      guestEmail: 'camille@example.fr',
+      previousStart: '2026-11-10T09:00:00.000Z',
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowLink: BASEROW_ROW_LINK,
+      ...input,
+    })
+
+  it('spells out the previous slot and the new one, with the Meet link and the row link', () => {
+    const content = contentOf()
+
+    expect(content?.subject).toBe('Échange Spark déplacé : Camille Martin, jeudi 12 novembre 2026 à 14:30')
+    expect(content?.text).toContain('Ancien créneau : mardi 10 novembre 2026 à 10:00 (heure de Paris)')
+    expect(content?.text).toContain('Nouveau créneau : jeudi 12 novembre 2026 à 14:30 (heure de Paris)')
+    expect(content?.text).toContain(`Lien Meet : ${MEET_LINK}`)
+    expect(content?.text).toContain(`Fiche Baserow : ${BASEROW_ROW_LINK}`)
+    expect(content?.text).not.toMatch(/\{\w+\}/)
+  })
+
+  it('omits the row line and the blank line above it when there is no link', () => {
+    const content = contentOf({ baserowLink: undefined })
+
+    expect(content?.text).not.toContain('Fiche Baserow :')
+    expect(content?.text).toContain(`Lien Meet : ${MEET_LINK}\n\nNotification automatique du site softn.io.`)
+    expect(content?.text).not.toContain('\n\n\n')
+  })
+
+  it('answers no content when the previous start cannot be rendered', () => {
+    expect(contentOf({ previousStart: 'nope' })).toBeNull()
+  })
+})
+
+describe('ownerCancellationEmailContent', () => {
+  const contentOf = (input: Partial<Parameters<typeof ownerCancellationEmailContent>[0]> = {}) =>
+    ownerCancellationEmailContent({
+      guestName: 'Camille Martin',
+      guestEmail: 'camille@example.fr',
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      reason: 'no-longer-needed',
+      baserowLink: BASEROW_ROW_LINK,
+      ...input,
+    })
+
+  it('carries the label of the picked reason and no Meet link', () => {
+    const content = contentOf()
+
+    expect(content?.subject).toBe('Échange Spark annulé : Camille Martin, jeudi 12 novembre 2026 à 14:30')
+    expect(content?.text).toContain('Échange Spark annulé.')
+    expect(content?.text).toContain('Créneau annulé : jeudi 12 novembre 2026 à 14:30 (heure de Paris)')
+    expect(content?.text).toContain('Motif : Report de projet')
+    expect(content?.text).not.toContain(MEET_LINK)
+    expect(content?.text).not.toMatch(/\{\w+\}/)
+  })
+
+  it('drops the reason line and the row line when neither has a value', () => {
+    const content = contentOf({ reason: undefined, baserowLink: undefined })
+
+    expect(content?.text).not.toContain('Motif :')
+    expect(content?.text).not.toContain('Fiche Baserow :')
+    expect(content?.text).toContain(
+      'Créneau annulé : jeudi 12 novembre 2026 à 14:30 (heure de Paris)\n\nNotification automatique du site softn.io.',
+    )
+    expect(content?.text).not.toContain('\n\n\n')
+  })
+
+  it('answers no content when the slot cannot be rendered', () => {
+    expect(contentOf({ slot: { start: 'nope', end: 'nope' } })).toBeNull()
+  })
+})
+
+describe('sendBookingOwnerNewBookingEmail', () => {
+  it('addresses the notification to the Workspace owner, from the booking alias, with no calendar file', async () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', BASEROW_VIEW_URL)
+
+    const outcome = await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: true })
+    expect(gmailMock.sendGmailMessage).toHaveBeenCalledWith({
+      message: expect.any(String),
+      subjectToken: SUBJECT_TOKEN,
+    })
+
+    const source = sentMessage()
+    expect(source).toContain('From: "Softn.io" <meet@softn.io>')
+    expect(source).toContain('Reply-To: meet@softn.io')
+    expect(source).toContain(`To: <${OWNER}>`)
+    // Nothing for the guest's agenda: the notification carries no calendar file.
+    expect(source).not.toContain('text/calendar')
+    expect(source).not.toContain('invitation.ics')
+
+    expect(sentText()).toContain(`Fiche Baserow : ${BASEROW_VIEW_URL}/row/${BASEROW_ROW_ID}`)
+    // The internal notification never marks the event or dates a slot.
+    expect(calendarMock.markBookingEmailFailed).not.toHaveBeenCalled()
+    expect(calendarMock.storeBookingEmailSentAt).not.toHaveBeenCalled()
+  })
+
+  it('omits the row line when the deployment has no view URL, and again when there is no row id', async () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', '')
+
+    await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+    expect(sentText()).not.toContain('Fiche Baserow :')
+
+    gmailMock.sendGmailMessage.mockClear()
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', BASEROW_VIEW_URL)
+    await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: undefined,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+    expect(sentText()).not.toContain('Fiche Baserow :')
+  })
+
+  it('sends nothing without a recipient, answering a code the caller logs', async () => {
+    vi.stubEnv('GOOGLE_CALENDAR_OWNER', '')
+
+    const outcome = await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: false, detail: 'compose recipient-missing' })
+    expect(gmailMock.sendGmailMessage).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing without a Meet link, answering a code the caller logs', async () => {
+    const outcome = await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: undefined,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: false, detail: 'compose meet-link-missing' })
+    expect(gmailMock.sendGmailMessage).not.toHaveBeenCalled()
+  })
+
+  it('answers a non-personal code when Gmail fails, and never marks the event', async () => {
+    gmailMock.sendGmailMessage.mockResolvedValue({
+      ok: false,
+      error: 'unauthorized',
+      status: 403,
+      reason: 'insufficientPermissions',
+    })
+
+    const outcome = await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: false, detail: 'gmail unauthorized status=403 reason=insufficientPermissions' })
+    expect(JSON.stringify(outcome)).not.toContain('camille@example.fr')
+    expect(JSON.stringify(outcome)).not.toContain('Camille')
+    expect(calendarMock.markBookingEmailFailed).not.toHaveBeenCalled()
+  })
+
+  it('answers a non-personal code when building the content throws, so no caller can fail on it', async () => {
+    // A copy edit that leaves a placeholder unanswered throws in `interpolate`, inside the send
+    // path's own try: the caller must read a code, never a rejection.
+    interpolateMock.fail = true
+
+    const outcome = await sendBookingOwnerNewBookingEmail({
+      lead: OWNER_LEAD,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: BASEROW_ROW_ID,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: false, detail: 'compose failed' })
+    expect(gmailMock.sendGmailMessage).not.toHaveBeenCalled()
+    expect(JSON.stringify(outcome)).not.toContain('Camille')
+  })
+})
+
+describe('sendBookingOwnerRescheduleEmail', () => {
+  it('addresses the move to the Workspace owner, with both slots and no calendar file', async () => {
+    const outcome = await sendBookingOwnerRescheduleEmail({
+      event,
+      slot: SLOT,
+      previousStart: '2026-11-10T09:00:00.000Z',
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: '7',
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: true })
+    const source = sentMessage()
+    expect(source).toContain(`To: <${OWNER}>`)
+    expect(source).not.toContain('text/calendar')
+
+    const text = sentText()
+    expect(text).toContain('Ancien créneau : mardi 10 novembre 2026 à 10:00 (heure de Paris)')
+    expect(text).toContain('Nouveau créneau : jeudi 12 novembre 2026 à 14:30 (heure de Paris)')
+  })
+
+  it('sends nothing when the event does not carry the guest', async () => {
+    const outcome = await sendBookingOwnerRescheduleEmail({
+      event: { ...event, guestFirstName: undefined },
+      slot: SLOT,
+      previousStart: '2026-11-10T09:00:00.000Z',
+      rules: BOOKING_RULES,
+      meetLink: MEET_LINK,
+      baserowRowId: '7',
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: false, detail: 'compose guest-missing' })
+    expect(gmailMock.sendGmailMessage).not.toHaveBeenCalled()
+  })
+})
+
+describe('sendBookingOwnerCancellationEmail', () => {
+  it('addresses the cancellation to the Workspace owner, with the reason label and no Meet link', async () => {
+    const outcome = await sendBookingOwnerCancellationEmail({
+      event,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      reason: 'prevented',
+      baserowRowId: '7',
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    expect(outcome).toEqual({ ok: true })
+    const source = sentMessage()
+    expect(source).toContain(`To: <${OWNER}>`)
+    expect(source).not.toContain('text/calendar')
+
+    const text = sentText()
+    expect(text).toContain('Créneau annulé : jeudi 12 novembre 2026 à 14:30 (heure de Paris)')
+    expect(text).toContain('Motif : Empêchement')
+    expect(text).not.toContain(MEET_LINK)
+  })
+
+  it('drops the reason line when the visitor picked none', async () => {
+    await sendBookingOwnerCancellationEmail({
+      event,
+      slot: SLOT,
+      rules: BOOKING_RULES,
+      reason: undefined,
+      baserowRowId: undefined,
+      subjectToken: SUBJECT_TOKEN,
+      sentAt: SENT_AT,
+    })
+
+    const text = sentText()
+    expect(text).not.toContain('Motif :')
+    expect(text).not.toContain('Fiche Baserow :')
   })
 })

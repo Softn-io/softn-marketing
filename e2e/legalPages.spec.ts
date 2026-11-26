@@ -146,6 +146,14 @@ test.describe('legal pages: metadata and document structure', () => {
     await expect(page.getByText(legal.privacy.intro)).toHaveCount(0)
   })
 
+  test('the privacy page discloses the internal notification of the booking moments (issue #168)', async ({ page }) => {
+    await page.goto(SITE_ROUTES.privacyPolicy)
+    // The service e-mails section states the internal notification to Softn.io, with the answers
+    // of the booking, and that it stays in Softn.io's inbox.
+    await expect(page.getByText('donne aussi lieu à une notification interne')).toBeVisible()
+    await expect(page.getByText('reste dans la boîte de réception de Softn.io')).toBeVisible()
+  })
+
   test('the {contactPageLink} placeholder renders as a real link to the contact page, in the sentence', async ({
     page,
   }) => {

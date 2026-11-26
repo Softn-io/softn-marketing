@@ -34,6 +34,24 @@ describe('readEnv', () => {
     expect(() => readEnv()).toThrow('BASEROW_API_URL must be an https URL')
   })
 
+  it('keeps an https Baserow leads view URL and strips its trailing slash', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'https://baserow.io/database/1/table/2/3/')
+
+    expect(readEnv().BASEROW_LEADS_VIEW_URL).toBe('https://baserow.io/database/1/table/2/3')
+  })
+
+  it('rejects a non-https Baserow leads view URL', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', 'http://baserow.io/database/1/table/2/3')
+
+    expect(() => readEnv()).toThrow('BASEROW_LEADS_VIEW_URL must be an https URL')
+  })
+
+  it('treats a blank Baserow leads view URL as unset', () => {
+    vi.stubEnv('BASEROW_LEADS_VIEW_URL', '   ')
+
+    expect(readEnv().BASEROW_LEADS_VIEW_URL).toBeUndefined()
+  })
+
   it('keeps the booking variables of the keyless federation', () => {
     vi.stubEnv('GOOGLE_SERVICE_ACCOUNT_EMAIL', 'booking@softn-io.iam.gserviceaccount.com')
     vi.stubEnv('GOOGLE_CALENDAR_OWNER', 'melanie@softn.io')

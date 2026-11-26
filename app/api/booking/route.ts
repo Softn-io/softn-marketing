@@ -1,3 +1,4 @@
+import { after } from 'next/server'
 import { ASSISTANT_RATE_LIMIT_POLICY, checkRateLimit, trustedClientIp, type RateLimitFailure } from '@/lib/rateLimit'
 import { createBaserowRow, type BaserowFailure } from '@/lib/baserow'
 import {
@@ -14,7 +15,11 @@ import {
   type BookingLead,
 } from '@/lib/booking/event'
 import { hasJsonContentType, isSameOriginRequest } from '@/lib/http/guard'
-import { sendBookingConfirmationEmail } from '@/lib/booking/emails'
+import {
+  sendBookingConfirmationEmail,
+  sendBookingOwnerNewBookingEmail,
+  type BookingEmailOutcome,
+} from '@/lib/booking/emails'
 import { bookingLeadFields, BOOKING_LEAD_REQUIRED_FIELD_CHECKS } from '@/lib/booking/lead'
 import { readBookingLinkSecret } from '@/lib/booking/manageToken'
 import { BOOKING_RULES } from '@/lib/booking/rules'
@@ -79,6 +84,17 @@ const logFailure = (detail: string): void => {
 }
 
 /**
+ * Logs the outcome of one internal notification, without ever touching the visitor's answer.
+ *
+ * The notification carries no event mark — the marks of the calendar say a guest's message never
+ * left — so a failure leaves the single non-personal code it returned. The manage route logs its own
+ * notifications the same way.
+ */
+const logOwnerEmailOutcome = (outcome: BookingEmailOutcome): void => {
+  if (!outcome.ok) logFailure(`owner email not sent: ${outcome.detail}`)
+}
+
+/**
  * The lead of one validated request, with the optional answers left absent when they are not there.
  *
  * The consent instant comes from the caller, which stamps it on receipt: it is never the value the
@@ -129,6 +145,18 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
 }
 
 /**
+ * Id of the leads row the owner notification links to, or `undefined` when Baserow stored none.
+ *
+ * A stored row carries its id, a create that lost a verified column still answers the id of the row
+ * it made, and any other failure has none.
+ */
+const leadRowIdOf = (row: Awaited<ReturnType<typeof createBaserowRowWithLeadsTable>>): number | undefined => {
+  if (row.ok) return row.data.id
+  if (row.error === 'schema-mismatch') return row.rowId
+  return undefined
+}
+
+/**
  * Books one slot: re-checks it, creates the calendar event, then stores the lead.
  *
  * Order: same-origin check, JSON content type, shared rate limit, Zod validation, honeypot, then the
@@ -145,6 +173,10 @@ const createBaserowRowWithLeadsTable = async ({ lead, slot, consentOn }: StoreLe
  * answers. A create that loses one of the verified columns is a `schema-mismatch`: Baserow did
  * create the row, so the event is marked as not stored and still keeps the row id, while the
  * booking and its confirmation stand.
+ *
+ * The internal notification to Mel leaves after the answer (`after`), from the same answers and the
+ * row id when one was stored: the visitor never waits for it, and a failed one is logged as a code
+ * and changes nothing either.
  *
  * @param request Incoming `POST` with the booking request as JSON.
  * @returns `{ booked: true }` on success, or `{ error }` with 400, 403, 409, 415, 429 or 503.
@@ -240,6 +272,7 @@ export const POST = async (request: Request): Promise<Response> => {
   }
 
   const row = await createBaserowRowWithLeadsTable({ lead, slot, consentOn })
+  const leadRowId = leadRowIdOf(row)
   if (row.ok) {
     // The id of the row is kept with the event, best effort, so a later reschedule or cancellation
     // updates the row without a lookup by personal data. No notification is sent to the visitor.
@@ -288,6 +321,22 @@ export const POST = async (request: Request): Promise<Response> => {
     logFailure(`email not sent: ${confirmation.detail}`)
     if (confirmation.markDetail !== undefined) logFailure(`email mark not stored: ${confirmation.markDetail}`)
   }
+
+  // Mel also reads an internal notification of every booking, from the same answers through the same
+  // Gmail path. It is scheduled after the answer: the visitor never waits for it, and a failure only
+  // leaves one non-personal code in the log.
+  after(async () => {
+    logOwnerEmailOutcome(
+      await sendBookingOwnerNewBookingEmail({
+        lead,
+        slot,
+        rules: BOOKING_RULES,
+        meetLink: event.data.hangoutLink,
+        baserowRowId: leadRowId,
+        subjectToken,
+      }),
+    )
+  })
 
   return json({ booked: true }, 200)
 }

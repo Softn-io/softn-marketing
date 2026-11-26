@@ -26,17 +26,40 @@ const rateLimitMock = vi.hoisted(() => ({
 const emailMock = vi.hoisted(() => ({
   sendBookingUpdateEmail: vi.fn(),
   sendBookingCancellationEmail: vi.fn(),
+  sendBookingOwnerRescheduleEmail: vi.fn(),
+  sendBookingOwnerCancellationEmail: vi.fn(),
 }))
+
+/**
+ * `after` of `next/server`, which needs a request scope the unit test does not have: the callback is
+ * recorded here and {@link runAfterCallbacks} runs it, exactly as Next.js does once the answer has
+ * left.
+ */
+const afterMock = vi.hoisted(() => {
+  const callbacks: Array<() => void | Promise<void>> = []
+  return {
+    callbacks,
+    schedule: (callback: () => void | Promise<void>): void => {
+      callbacks.push(callback)
+    },
+  }
+})
 
 vi.mock('@/lib/google/calendar', () => calendarMock)
 vi.mock('@/lib/baserow', () => baserowMock)
 vi.mock('@/lib/rateLimit', () => rateLimitMock)
 vi.mock('@/lib/booking/emails', () => emailMock)
+vi.mock('next/server', () => ({ after: afterMock.schedule }))
 
 const SECRET = 's'.repeat(48)
 const EVENT_ID = 'softnabc0123456789abcdefghijkl'
 
 let errorSpy: MockInstance
+
+/** Runs the callbacks `after` registered, as Next.js does once the response has left. */
+const runAfterCallbacks = async (): Promise<void> => {
+  for (const callback of afterMock.callbacks.splice(0)) await callback()
+}
 
 /** Instant ten days ahead: a long way past the reschedule notice whatever the hour of the day. */
 const FAR_START = new Date(Date.now() + 10 * 86_400_000).toISOString()
@@ -105,8 +128,13 @@ beforeEach(() => {
   rateLimitMock.trustedClientIp.mockReturnValue('test-client')
   emailMock.sendBookingUpdateEmail.mockReset()
   emailMock.sendBookingCancellationEmail.mockReset()
+  emailMock.sendBookingOwnerRescheduleEmail.mockReset()
+  emailMock.sendBookingOwnerCancellationEmail.mockReset()
   emailMock.sendBookingUpdateEmail.mockResolvedValue({ ok: true })
   emailMock.sendBookingCancellationEmail.mockResolvedValue({ ok: true })
+  emailMock.sendBookingOwnerRescheduleEmail.mockResolvedValue({ ok: true })
+  emailMock.sendBookingOwnerCancellationEmail.mockResolvedValue({ ok: true })
+  afterMock.callbacks.length = 0
 })
 
 afterEach(() => {
@@ -335,6 +363,30 @@ describe('POST /api/booking/manage reschedule', () => {
     expect(emailed.meetLink).toBe('https://meet.google.com/abc-defg-hij')
     expect(emailed.emailCounter).toBe('0')
     expect(emailed.googleSequence).toBe(1)
+
+    // The internal notification to Mel is scheduled after the answer, with the same event, the new
+    // and previous slot, and the row id the event carries.
+    expect(emailMock.sendBookingOwnerRescheduleEmail).not.toHaveBeenCalled()
+    await runAfterCallbacks()
+    expect(emailMock.sendBookingOwnerRescheduleEmail).toHaveBeenCalledTimes(1)
+    expect(emailMock.sendBookingOwnerRescheduleEmail).toHaveBeenCalledWith({
+      event: {
+        eventId: EVENT_ID,
+        iCalUid: `${EVENT_ID}@google.com`,
+        guestFirstName: 'Camille',
+        guestLastName: 'Meyer',
+        guestEmail: 'camille@example.fr',
+      },
+      slot: {
+        start: new Date(Date.parse(newSlot.start)).toISOString(),
+        end: new Date(Date.parse(newSlot.start) + BOOKING_RULES.slotMinutes * 60_000).toISOString(),
+      },
+      previousStart: FAR_START,
+      rules: BOOKING_RULES,
+      meetLink: 'https://meet.google.com/abc-defg-hij',
+      baserowRowId: '42',
+      subjectToken: undefined,
+    })
   })
 
   it('keeps the moved answer when the update email cannot leave, and logs non-personal codes', async () => {
@@ -350,6 +402,26 @@ describe('POST /api/booking/manage reschedule', () => {
     expect(await response.json()).toEqual({ rescheduled: true })
     expect(errorSpy).toHaveBeenCalledWith('[booking] manage: email not sent: gmail request-failed status=502')
     expect(errorSpy).toHaveBeenCalledWith('[booking] manage: email mark not stored: events patch timeout')
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of [EVENT_ID, newSlot.start, 'camille@example.fr', 'Camille']) {
+      expect(logged).not.toContain(personal)
+    }
+  })
+
+  it('keeps the moved answer when only the owner notification cannot leave, logging one code', async () => {
+    emailMock.sendBookingOwnerRescheduleEmail.mockResolvedValue({ ok: false, detail: 'gmail timeout' })
+
+    const response = await POST(request({ action: 'reschedule', token: tokenFor(), slot: newSlot.start }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ rescheduled: true })
+    // The answer left before the notification ran; its failure is logged once, afterwards.
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    await runAfterCallbacks()
+
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage: owner email not sent: gmail timeout')
 
     const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
     for (const personal of [EVENT_ID, newSlot.start, 'camille@example.fr', 'Camille']) {
@@ -380,6 +452,8 @@ describe('POST /api/booking/manage reschedule', () => {
     expect(await response.json()).toEqual({ error: 'slot-taken' })
     expect(calendarMock.rescheduleBookingEvent).not.toHaveBeenCalled()
     expect(baserowMock.updateBaserowRow).not.toHaveBeenCalled()
+    // Nothing moved, so no owner notification is scheduled either.
+    expect(afterMock.callbacks).toHaveLength(0)
   })
 
   it('refuses a slot that is not one the rules offer, without writing', async () => {
@@ -503,6 +577,29 @@ describe('POST /api/booking/manage cancel', () => {
       rules: BOOKING_RULES,
       subjectToken: undefined,
     })
+
+    // The internal notification to Mel is scheduled after the answer, with the cancelled slot, the
+    // reason code the client sent and the row id the event carried.
+    expect(emailMock.sendBookingOwnerCancellationEmail).not.toHaveBeenCalled()
+    await runAfterCallbacks()
+    expect(emailMock.sendBookingOwnerCancellationEmail).toHaveBeenCalledTimes(1)
+    expect(emailMock.sendBookingOwnerCancellationEmail).toHaveBeenCalledWith({
+      event: {
+        eventId: EVENT_ID,
+        iCalUid: `${EVENT_ID}@google.com`,
+        guestFirstName: 'Camille',
+        guestLastName: 'Meyer',
+        guestEmail: 'camille@example.fr',
+      },
+      slot: {
+        start: FAR_START,
+        end: new Date(Date.parse(FAR_START) + BOOKING_RULES.slotMinutes * 60_000).toISOString(),
+      },
+      reason: 'prevented',
+      rules: BOOKING_RULES,
+      baserowRowId: '42',
+      subjectToken: undefined,
+    })
   })
 
   it('keeps the cancelled answer when the cancellation email cannot leave, logging non-personal codes', async () => {
@@ -527,6 +624,29 @@ describe('POST /api/booking/manage cancel', () => {
     }
   })
 
+  it('keeps the cancelled answer when only the owner notification cannot leave, logging one code', async () => {
+    emailMock.sendBookingOwnerCancellationEmail.mockResolvedValue({
+      ok: false,
+      detail: 'gmail unauthorized status=403',
+    })
+
+    const response = await POST(request({ action: 'cancel', token: tokenFor(), reason: 'other' }))
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({ cancelled: true })
+    // The answer left before the notification ran; its failure is logged once, afterwards.
+    expect(errorSpy).not.toHaveBeenCalled()
+
+    await runAfterCallbacks()
+
+    expect(errorSpy).toHaveBeenCalledWith('[booking] manage: owner email not sent: gmail unauthorized status=403')
+
+    const logged = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    for (const personal of [EVENT_ID, 'camille@example.fr', 'Camille', 'Meyer', 'Autre']) {
+      expect(logged).not.toContain(personal)
+    }
+  })
+
   it('cancels without a reason, leaving the reason column untouched', async () => {
     const response = await POST(request({ action: 'cancel', token: tokenFor() }))
 
@@ -536,6 +656,13 @@ describe('POST /api/booking/manage cancel', () => {
       rowId: 42,
       fields: { [BOOKING_LEAD_FIELDS.status]: BOOKING_LEAD_STATUS_CANCELLED },
     })
+
+    // No chip picked, so the owner notification carries no reason either: its line drops.
+    await runAfterCallbacks()
+    const notification = emailMock.sendBookingOwnerCancellationEmail.mock.calls[0]?.[0] as {
+      reason: unknown
+    }
+    expect(notification.reason).toBeUndefined()
   })
 
   it('refuses a reason outside the four known codes, before any write', async () => {
@@ -576,6 +703,8 @@ describe('POST /api/booking/manage cancel', () => {
     expect(response.status).toBe(503)
     expect(await response.json()).toEqual({ error: 'unavailable' })
     expect(baserowMock.updateBaserowRow).not.toHaveBeenCalled()
+    // The event still exists, so no cancellation is announced to the owner.
+    expect(afterMock.callbacks).toHaveLength(0)
   })
 
   it('keeps the cancelled answer when only Baserow fails', async () => {

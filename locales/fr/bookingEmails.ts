@@ -18,6 +18,10 @@
  *
  * The reminder is the fourth email: it has no calendar file and is sent by the scheduled job, not
  * by this application's booking routes. Its copy lives here so that job only has to wire it.
+ *
+ * The `owner` section holds the internal notifications Mel reads, sent at the booking, reschedule
+ * and cancellation moments: same events, but the reader is not a guest, so those bodies carry no
+ * greeting, no signature and no footer, and their optional lines drop whole when a value is absent.
  */
 export const bookingEmails = {
   /** Template of `{duration}`, filled with the call length of the booking rules. */
@@ -158,6 +162,84 @@ Lien de connexion : {meetLink}
 {manageLine}`,
     /** Description of the cancellation file: the appointment no longer exists, so it carries no link. */
     cancellationDescription: 'Cet échange Spark est annulé.',
+  },
+  /**
+   * Internal booking notifications Mel reads, addressed to the Workspace owner.
+   *
+   * Same moments as the confirmation, the update and the cancellation, other reader: the bodies are
+   * labelled lines read at a glance, with no greeting, no closing formula, no signature and no
+   * footer, and one fixed last line naming their origin alone. No `preheader` key either — an
+   * internal email needs none — and the HTML alternative fills no signature.
+   *
+   * The five line keys below hold a whole line, label included: each body writes them alone on their
+   * own line, and the sender drops such a line — its line break included — when the value is absent,
+   * so a missing answer or a missing Baserow link never leaves a label without a value.
+   * `{reasonLabel}` is the label of the chip the visitor picked, read from
+   * `bookingManage.cancel.reason.options`.
+   */
+  owner: {
+    /** Whole line of the optional phone number, dropped when the visitor gave none. */
+    phoneLine: 'Téléphone : {phone}',
+    /** Whole line of the optional structure type, dropped when the visitor gave none. */
+    structureLine: 'Structure : {structure}',
+    /** Whole line of the optional role, dropped when the visitor gave none. */
+    roleLine: 'Fonction : {role}',
+    /** Whole line of the optional cancellation reason, dropped when the visitor picked none. */
+    reasonLine: 'Motif : {reasonLabel}',
+    /** Whole line of the leads row link, dropped when the deployment has no view URL to build it. */
+    baserowLine: 'Fiche Baserow : {baserowLink}',
+    newBooking: {
+      subject: 'Nouvel échange Spark : {guestName}, {date} à {time}',
+      body: `Nouvel échange Spark réservé.
+
+Invité : {guestName}
+E-mail : {guestEmail}
+{phoneLine}
+{structureLine}
+{roleLine}
+
+Date : {date}
+Heure : {time} (heure de Paris)
+Durée : {duration}, en visio
+Lien Meet : {meetLink}
+
+Besoin exprimé :
+{need}
+
+{baserowLine}
+
+Notification automatique du site softn.io.`,
+    },
+    reschedule: {
+      subject: 'Échange Spark déplacé : {guestName}, {date} à {time}',
+      body: `Échange Spark déplacé.
+
+Invité : {guestName}
+E-mail : {guestEmail}
+
+Ancien créneau : {previousDate} à {previousTime} (heure de Paris)
+Nouveau créneau : {date} à {time} (heure de Paris)
+Durée : {duration}, en visio
+Lien Meet : {meetLink}
+
+{baserowLine}
+
+Notification automatique du site softn.io.`,
+    },
+    cancellation: {
+      subject: 'Échange Spark annulé : {guestName}, {date} à {time}',
+      body: `Échange Spark annulé.
+
+Invité : {guestName}
+E-mail : {guestEmail}
+
+Créneau annulé : {date} à {time} (heure de Paris)
+{reasonLine}
+
+{baserowLine}
+
+Notification automatique du site softn.io.`,
+    },
   },
 } as const
 

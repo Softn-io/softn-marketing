@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-26:
+
+- **Modification légale**: Dans `locales/fr/legal.ts`, `privacy.emails.body` précise désormais qu'une notification interne est envoyée à Softn.io à chaque réservation, déplacement ou annulation, avec les informations saisies lors de la réservation (nom, adresse e-mail, besoin, et, le cas échéant, téléphone, structure, fonction et motif d'annulation), et qu'elle reste dans la boîte de réception de Softn.io. Copie validée par Mel (décision du 2026-11-26, proposition `docs/content-proposals/booking-owner-notifications-2026-11-26.md`).
+- **Manifeste**: L'empreinte SHA-256 de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`. Son `reviewedAt` reste celui de la revue précédente et aucune entrée `verified` n'est ajoutée : les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, restent à vérifier par Mel sur cette nouvelle copie. Les affirmations qu'ils tirent de cette source proviennent des rubriques « Assistant virtuel » et « Droits des personnes », que cette modification ne touche pas.
+
 ## 2026-11-25:
 
 - **Modification légale**: Dans `locales/fr/legal.ts`, `purposes.call` précise désormais que la personne est informée par écrit dans les e-mails de réservation (confirmation, mise à jour et rappel) puis au début de l'échange, et qu'elle peut demander que la transcription soit désactivée en répondant à l'un de ces e-mails ou à l'oral ; les trois e-mails de réservation de `locales/fr/bookingEmails.ts` (confirmation, mise à jour et rappel) portent cette information. Copie validée par Mel (proposition `docs/content-proposals/booking-email-transcript-2026-11-25.md`).

@@ -7,8 +7,8 @@ const KNOWN_PLACEHOLDERS = ['contactPageLink', 'dataRequestSubject'] as const
 
 const CONTENTS = [
   { name: 'mentions', content: mentionsContent, locale: legal.mentions, updatedAt: '30/11/2026' },
-  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '25/11/2026' },
-  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '25/11/2026' },
+  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '26/11/2026' },
+  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '26/11/2026' },
 ] as const
 
 describe('legalSections', () => {
@@ -39,6 +39,15 @@ describe('legalSections', () => {
     // the call, and may object by replying to one of these e-mails or orally.
     expect(legal.privacy.purposes.call).toContain('informée par écrit dans les e-mails de réservation')
     expect(legal.privacy.purposes.call).toContain('désactivée, en répondant')
+  })
+
+  it('privacy: the service e-mails section discloses the internal notification of the booking moments', () => {
+    const emails = privacyContent.sections.find((section) => section.title === legal.privacy.sections.emails.title)
+    expect(emails?.paragraphs).toContain(legal.privacy.emails.body)
+    // Issue #168: every booking, reschedule and cancellation also sends Softn.io an internal
+    // notification with the answers of the booking, and it stays in Softn.io's inbox.
+    expect(legal.privacy.emails.body).toContain('donne aussi lieu à une notification interne')
+    expect(legal.privacy.emails.body).toContain('reste dans la boîte de réception de Softn.io')
   })
 
   it.each(CONTENTS)('$name: every placeholder the copy uses is one the renderer answers', ({ content }) => {
