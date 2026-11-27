@@ -1,5 +1,10 @@
 # Journal de la base de connaissances
 
+## 2026-11-27:
+
+- **Modification légale**: Dans `locales/fr/legal.ts`, `privacy.processors.umami` décrit Umami comme un logiciel auto-hébergé sur Vercel dont les données sont stockées chez Supabase, à la place d'une application hébergée sur Vercel avec son propre transfert encadré par le Data Privacy Framework, et `privacy.retention.rateLimit` ajoute la réservation à la fenêtre de 60 secondes. Copie validée par Mel (décision du 2026-11-27, proposition `docs/content-proposals/gdpr-register-followups-2026-11-27.md`). La date de mise à jour des politiques de confidentialité et de cookies passe au 2026-11-27.
+- **Manifeste**: L'empreinte SHA-256 de `legal.ts` est mise à jour dans `locales/fr/okf-sources.json`. Son `reviewedAt` reste celui de la revue précédente et aucune entrée `verified` n'est ajoutée : les concepts `assistant` et `contact`, les deux seuls à citer `legal.ts`, restent à vérifier par Mel sur cette nouvelle copie. Les affirmations qu'ils tirent de cette source proviennent des rubriques « Assistant virtuel » et « Droits des personnes », que cette modification ne touche pas.
+
 ## 2026-11-26:
 
 - **Modification légale**: Dans `locales/fr/legal.ts`, `privacy.emails.body` précise désormais qu'une notification interne est envoyée à Softn.io à chaque réservation, déplacement ou annulation, avec les informations saisies lors de la réservation (nom, adresse e-mail, besoin, et, le cas échéant, téléphone, structure, fonction et motif d'annulation), et qu'elle reste dans la boîte de réception de Softn.io. Copie validée par Mel (décision du 2026-11-26, proposition `docs/content-proposals/booking-owner-notifications-2026-11-26.md`).
