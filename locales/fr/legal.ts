@@ -60,7 +60,7 @@ export const legal = {
       },
       transfers: {
         title: "Transferts hors de l'Union européenne",
-        body: "Les données sont principalement hébergées dans l'Union européenne. Certains prestataires sont établis hors de l'Union européenne (États-Unis) : Upstash, Vercel, Umami (hébergé sur Vercel), Google et Supabase. Le transfert est alors encadré par le Data Privacy Framework (UE–États-Unis) pour les entreprises certifiées ou par des clauses contractuelles types. Baserow est un prestataire européen, sans transfert hors de l'Union européenne. Mistral AI est un prestataire européen, sans transfert hors de l'Espace économique européen, à l'exception éventuelle de la Suisse, qui bénéficie d'une décision d'adéquation de la Commission européenne.",
+        body: "Les données sont principalement hébergées dans l'Union européenne. Certains prestataires sont établis hors de l'Union européenne (États-Unis) : Upstash, Vercel, Google et Supabase. Le transfert est alors encadré par le Data Privacy Framework (UE–États-Unis) pour les entreprises certifiées ou par des clauses contractuelles types. L'outil de mesure d'audience Umami est auto-hébergé sur Vercel, et ses données sont stockées chez Supabase. Baserow est un prestataire européen, sans transfert hors de l'Union européenne. Mistral AI est un prestataire européen, sans transfert hors de l'Espace économique européen, à l'exception éventuelle de la Suisse, qui bénéficie d'une décision d'adéquation de la Commission européenne.",
       },
       retention: {
         title: 'Durées de conservation',
@@ -92,7 +92,7 @@ export const legal = {
       technical:
         "À chaque visite : adresse IP et données techniques nécessaires au fonctionnement et à la sécurité du site (journaux d'hébergement). Pour limiter les abus, une version pseudonymisée de l'adresse IP et un compteur de requêtes sont conservés quelques minutes.",
       audience:
-        "Avec le consentement du visiteur : statistiques de navigation (pages consultées, type d'appareil et de navigateur) et, pour une partie des visites, données d'interaction : clics, défilement, mouvements de la souris et contenu de la page, enregistrés sous forme de cartes de chaleur et de replays. Les textes et les champs de saisie sont masqués ; l'assistant, la réservation et le formulaire de contact ne sont pas enregistrés. Ces mesures ne sont actives qu'après l'accord du visiteur.",
+        "Avec le consentement du visiteur : statistiques de navigation (pages consultées, type d'appareil et de navigateur, localisation approximative) et, pour une partie des visites, données d'interaction : clics, défilement, mouvements de la souris et contenu de la page, enregistrés sous forme de cartes de chaleur et de replays. Pour compter les sessions et estimer la localisation, l'adresse IP est traitée sous forme hachée ; elle n'est pas conservée. Les textes et les champs de saisie sont masqués ; l'assistant, la réservation et le formulaire de contact ne sont pas enregistrés. Ces mesures ne sont actives qu'après l'accord du visiteur.",
     },
     purposes: {
       booking:
@@ -109,7 +109,7 @@ export const legal = {
     },
     processors: {
       intro:
-        'Softn.io fait appel à des prestataires (sous-traitants) pour faire fonctionner le site. Ils traitent les données pour son compte :',
+        "Pour faire fonctionner le site, Softn.io utilise des prestataires (sous-traitants), qui traitent les données pour son compte, ainsi qu'un logiciel de mesure d'audience auto-hébergé :",
       baserow:
         "Baserow : enregistrement des demandes de rendez-vous, des messages du formulaire de contact et des adresses de la liste d'attente. Service hébergé en Allemagne (Union européenne), par une société établie aux Pays-Bas. Aucun transfert hors de l'Union européenne.",
       mistral:
@@ -122,7 +122,7 @@ export const legal = {
       vercel:
         "Vercel : hébergement du site et journaux techniques. Les fonctions du site s'exécutent à Paris (France) ; Vercel Inc. est établie aux États-Unis ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
       umami:
-        "Umami : mesure d'audience, cartes de chaleur et replays de sessions, chargés uniquement après le consentement du visiteur. Application hébergée sur Vercel (fonctions à Paris) ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
+        "Umami : mesure d'audience, cartes de chaleur et replays de sessions, chargés uniquement après le consentement du visiteur. Logiciel auto-hébergé sur Vercel, dont les données sont stockées chez Supabase (voir les entrées Vercel et Supabase).",
       supabase:
         "Supabase : stockage des statistiques, des cartes de chaleur et des replays de la mesure d'audience Umami, après consentement du visiteur. Données hébergées en Irlande (Union européenne) ; transfert encadré par les clauses contractuelles types de la Commission européenne.",
     },
@@ -135,7 +135,7 @@ export const legal = {
         "Adresse de la liste d'attente : 365 jours sans suite donnée.\nLa suppression est possible sur simple demande.",
       logs: "Journaux d'hébergement : durée de conservation prévue par Vercel pour l'offre utilisée, sans export.",
       rateLimit:
-        "Données de limitation du débit : 60 secondes pour l'assistant et 10 minutes pour le formulaire de contact. Identifiants de la vérification anti-robot : 10 minutes.",
+        "Données de limitation du débit : 60 secondes pour l'assistant et la réservation, 10 minutes pour le formulaire de contact. Identifiants de la vérification anti-robot : 10 minutes.",
       audienceReplays: 'Replays de sessions : 30 jours, puis suppression. Un replay dure 5 minutes au plus.',
       audienceStats: 'Statistiques et cartes de chaleur agrégées : 24 mois, puis suppression.',
       consent: 'Preuve de consentement : 365 jours sans suite donnée.',
@@ -187,7 +187,7 @@ export const legal = {
     audience: {
       body: "Avec le consentement du visiteur, le site utilise Umami pour mesurer son audience. Rien n'est chargé avant ce consentement. Deux scripts sont alors chargés depuis softn.io, sans cookie.",
       tracker:
-        'Le premier compte les visites et les pages consultées, pour comprendre quelles parties du site sont lues.',
+        "Le premier compte les visites et les pages consultées, pour comprendre quelles parties du site sont lues. Pour compter les sessions et estimer une localisation approximative, il traite l'adresse IP sous forme hachée, sans la conserver.",
       heatmaps:
         'Le second produit des cartes de chaleur : les clics et la profondeur de défilement sont regroupés par page, pour repérer ce qui est cliqué ou ignoré.',
       replays:
