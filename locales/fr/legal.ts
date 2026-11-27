@@ -122,7 +122,7 @@ export const legal = {
       vercel:
         "Vercel : hébergement du site et journaux techniques. Les fonctions du site s'exécutent à Paris (France) ; Vercel Inc. est établie aux États-Unis ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
       umami:
-        "Umami : mesure d'audience, cartes de chaleur et replays de sessions, chargés uniquement après le consentement du visiteur. Application hébergée sur Vercel (fonctions à Paris) ; transfert encadré par le Data Privacy Framework (UE–États-Unis).",
+        "Umami : mesure d'audience, cartes de chaleur et replays de sessions, chargés uniquement après le consentement du visiteur. Logiciel auto-hébergé sur Vercel, dont les données sont stockées chez Supabase (voir les entrées Vercel et Supabase).",
       supabase:
         "Supabase : stockage des statistiques, des cartes de chaleur et des replays de la mesure d'audience Umami, après consentement du visiteur. Données hébergées en Irlande (Union européenne) ; transfert encadré par les clauses contractuelles types de la Commission européenne.",
     },
@@ -135,7 +135,7 @@ export const legal = {
         "Adresse de la liste d'attente : 365 jours sans suite donnée.\nLa suppression est possible sur simple demande.",
       logs: "Journaux d'hébergement : durée de conservation prévue par Vercel pour l'offre utilisée, sans export.",
       rateLimit:
-        "Données de limitation du débit : 60 secondes pour l'assistant et 10 minutes pour le formulaire de contact. Identifiants de la vérification anti-robot : 10 minutes.",
+        "Données de limitation du débit : 60 secondes pour l'assistant et la réservation, 10 minutes pour le formulaire de contact. Identifiants de la vérification anti-robot : 10 minutes.",
       audienceReplays: 'Replays de sessions : 30 jours, puis suppression. Un replay dure 5 minutes au plus.',
       audienceStats: 'Statistiques et cartes de chaleur agrégées : 24 mois, puis suppression.',
       consent: 'Preuve de consentement : 365 jours sans suite donnée.',
