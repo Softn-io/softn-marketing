@@ -109,7 +109,7 @@ export const legal = {
     },
     processors: {
       intro:
-        'Softn.io fait appel à des prestataires (sous-traitants) pour faire fonctionner le site. Ils traitent les données pour son compte :',
+        "Pour faire fonctionner le site, Softn.io utilise des prestataires (sous-traitants), qui traitent les données pour son compte, ainsi qu'un logiciel de mesure d'audience auto-hébergé :",
       baserow:
         "Baserow : enregistrement des demandes de rendez-vous, des messages du formulaire de contact et des adresses de la liste d'attente. Service hébergé en Allemagne (Union européenne), par une société établie aux Pays-Bas. Aucun transfert hors de l'Union européenne.",
       mistral:
