@@ -7,8 +7,8 @@ const KNOWN_PLACEHOLDERS = ['contactPageLink', 'dataRequestSubject'] as const
 
 const CONTENTS = [
   { name: 'mentions', content: mentionsContent, locale: legal.mentions, updatedAt: '30/11/2026' },
-  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '26/11/2026' },
-  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '26/11/2026' },
+  { name: 'privacy', content: privacyContent, locale: legal.privacy, updatedAt: '27/11/2026' },
+  { name: 'cookies', content: cookiesContent, locale: legal.cookies, updatedAt: '27/11/2026' },
 ] as const
 
 describe('legalSections', () => {
@@ -73,6 +73,14 @@ describe('legalSections', () => {
     // notification with the answers of the booking, and it stays in Softn.io's inbox.
     expect(legal.privacy.emails.body).toContain('donne aussi lieu à une notification interne')
     expect(legal.privacy.emails.body).toContain('reste dans la boîte de réception de Softn.io')
+  })
+
+  it('privacy: the rate-limit retention names the assistant, the booking and the contact windows', () => {
+    // The 60 s window is the assistant policy, shared with the booking routes; the contact form
+    // and its anti-bot identifiers keep 10 minutes.
+    expect(legal.privacy.retention.rateLimit).toContain("60 secondes pour l'assistant et la réservation")
+    expect(legal.privacy.retention.rateLimit).toContain('10 minutes pour le formulaire de contact')
+    expect(legal.privacy.retention.rateLimit).toContain('Identifiants de la vérification anti-robot : 10 minutes')
   })
 
   it.each(CONTENTS)('$name: every placeholder the copy uses is one the renderer answers', ({ content }) => {
