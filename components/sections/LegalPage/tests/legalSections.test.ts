@@ -55,6 +55,19 @@ describe('legalSections', () => {
     )
   })
 
+  it('privacy: the processors intro separates the processors from the self-hosted audience software', () => {
+    const processors = privacyContent.sections.find(
+      (section) => section.title === legal.privacy.sections.processors.title,
+    )
+    // The intro is the counterpart of the transfers disclosure: Umami is not a processor, it is
+    // self-hosted audience software, named separately. The copy is owner-approved (2026-11-27).
+    expect(legal.privacy.processors.intro).toContain('prestataires (sous-traitants)')
+    expect(legal.privacy.processors.intro).toContain('traitent les données pour son compte')
+    expect(legal.privacy.processors.intro).toContain("logiciel de mesure d'audience auto-hébergé")
+    expect(legal.privacy.processors.intro).not.toContain('Umami')
+    expect(processors?.intro).toBe(legal.privacy.processors.intro)
+  })
+
   it('privacy and cookies: the audience copy discloses the hashed-IP processing', () => {
     // The collected-data paragraph and the cookie tracker paragraph both state the same behaviour:
     // the IP is processed hashed to count sessions and estimate an approximate location, never kept.
